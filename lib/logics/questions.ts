@@ -37,11 +37,11 @@ const Q_A3: QuestionDef = {
   split: false,
   text: {
     en: 'What kills more people per year — dog attacks or shark attacks?',
-    he: 'מה גורם ליותר מקרי מוות בשנה — תקיפות של כלבים או תקיפות של כרישים?',
+    he: 'מה גורם ליותר מקרי מוות בשנה — תקיפות כלבים או תקיפות כרישים?',
   },
   options: [
-    { en: 'Dog attacks', he: 'תקיפות של כלבים', value: 'dogs' },
-    { en: 'Shark attacks', he: 'תקיפות של כרישים', value: 'sharks' },
+    { en: 'Dog attacks', he: 'תקיפות כלבים', value: 'dogs' },
+    { en: 'Shark attacks', he: 'תקיפות כרישים', value: 'sharks' },
   ],
 };
 
@@ -178,7 +178,7 @@ const ANCH_1: AnchoringBlock = {
     split: false,
     text: {
       en: 'What is the size of the population, in your estimate?',
-      he: 'מה גודל האוכלוסייה, להערכתך?',
+      he: 'מה גודל האוכלוסייה, להערכתכם?',
     },
     unit: { en: 'millions', he: 'מיליונים' },
   },
@@ -209,7 +209,7 @@ const ANCH_2: AnchoringBlock = {
     split: false,
     text: {
       en: 'What is the percentage, in your estimate?',
-      he: 'מהו האחוז, להערכתך?',
+      he: 'מה האחוז, להערכתכם?',
     },
     unit: { en: '%', he: '%' },
   },
@@ -223,11 +223,11 @@ const ANCH_3: AnchoringBlock = {
     split: true,
     textA: {
       en: 'Quickly estimate (no calculating!) the result of:\n\n1 × 2 × 3 × 4 × 5 × 6 × 7 × 8',
-      he: 'העריכו במהירות (ללא חישוב!) את התוצאה של:\n\n1 × 2 × 3 × 4 × 5 × 6 × 7 × 8',
+      he: 'העריכו מהר (בלי לחשב!) את התוצאה של:\n\n1 × 2 × 3 × 4 × 5 × 6 × 7 × 8',
     },
     textB: {
       en: 'Quickly estimate (no calculating!) the result of:\n\n8 × 7 × 6 × 5 × 4 × 3 × 2 × 1',
-      he: 'העריכו במהירות (ללא חישוב!) את התוצאה של:\n\n8 × 7 × 6 × 5 × 4 × 3 × 2 × 1',
+      he: 'העריכו מהר (בלי לחשב!) את התוצאה של:\n\n8 × 7 × 6 × 5 × 4 × 3 × 2 × 1',
     },
   },
   screen2: {

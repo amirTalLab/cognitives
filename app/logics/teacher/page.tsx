@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ErrorBar, Legend, ReferenceLine,
-  Cell,
+  Cell, ScatterChart, Scatter, ZAxis,
 } from 'recharts';
 import { Eye, Download, Home, RefreshCw } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
@@ -36,6 +36,7 @@ function sem(vals: number[]) {
   const v = vals.reduce((a, x) => a + (x - m) ** 2, 0) / (vals.length - 1);
   return Math.sqrt(v / vals.length);
 }
+function binomSem(p: number, n: number) { return n > 0 ? Math.sqrt(p * (1 - p) / n) : 0; }
 function round1(n: number) { return Math.round(n * 10) / 10; }
 function q25(vals: number[]) {
   const sorted = [...vals].sort((a, b) => a - b);
@@ -135,21 +136,22 @@ function getGroup(session: LogicsResponse[]): string {
 
 // ── Availability chart data ────────────────────────────────────────────────
 
-interface OptionBar { question: string; option: string; pct: number; isCorrect: boolean; }
+interface OptionBar { question: string; option: string; pct: number; sem: number; isCorrect: boolean; }
 
 function availabilityData(bySession: BySession): OptionBar[][] {
   const questions = [
-    { code: 'Q-A1', label: 'Q1: Committee', options: ['more-2', 'more-8', 'same'], labels: ['More 2', 'More 8', 'Same'], correct: 'same' },
-    { code: 'Q-A2', label: 'Q2: Death cause', options: ['murder', 'suicide'], labels: ['Murder', 'Suicide'], correct: 'suicide' },
-    { code: 'Q-A3', label: 'Q3: Dog vs Shark', options: ['dogs', 'sharks'], labels: ['Dogs', 'Sharks'], correct: 'dogs' },
-    { code: 'Q-A4', label: 'Q4: Letter K', options: ['start-k', 'third-k'], labels: ['Start K', '3rd K'], correct: 'third-k' },
+    { code: 'Q-A1', label: 'Committees: 2 vs 8 from 10 — which has more?', options: ['more-2', 'more-8', 'same'], labels: ['More 2', 'More 8', 'Same'], correct: 'same' },
+    { code: 'Q-A2', label: 'Annual deaths: murder or suicide?', options: ['murder', 'suicide'], labels: ['Murder', 'Suicide'], correct: 'suicide' },
+    { code: 'Q-A3', label: 'More deadly: dog or shark attacks?', options: ['dogs', 'sharks'], labels: ['Dogs', 'Sharks'], correct: 'dogs' },
+    { code: 'Q-A4', label: 'English words: K as 1st vs 3rd letter?', options: ['start-k', 'third-k'], labels: ['Start K', '3rd K'], correct: 'third-k' },
   ];
   const sessions = Object.values(bySession);
   const n = sessions.length;
   return questions.map(q => {
     return q.options.map((opt, i) => {
       const count = sessions.filter(s => getAnswer(s, q.code) === opt).length;
-      return { question: q.label, option: q.labels[i], pct: n > 0 ? round1((count / n) * 100) : 0, isCorrect: opt === q.correct };
+      const p = n > 0 ? count / n : 0;
+      return { question: q.label, option: q.labels[i], pct: round1(p * 100), sem: round1(binomSem(p, n) * 100), isCorrect: opt === q.correct };
     });
   });
 }
@@ -158,29 +160,30 @@ function availabilityData(bySession: BySession): OptionBar[][] {
 
 function representativenessData(bySession: BySession): OptionBar[][] {
   const questions = [
-    { code: 'Q-R1', label: 'Q1: Coin seq', options: ['mixed', 'blocky', 'equal'], labels: ['Mixed', 'Blocky', 'Equal'], correct: 'equal' },
-    { code: 'Q-R2', label: 'Q2: Linda', options: ['teller', 'teller-feminist'], labels: ['Teller', 'Teller+Feminist'], correct: 'teller' },
-    { code: 'Q-R3', label: 'Q3: Gambler', options: ['heads', 'tails', 'equal'], labels: ['Heads', 'Tails', 'Equal'], correct: 'equal' },
+    { code: 'Q-R1', label: 'Coin 6 flips: which sequence more likely?', options: ['mixed', 'blocky', 'equal'], labels: ['Mixed', 'Blocky', 'Equal'], correct: 'equal' },
+    { code: 'Q-R2', label: 'Linda: bank teller or teller + feminist?', options: ['teller', 'teller-feminist'], labels: ['Teller', 'Teller+Feminist'], correct: 'teller' },
+    { code: 'Q-R3', label: '5 heads in a row — next flip?', options: ['heads', 'tails', 'equal'], labels: ['Heads', 'Tails', 'Equal'], correct: 'equal' },
   ];
   const sessions = Object.values(bySession);
   const n = sessions.length;
   return questions.map(q => {
     return q.options.map((opt, i) => {
       const count = sessions.filter(s => getAnswer(s, q.code) === opt).length;
-      return { question: q.label, option: q.labels[i], pct: n > 0 ? round1((count / n) * 100) : 0, isCorrect: opt === q.correct };
+      const p = n > 0 ? count / n : 0;
+      return { question: q.label, option: q.labels[i], pct: round1(p * 100), sem: round1(binomSem(p, n) * 100), isCorrect: opt === q.correct };
     });
   });
 }
 
 // ── Anchoring chart data ───────────────────────────────────────────────────
 
-interface AnchorPoint { question: string; medianA: number; medianB: number; q25A: number; q75A: number; q25B: number; q75B: number; trueValue: number; }
+interface AnchorPoint { question: string; medianA: number; medianB: number; semA: number; semB: number; q25A: number; q75A: number; q25B: number; q75B: number; trueValue: number; }
 
 function anchoringData(bySession: BySession): AnchorPoint[] {
   const items = [
-    { code: 'Q-ANCH-1-s2', label: 'Turkey pop. (M)', trueValue: 85 },
-    { code: 'Q-ANCH-2-s2', label: 'African UN (%)', trueValue: 28 },
-    { code: 'Q-ANCH-3-s2', label: 'Multiplication', trueValue: 40320 },
+    { code: 'Q-ANCH-1-s2', label: 'Turkey population (M) — anchor 20M vs 100M', trueValue: 85 },
+    { code: 'Q-ANCH-2-s2', label: 'African UN members (%) — anchor 10% vs 65%', trueValue: 28 },
+    { code: 'Q-ANCH-3-s2', label: '1×2×…×8 estimate — ascending vs descending', trueValue: 40320 },
   ];
   const sessions = Object.values(bySession);
   return items.map(item => {
@@ -190,6 +193,8 @@ function anchoringData(bySession: BySession): AnchorPoint[] {
       question: item.label,
       medianA: round1(median(groupA)),
       medianB: round1(median(groupB)),
+      semA: round1(sem(groupA)),
+      semB: round1(sem(groupB)),
       q25A: round1(q25(groupA)), q75A: round1(q75(groupA)),
       q25B: round1(q25(groupB)), q75B: round1(q75(groupB)),
       trueValue: item.trueValue,
@@ -216,42 +221,67 @@ function wasonData(bySession: BySession): WasonBar[] {
     return selected.size === 2 && selected.has('beer') && selected.has('16yo') ? 1 : 0;
   });
   return [
-    { task: 'Abstract (Wason)', pctCorrect: round1(mean(correctA) * 100), sem: round1(sem(correctA.map(v => v * 100))) },
-    { task: 'Social (Bar)', pctCorrect: round1(mean(correctB) * 100), sem: round1(sem(correctB.map(v => v * 100))) },
+    { task: 'Abstract: E K 4 7 — must flip E+7', pctCorrect: round1(mean(correctA) * 100), sem: round1(sem(correctA.map(v => v * 100))) },
+    { task: 'Social: bar inspector — check beer+16yo', pctCorrect: round1(mean(correctB) * 100), sem: round1(sem(correctB.map(v => v * 100))) },
   ];
 }
 
-// ── Rule discovery data ────────────────────────────────────────────────────
+// ── Rule discovery data (per-triple classification) ───────────────────────
 
-interface RuleData { totalGuesses: number; confirming: number; disconfirming: number; topGuesses: { guess: string; count: number }[]; }
+function isConfirmingTriple(triple: { numbers: number[]; fits: boolean }): boolean {
+  const [a, b, c] = triple.numbers;
+  return a < b && b < c && (b - a) === (c - b);
+}
 
-function ruleDiscoveryData(bySession: BySession): RuleData {
+interface ParticipantRule {
+  sid: string;
+  confirmCount: number;
+  disconfirmCount: number;
+  biasScore: number;
+  ruleGuess: string;
+  ruleCorrect: boolean;
+}
+
+function isRuleGuessCorrect(guess: string): boolean {
+  if (!guess) return false;
+  const g = guess.toLowerCase().trim();
+  const hasAscending = /ascend|increas|go.?up|each.*(?:larger|bigger|greater)|larger.*prev|bigger.*prev|עולה|הולך.*וגדל|כל.*מספר.*גדול|סדר.*עולה|מספרים.*עולים|גדול.*מ.*(?:הקודם|שלפניו)|שלושה.*עולים/i.test(g);
+  if (!hasAscending) return false;
+  const isRestricted = /\+\s*2|plus\s*2|by\s*2|gap\s*(?:of\s*)?2|increment|הפרש|קבוע|constant|equal.*gap|same.*diff|even|זוגי|כפולות/i.test(g);
+  return !isRestricted;
+}
+
+function ruleDiscoveryData(bySession: BySession): { participants: ParticipantRule[]; topGuesses: { guess: string; count: number }[] } {
   const sessions = Object.values(bySession);
-  let confirming = 0;
-  let disconfirming = 0;
-  let totalGuesses = 0;
   const guessCounts: Record<string, number> = {};
+  const participants: ParticipantRule[] = [];
 
   for (const s of sessions) {
     const row = s.find(r => r.question_code === 'Q-RULE');
     if (!row) continue;
-    totalGuesses++;
-    if (row.rule_guess) {
-      const g = row.rule_guess.toLowerCase().trim();
+    const guess = row.rule_guess || '';
+    if (guess) {
+      const g = guess.toLowerCase().trim();
       guessCounts[g] = (guessCounts[g] || 0) + 1;
     }
+    let confirmCount = 0, disconfirmCount = 0;
     if (row.rule_triples_json) {
       try {
         const triples = JSON.parse(row.rule_triples_json) as { numbers: number[]; fits: boolean }[];
-        const hasDisconfirming = triples.some(t => !t.fits) || triples.some(t => {
-          const [a, b, c] = t.numbers;
-          const isEvenlySpaced = (b - a) === (c - b);
-          return !isEvenlySpaced && t.fits;
-        });
-        if (hasDisconfirming) disconfirming++;
-        else confirming++;
-      } catch { confirming++; }
+        for (const t of triples) {
+          if (isConfirmingTriple(t)) confirmCount++;
+          else disconfirmCount++;
+        }
+      } catch { /* ignore */ }
     }
+    participants.push({
+      sid: s[0].session_id,
+      confirmCount,
+      disconfirmCount,
+      biasScore: confirmCount - disconfirmCount,
+      ruleGuess: guess,
+      ruleCorrect: isRuleGuessCorrect(guess),
+    });
   }
 
   const topGuesses = Object.entries(guessCounts)
@@ -259,20 +289,65 @@ function ruleDiscoveryData(bySession: BySession): RuleData {
     .slice(0, 5)
     .map(([guess, count]) => ({ guess, count }));
 
-  return { totalGuesses, confirming, disconfirming, topGuesses };
+  return { participants, topGuesses };
+}
+
+// ── Paired strip chart (SVG) ──────────────────────────────────────────────
+
+function PairedStripChart({ data }: { data: ParticipantRule[] }) {
+  if (!data.length) return <p className="text-gray-500 text-sm">No data</p>;
+  const W = 420, H = 260;
+  const ml = 55, mr = 45, mt = 28, mb = 36;
+  const pw = W - ml - mr, ph = H - mt - mb;
+  const maxY = Math.max(5, ...data.flatMap(d => [d.confirmCount, d.disconfirmCount]));
+  const yScale = (v: number) => mt + ph - (v / maxY) * ph;
+  const x0 = ml + pw * 0.3;
+  const x1 = ml + pw * 0.7;
+  const meanC = mean(data.map(d => d.confirmCount));
+  const meanD = mean(data.map(d => d.disconfirmCount));
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-md">
+      {Array.from({ length: maxY + 1 }, (_, i) => (
+        <g key={i}>
+          <line x1={ml} y1={yScale(i)} x2={W - mr} y2={yScale(i)} stroke="#374151" strokeDasharray="2 2" />
+          <text x={ml - 8} y={yScale(i) + 4} textAnchor="end" fill="#9ca3af" fontSize={10}>{i}</text>
+        </g>
+      ))}
+      <text x={x0} y={H - 6} textAnchor="middle" fill="#9ca3af" fontSize={11}>Confirming</text>
+      <text x={x1} y={H - 6} textAnchor="middle" fill="#9ca3af" fontSize={11}>Disconfirming</text>
+      <text x={14} y={mt + ph / 2} textAnchor="middle" fill="#9ca3af" fontSize={10}
+        transform={`rotate(-90, 14, ${mt + ph / 2})`}># Triples</text>
+      {data.map((d, i) => {
+        const jx = ((i * 7 + 3) % 17 - 8) * 1.8;
+        return (
+          <g key={i}>
+            <line x1={x0 + jx} y1={yScale(d.confirmCount)} x2={x1 + jx} y2={yScale(d.disconfirmCount)}
+              stroke="#6b7280" strokeWidth={0.7} opacity={0.35} />
+            <circle cx={x0 + jx} cy={yScale(d.confirmCount)} r={4} fill="#f97316" opacity={0.75} />
+            <circle cx={x1 + jx} cy={yScale(d.disconfirmCount)} r={4} fill="#34d399" opacity={0.75} />
+          </g>
+        );
+      })}
+      <line x1={x0 - 28} y1={yScale(meanC)} x2={x0 + 28} y2={yScale(meanC)} stroke="#f97316" strokeWidth={2.5} />
+      <line x1={x1 - 28} y1={yScale(meanD)} x2={x1 + 28} y2={yScale(meanD)} stroke="#34d399" strokeWidth={2.5} />
+      <text x={x0} y={yScale(meanC) - 8} textAnchor="middle" fill="#f97316" fontSize={10} fontWeight="bold">M={round1(meanC)}</text>
+      <text x={x1} y={yScale(meanD) - 8} textAnchor="middle" fill="#34d399" fontSize={10} fontWeight="bold">M={round1(meanD)}</text>
+    </svg>
+  );
 }
 
 // ── Framing chart data ─────────────────────────────────────────────────────
 
 interface FramingLikert { question: string; meanA: number; semA: number; meanB: number; semB: number; }
-interface FramingChoice { question: string; certainA: number; certainB: number; }
+interface FramingChoice { question: string; certainA: number; semA: number; certainB: number; semB: number; }
 
 function framingData(bySession: BySession): { likert: FramingLikert[]; choice: FramingChoice[] } {
   const sessions = Object.values(bySession);
   const likertItems = [
-    { code: 'Q-FRAME-1', label: 'Medical treatment' },
-    { code: 'Q-FRAME-3', label: 'Exam performance' },
-    { code: 'Q-FRAME-4', label: 'Tax policy' },
+    { code: 'Q-FRAME-1', label: '90% survival vs 10% mortality' },
+    { code: 'Q-FRAME-3', label: 'Most passed vs some failed' },
+    { code: 'Q-FRAME-4', label: 'Tax break married vs extra tax single' },
   ];
   const likert = likertItems.map(item => {
     const valsA = sessions.filter(s => getGroup(s) === 'A').map(s => getNumeric(s, item.code)).filter((v): v is number => v != null);
@@ -288,10 +363,14 @@ function framingData(bySession: BySession): { likert: FramingLikert[]; choice: F
   const choiceB = sessions.filter(s => getGroup(s) === 'B');
   const certainACount = choiceA.filter(s => getAnswer(s, 'Q-FRAME-2') === 'certain').length;
   const certainBCount = choiceB.filter(s => getAnswer(s, 'Q-FRAME-2') === 'certain').length;
-  const choice = [{
-    question: 'Disease program',
-    certainA: choiceA.length > 0 ? round1((certainACount / choiceA.length) * 100) : 0,
-    certainB: choiceB.length > 0 ? round1((certainBCount / choiceB.length) * 100) : 0,
+  const pA = choiceA.length > 0 ? certainACount / choiceA.length : 0;
+  const pB = choiceB.length > 0 ? certainBCount / choiceB.length : 0;
+  const choice: FramingChoice[] = [{
+    question: '600 die: 200 saved vs 400 die',
+    certainA: round1(pA * 100),
+    semA: round1(binomSem(pA, choiceA.length) * 100),
+    certainB: round1(pB * 100),
+    semB: round1(binomSem(pB, choiceB.length) * 100),
   }];
 
   return { likert, choice };
@@ -326,14 +405,21 @@ function classifyCRT(code: string, answer: string | undefined): 'correct' | 'tem
   return 'other';
 }
 
-interface CRTPerQ { question: string; correct: number; tempting: number; other: number; }
+interface CRTPerQ { question: string; correct: number; tempting: number; other: number; semCorrect: number; semTempting: number; }
 interface CRTDistribution { score: number; count: number; }
 
-function crtData(bySession: BySession): { perQ: CRTPerQ[]; distribution: CRTDistribution[]; } {
+function crtData(bySession: BySession): { perQ: CRTPerQ[]; distribution: CRTDistribution[] } {
   const sessions = Object.values(bySession);
   const n = sessions.length;
   const codes = ['Q-CRT-1', 'Q-CRT-2', 'Q-CRT-3', 'Q-CRT-4', 'Q-CRT-5', 'Q-CRT-6'];
-  const labels = ['Bat & Ball', 'Machines', 'Grass', 'Race', 'Sheep', 'Socks'];
+  const labels = [
+    'Bat+ball ₪10.10, bat ₪10 more',
+    '5 machines → 5 items in 5 min',
+    'Grass doubles, 48d full → half?',
+    'Pass 2nd place → your place?',
+    '15 sheep, all but 8 died',
+    '5+5 socks, dark → min pair?',
+  ];
 
   const perQ = codes.map((code, i) => {
     let correct = 0, tempting = 0, other = 0;
@@ -343,11 +429,15 @@ function crtData(bySession: BySession): { perQ: CRTPerQ[]; distribution: CRTDist
       else if (cat === 'tempting') tempting++;
       else other++;
     }
+    const pC = n > 0 ? correct / n : 0;
+    const pT = n > 0 ? tempting / n : 0;
     return {
       question: labels[i],
-      correct: n > 0 ? round1((correct / n) * 100) : 0,
-      tempting: n > 0 ? round1((tempting / n) * 100) : 0,
+      correct: round1(pC * 100),
+      tempting: round1(pT * 100),
       other: n > 0 ? round1((other / n) * 100) : 0,
+      semCorrect: round1(binomSem(pC, n) * 100),
+      semTempting: round1(binomSem(pT, n) * 100),
     };
   });
 
@@ -367,14 +457,13 @@ function crtData(bySession: BySession): { perQ: CRTPerQ[]; distribution: CRTDist
   return { perQ, distribution };
 }
 
-// ── RT analysis data ───────────────────────────────────────────────────────
+// ── CRT RT analysis (CRT only) ───────────────────────────────────────────
 
-interface RTComparison { category: string; correctRT: number; correctSEM: number; wrongRT: number; wrongSEM: number; }
+interface RTBar { label: string; rt: number; sem: number; }
 
-function rtAnalysisData(bySession: BySession): RTComparison[] {
+function crtRtData(bySession: BySession): RTBar[] {
   const sessions = Object.values(bySession);
   const crtCodes = ['Q-CRT-1', 'Q-CRT-2', 'Q-CRT-3', 'Q-CRT-4', 'Q-CRT-5', 'Q-CRT-6'];
-
   const correctRTs: number[] = [];
   const temptingRTs: number[] = [];
   for (const s of sessions) {
@@ -386,22 +475,9 @@ function rtAnalysisData(bySession: BySession): RTComparison[] {
       else if (cat === 'tempting') temptingRTs.push(rt);
     }
   }
-
-  const wasonCorrectRTs: number[] = [];
-  const wasonWrongRTs: number[] = [];
-  for (const s of sessions) {
-    const ansA = getAnswer(s, 'Q-WASON-A');
-    const rtA = getRT(s, 'Q-WASON-A');
-    if (ansA && rtA != null) {
-      const sel = new Set(ansA.split(','));
-      if (sel.size === 2 && sel.has('E') && sel.has('7')) wasonCorrectRTs.push(rtA);
-      else wasonWrongRTs.push(rtA);
-    }
-  }
-
   return [
-    { category: 'CRT', correctRT: round1(mean(correctRTs)), correctSEM: round1(sem(correctRTs)), wrongRT: round1(mean(temptingRTs)), wrongSEM: round1(sem(temptingRTs)) },
-    { category: 'Wason Abstract', correctRT: round1(mean(wasonCorrectRTs)), correctSEM: round1(sem(wasonCorrectRTs)), wrongRT: round1(mean(wasonWrongRTs)), wrongSEM: round1(sem(wasonWrongRTs)) },
+    { label: 'Correct', rt: round1(mean(correctRTs)), sem: round1(sem(correctRTs)) },
+    { label: 'Tempting wrong', rt: round1(mean(temptingRTs)), sem: round1(sem(temptingRTs)) },
   ];
 }
 
@@ -471,6 +547,13 @@ export default function TeacherPage() {
 
   const bySession = groupBySession(displayRows);
   const nParticipants = Object.keys(bySession).length;
+
+  // Stable jitter seed for rule scatter
+  const jitterMap = useMemo(() => {
+    const m = new Map<string, number>();
+    Object.keys(bySession).forEach((sid, i) => m.set(sid, ((i * 7 + 3) % 17 - 8) * 0.03));
+    return m;
+  }, [bySession]);
 
   const handleDownloadCSV = async () => {
     try {
@@ -569,7 +652,7 @@ export default function TeacherPage() {
           <div className="flex flex-col gap-6">
 
             {/* 7.1 Availability */}
-            <ChartCard title="7.1 Availability Heuristic" subtitle="% choosing each option. ★ = correct answer.">
+            <ChartCard title="7.1 Availability Heuristic" subtitle="% choosing each option (±SEM). Green = correct answer.">
               {(revealed) => {
                 const data = availabilityData(bySession);
                 return (
@@ -580,11 +663,12 @@ export default function TeacherPage() {
                         <ResponsiveContainer width="100%" height={100}>
                           <BarChart data={qData} layout="vertical" margin={{ left: 80, right: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis type="number" domain={[0, 100]} tick={TICK} />
+                            <XAxis type="number" domain={[0, 'auto']} tick={TICK} />
                             <YAxis type="category" dataKey="option" tick={TICK} width={70} />
                             <Tooltip contentStyle={BG} />
                             {revealed && (
                               <Bar dataKey="pct" name="%" radius={[0, 4, 4, 0]}>
+                                <ErrorBar dataKey="sem" width={4} strokeWidth={1.5} stroke="#9ca3af" direction="x" />
                                 {qData.map((d, i) => (
                                   <Cell key={i} fill={d.isCorrect ? '#34d399' : '#f97316'} />
                                 ))}
@@ -600,7 +684,7 @@ export default function TeacherPage() {
             </ChartCard>
 
             {/* 7.2 Representativeness */}
-            <ChartCard title="7.2 Representativeness Heuristic" subtitle="% choosing each option. ★ = correct answer.">
+            <ChartCard title="7.2 Representativeness Heuristic" subtitle="% choosing each option (±SEM). Green = correct answer.">
               {(revealed) => {
                 const data = representativenessData(bySession);
                 return (
@@ -611,11 +695,12 @@ export default function TeacherPage() {
                         <ResponsiveContainer width="100%" height={100}>
                           <BarChart data={qData} layout="vertical" margin={{ left: 120, right: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis type="number" domain={[0, 100]} tick={TICK} />
+                            <XAxis type="number" domain={[0, 'auto']} tick={TICK} />
                             <YAxis type="category" dataKey="option" tick={TICK} width={110} />
                             <Tooltip contentStyle={BG} />
                             {revealed && (
                               <Bar dataKey="pct" name="%" radius={[0, 4, 4, 0]}>
+                                <ErrorBar dataKey="sem" width={4} strokeWidth={1.5} stroke="#9ca3af" direction="x" />
                                 {qData.map((d, i) => (
                                   <Cell key={i} fill={d.isCorrect ? '#34d399' : '#f97316'} />
                                 ))}
@@ -631,26 +716,27 @@ export default function TeacherPage() {
             </ChartCard>
 
             {/* 7.3 Anchoring */}
-            <ChartCard title="7.3 Anchoring Effect" subtitle="Median estimates: low-anchor group (A) vs high-anchor group (B). Line = true value.">
+            <ChartCard title="7.3 Anchoring Effect" subtitle="Median estimates: low-anchor (A) vs high-anchor (B). Error bars = SEM. Red line = true value.">
               {(revealed) => {
                 const data = anchoringData(bySession);
                 return (
                   <div className="flex flex-col gap-4">
                     {data.map((item, i) => (
                       <div key={i}>
-                        <p className="text-xs text-gray-400 mb-1">{item.question} (true: {item.trueValue.toLocaleString()})</p>
+                        <p className="text-xs text-gray-400 mb-1">{item.question}</p>
                         <ResponsiveContainer width="100%" height={120}>
                           <BarChart data={[
-                            { name: 'Low anchor (A)', value: item.medianA },
-                            { name: 'High anchor (B)', value: item.medianB },
+                            { name: 'Low anchor (A)', value: item.medianA, sem: item.semA },
+                            { name: 'High anchor (B)', value: item.medianB, sem: item.semB },
                           ]} margin={{ left: 20, right: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                             <XAxis dataKey="name" tick={TICK} />
-                            <YAxis tick={TICK} />
+                            <YAxis tick={TICK} domain={[0, 'auto']} />
                             <Tooltip contentStyle={BG} />
-                            <ReferenceLine y={item.trueValue} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'True', fill: '#ef4444', fontSize: 10 }} />
+                            <ReferenceLine y={item.trueValue} stroke="#ef4444" strokeDasharray="4 4" label={{ value: `True: ${item.trueValue.toLocaleString()}`, fill: '#ef4444', fontSize: 10 }} />
                             {revealed && (
                               <Bar dataKey="value" name="Median estimate" radius={[4, 4, 0, 0]}>
+                                <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#6b7280" direction="y" />
                                 <Cell fill="#60a5fa" />
                                 <Cell fill="#f472b6" />
                               </Bar>
@@ -664,8 +750,8 @@ export default function TeacherPage() {
               }}
             </ChartCard>
 
-            {/* 7.4 Confirmation Bias */}
-            <ChartCard title="7.4 Confirmation Bias — Wason Selection" subtitle="% answering correctly on abstract vs social version.">
+            {/* 7.4 Wason Selection */}
+            <ChartCard title="7.4 Wason Selection Task" subtitle="% correct (exactly the 2 right cards, no extras). Abstract: E+7. Social: beer+16yo. Error bars = SEM.">
               {(revealed) => {
                 const data = wasonData(bySession);
                 return (
@@ -673,7 +759,7 @@ export default function TeacherPage() {
                     <BarChart data={data} margin={{ left: 10, right: 10 }} barCategoryGap="30%">
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="task" tick={TICK} />
-                      <YAxis domain={[0, 100]} tick={TICK}
+                      <YAxis domain={[0, 'auto']} tick={TICK}
                         label={{ value: '% Correct', angle: -90, position: 'insideLeft', style: LBL }} />
                       <Tooltip contentStyle={BG} />
                       {revealed && (
@@ -687,28 +773,66 @@ export default function TeacherPage() {
               }}
             </ChartCard>
 
-            {/* 7.4b Rule Discovery */}
-            <ChartCard title="7.4b Rule Discovery (2-4-6)" subtitle="Confirmation vs disconfirmation testing strategies.">
+            {/* 7.4b Rule Discovery (2-4-6) */}
+            <ChartCard title="7.4b Rule Discovery (2-4-6)" subtitle="Confirming = ascending with constant gap. Disconfirming = any other triple. Auto-classified rule correctness (approximate).">
               {(revealed) => {
-                const data = ruleDiscoveryData(bySession);
+                const { participants, topGuesses } = ruleDiscoveryData(bySession);
                 if (!revealed) return <div className="h-40" />;
-                const total = data.confirming + data.disconfirming;
+                if (!participants.length) return <p className="text-gray-500 text-sm">No rule discovery data</p>;
+
+                const biasScatterData = participants.map(p => ({
+                  x: (p.ruleCorrect ? 1 : 0) + (jitterMap.get(p.sid) ?? 0),
+                  y: p.biasScore,
+                }));
+                const correctBias = participants.filter(p => p.ruleCorrect).map(p => p.biasScore);
+                const wrongBias = participants.filter(p => !p.ruleCorrect).map(p => p.biasScore);
+                const minBias = Math.min(0, ...participants.map(p => p.biasScore));
+                const maxBias = Math.max(0, ...participants.map(p => p.biasScore));
+
                 return (
-                  <div className="flex flex-col gap-4">
-                    <div className="flex gap-6">
-                      <div className="text-center">
-                        <p className="text-3xl font-bold text-orange-400">{total > 0 ? round1((data.confirming / total) * 100) : 0}%</p>
-                        <p className="text-xs text-gray-400 mt-1">Confirming only</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-3xl font-bold text-emerald-400">{total > 0 ? round1((data.disconfirming / total) * 100) : 0}%</p>
-                        <p className="text-xs text-gray-400 mt-1">Tried disconfirming</p>
-                      </div>
+                  <div className="flex flex-col gap-6">
+                    {/* Graph 1: Paired strip chart */}
+                    <div>
+                      <p className="text-xs text-gray-400 mb-2">Confirming vs disconfirming triples per participant (connected dots). Horizontal line = mean.</p>
+                      <PairedStripChart data={participants} />
                     </div>
-                    {data.topGuesses.length > 0 && (
+
+                    {/* Graph 2: Confirmation bias score scatter */}
+                    <div>
+                      <p className="text-xs text-gray-400 mb-2">Confirmation bias score (#confirm − #disconfirm) by rule correctness. Means shown as diamonds.</p>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <ScatterChart margin={{ left: 10, right: 20, top: 10, bottom: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis type="number" dataKey="x" domain={[-0.4, 1.4]} tick={TICK}
+                            ticks={[0, 1]}
+                            tickFormatter={(v: number) => v === 0 ? 'Incorrect' : v === 1 ? 'Correct' : ''}
+                            label={{ value: 'Rule guess', position: 'insideBottom', offset: -10, style: LBL }}
+                          />
+                          <YAxis dataKey="y" tick={TICK} domain={[minBias - 1, maxBias + 1]}
+                            label={{ value: 'Bias score', angle: -90, position: 'insideLeft', style: LBL }} />
+                          <ZAxis range={[50, 50]} />
+                          <Tooltip contentStyle={BG} formatter={(v: number) => round1(v)} labelFormatter={() => ''} />
+                          <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="4 4" />
+                          <Scatter data={biasScatterData} fill="#a78bfa" opacity={0.7} />
+                          {wrongBias.length > 0 && (
+                            <Scatter data={[{ x: 0, y: round1(mean(wrongBias)) }]} fill="#ef4444" shape="diamond" legendType="none">
+                              <ZAxis range={[120, 120]} />
+                            </Scatter>
+                          )}
+                          {correctBias.length > 0 && (
+                            <Scatter data={[{ x: 1, y: round1(mean(correctBias)) }]} fill="#34d399" shape="diamond" legendType="none">
+                              <ZAxis range={[120, 120]} />
+                            </Scatter>
+                          )}
+                        </ScatterChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Top guessed rules */}
+                    {topGuesses.length > 0 && (
                       <div>
                         <p className="text-xs text-gray-400 mb-2">Top guessed rules:</p>
-                        {data.topGuesses.map((g, i) => (
+                        {topGuesses.map((g, i) => (
                           <p key={i} className="text-sm text-gray-300">
                             <span className="text-gray-500">{g.count}×</span> {g.guess}
                           </p>
@@ -749,18 +873,22 @@ export default function TeacherPage() {
                     </ResponsiveContainer>
                     {/* Choice item */}
                     <div>
-                      <p className="text-xs text-gray-400 mb-2">Disease program: % choosing certain option</p>
+                      <p className="text-xs text-gray-400 mb-2">{choice[0]?.question}: % choosing certain option (±SEM)</p>
                       <ResponsiveContainer width="100%" height={120}>
                         <BarChart data={choice} margin={{ left: 10, right: 10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                           <XAxis dataKey="question" tick={TICK} />
-                          <YAxis domain={[0, 100]} tick={TICK} />
+                          <YAxis domain={[0, 'auto']} tick={TICK} />
                           <Tooltip contentStyle={BG} />
                           <Legend verticalAlign="top" />
                           {revealed && (
                             <>
-                              <Bar dataKey="certainA" name="Saved frame (A)" fill="#60a5fa" radius={[4, 4, 0, 0]} />
-                              <Bar dataKey="certainB" name="Die frame (B)" fill="#f472b6" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="certainA" name="Saved frame (A)" fill="#60a5fa" radius={[4, 4, 0, 0]}>
+                                <ErrorBar dataKey="semA" width={4} strokeWidth={2} stroke="#3b82f6" direction="y" />
+                              </Bar>
+                              <Bar dataKey="certainB" name="Die frame (B)" fill="#f472b6" radius={[4, 4, 0, 0]}>
+                                <ErrorBar dataKey="semB" width={4} strokeWidth={2} stroke="#ec4899" direction="y" />
+                              </Bar>
                             </>
                           )}
                         </BarChart>
@@ -771,17 +899,18 @@ export default function TeacherPage() {
               }}
             </ChartCard>
 
-            {/* 7.6 CRT / Miserliness */}
-            <ChartCard title="7.6 Cognitive Reflection Test (CRT)" subtitle="Per question: correct vs tempting vs other. Distribution of total score.">
+            {/* 7.6 CRT + RT Analysis */}
+            <ChartCard title="7.6 Cognitive Reflection Test (CRT)" subtitle="Per question: correct vs tempting vs other. Score distribution. RT: correct vs tempting answers.">
               {(revealed) => {
                 const { perQ, distribution } = crtData(bySession);
+                const rtData = crtRtData(bySession);
                 return (
                   <div className="flex flex-col gap-6">
                     <ResponsiveContainer width="100%" height={250}>
                       <BarChart data={perQ} margin={{ left: 10, right: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis dataKey="question" tick={TICK} />
-                        <YAxis domain={[0, 100]} tick={TICK}
+                        <XAxis dataKey="question" tick={TICK} interval={0} angle={-15} textAnchor="end" height={50} />
+                        <YAxis domain={[0, 'auto']} tick={TICK}
                           label={{ value: '%', angle: -90, position: 'insideLeft', style: LBL }} />
                         <Tooltip contentStyle={BG} />
                         <Legend verticalAlign="top" />
@@ -800,7 +929,8 @@ export default function TeacherPage() {
                         <BarChart data={distribution} margin={{ left: 10, right: 10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                           <XAxis dataKey="score" tick={TICK} label={{ value: 'Score', position: 'insideBottom', offset: -5, style: LBL }} />
-                          <YAxis tick={TICK} label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
+                          <YAxis tick={TICK} domain={[0, 'auto']}
+                            label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
                           <Tooltip contentStyle={BG} />
                           {revealed && (
                             <Bar dataKey="count" name="Participants" fill="#a78bfa" radius={[4, 4, 0, 0]} />
@@ -808,36 +938,26 @@ export default function TeacherPage() {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-2">CRT RT: correct vs tempting answers (±SEM)</p>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <BarChart data={rtData} margin={{ left: 10, right: 10 }} barCategoryGap="30%">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis dataKey="label" tick={TICK} />
+                          <YAxis tick={TICK} domain={[0, 'auto']}
+                            label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft', style: LBL }} />
+                          <Tooltip contentStyle={BG} />
+                          {revealed && (
+                            <Bar dataKey="rt" name="Mean RT" radius={[4, 4, 0, 0]}>
+                              <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#6b7280" direction="y" />
+                              <Cell fill="#34d399" />
+                              <Cell fill="#f97316" />
+                            </Bar>
+                          )}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                );
-              }}
-            </ChartCard>
-
-            {/* 7.7 RT Analysis */}
-            <ChartCard title="7.7 Speed: Intuition vs Reflection" subtitle="Mean RT for correct vs tempting/wrong answers. Error bars = SEM.">
-              {(revealed) => {
-                const data = rtAnalysisData(bySession);
-                return (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={data} margin={{ left: 10, right: 10 }} barCategoryGap="20%">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="category" tick={TICK} />
-                      <YAxis tick={TICK}
-                        label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft', style: LBL }} />
-                      <Tooltip contentStyle={BG} />
-                      <Legend verticalAlign="top" />
-                      {revealed && (
-                        <>
-                          <Bar dataKey="correctRT" name="Correct" fill="#34d399" radius={[4, 4, 0, 0]}>
-                            <ErrorBar dataKey="correctSEM" width={4} strokeWidth={2} stroke="#059669" direction="y" />
-                          </Bar>
-                          <Bar dataKey="wrongRT" name="Tempting/Wrong" fill="#f97316" radius={[4, 4, 0, 0]}>
-                            <ErrorBar dataKey="wrongSEM" width={4} strokeWidth={2} stroke="#c2410c" direction="y" />
-                          </Bar>
-                        </>
-                      )}
-                    </BarChart>
-                  </ResponsiveContainer>
                 );
               }}
             </ChartCard>

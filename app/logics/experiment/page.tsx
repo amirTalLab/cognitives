@@ -47,9 +47,6 @@ export default function LogicsExperiment() {
   const [rulePhase, setRulePhase] = useState<'testing' | 'guessing'>('testing');
   const [lastFeedback, setLastFeedback] = useState<string | null>(null);
 
-  // Multiplication timer
-  const [mulTimerDone, setMulTimerDone] = useState(false);
-
   const questionOnsetRef = useRef(0);
   const questionOrderRef = useRef(0);
 
@@ -100,7 +97,6 @@ export default function LogicsExperiment() {
     setRuleGuess('');
     setRulePhase('testing');
     setLastFeedback(null);
-    setMulTimerDone(false);
   }, []);
 
   const makeResponse = useCallback(
@@ -226,15 +222,14 @@ export default function LogicsExperiment() {
     const block = screen.unit.block!;
     setScreen({ kind: 'multiplication-timer', block, unitIdx: screen.unitIdx });
     questionOnsetRef.current = performance.now();
-    setMulTimerDone(false);
   }, [screen]);
 
   useEffect(() => {
-    if (screen?.kind === 'multiplication-timer' && !mulTimerDone) {
-      const timer = setTimeout(() => setMulTimerDone(true), 5000);
+    if (screen?.kind === 'multiplication-timer') {
+      const timer = setTimeout(handleMultiplicationSubmit, 5000);
       return () => clearTimeout(timer);
     }
-  }, [screen?.kind, mulTimerDone]);
+  }, [screen?.kind, handleMultiplicationSubmit]);
 
   const handleMultiplicationSubmit = useCallback(() => {
     if (!screen || screen.kind !== 'multiplication-timer') return;
@@ -403,9 +398,6 @@ export default function LogicsExperiment() {
                 group={group}
                 language={language}
                 isHe={isHe}
-                done={mulTimerDone}
-                onDone={handleMultiplicationSubmit}
-                t={t}
               />
             )}
 
@@ -771,8 +763,8 @@ interface MultiplicationScreen1Props {
 
 function MultiplicationScreen1({ block, group, language, isHe, onView, t }: MultiplicationScreen1Props) {
   const instructions = isHe
-    ? 'בלחיצה על הכפתור תוצג שאלה למשך 5 שניות. קראו אותה והעריכו במהירות.'
-    : 'Pressing the button will show a question for 5 seconds. Read it and estimate quickly.';
+    ? 'עוד רגע תוצג סדרת כפל למשך 5 שניות. נסו להעריך את התוצאה בראש.'
+    : 'A multiplication sequence will appear for 5 seconds. Try to estimate the result in your head.';
 
   return (
     <motion.div
@@ -786,24 +778,24 @@ function MultiplicationScreen1({ block, group, language, isHe, onView, t }: Mult
         onClick={onView}
         className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl text-lg transition-colors touch-manipulation"
       >
-        {isHe ? 'הציגו את השאלה' : 'Show the question'}
+        {isHe ? 'מוכנים? לחצו להתחלה' : 'Ready? Click to start'}
       </button>
     </motion.div>
   );
 }
 
-interface MultiplicationTimerScreenProps {
-  block: AnchoringBlock;
-  group: Group;
-  language: Language;
-  isHe: boolean;
-  done: boolean;
-  onDone: () => void;
-  t: Record<string, string>;
-}
-
-function MultiplicationTimerScreen({ block, group, language, isHe, done, onDone, t }: MultiplicationTimerScreenProps) {
+function MultiplicationTimerScreen({ block, group, language, isHe }: {
+  block: AnchoringBlock; group: Group; language: Language; isHe: boolean;
+}) {
+  const [countdown, setCountdown] = useState(5);
   const text = getQuestionText(block.screen1, group, language);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const id = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [countdown]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -812,12 +804,7 @@ function MultiplicationTimerScreen({ block, group, language, isHe, done, onDone,
       className="flex flex-col gap-6 items-center"
     >
       <p className="text-gray-100 text-xl font-bold leading-relaxed whitespace-pre-line text-center">{text}</p>
-      {!done && (
-        <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-      )}
-      {done && (
-        <SubmitButton disabled={false} onClick={onDone} label={t.enterEstimate} />
-      )}
+      <span className="text-gray-400 text-2xl font-mono tabular-nums">{countdown}</span>
     </motion.div>
   );
 }
