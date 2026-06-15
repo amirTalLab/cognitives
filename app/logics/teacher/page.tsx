@@ -811,7 +811,7 @@ export default function TeacherPage() {
                           <YAxis dataKey="y" tick={TICK} domain={[minBias - 1, maxBias + 1]}
                             label={{ value: 'Bias score', angle: -90, position: 'insideLeft', style: LBL }} />
                           <ZAxis range={[50, 50]} />
-                          <Tooltip contentStyle={BG} formatter={(v: number) => round1(v)} labelFormatter={() => ''} />
+                          <Tooltip contentStyle={BG} formatter={(v: number | undefined) => v != null ? round1(v) : v} labelFormatter={() => ''} />
                           <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="4 4" />
                           <Scatter data={biasScatterData} fill="#a78bfa" opacity={0.7} />
                           {wrongBias.length > 0 && (
