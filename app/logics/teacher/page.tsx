@@ -19,7 +19,7 @@ async function sha256(str: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-const BG = { background: '#111827', border: '1px solid #374151', borderRadius: 6 };
+const BG = { background: '#1e293b', border: '1px solid #475569', borderRadius: 6, color: '#f1f5f9' };
 const TICK = { fill: '#9ca3af', fontSize: 11 };
 const LBL = { fill: '#9ca3af', fontSize: 11 };
 
@@ -235,6 +235,7 @@ function isConfirmingTriple(triple: { numbers: number[]; fits: boolean }): boole
 
 interface ParticipantRule {
   sid: string;
+  name: string;
   confirmCount: number;
   disconfirmCount: number;
   biasScore: number;
@@ -276,6 +277,7 @@ function ruleDiscoveryData(bySession: BySession): { participants: ParticipantRul
     }
     participants.push({
       sid: s[0].session_id,
+      name: s[0].participant_name || s[0].session_id.slice(0, 6),
       confirmCount,
       disconfirmCount,
       biasScore: confirmCount - disconfirmCount,
@@ -321,11 +323,15 @@ function PairedStripChart({ data }: { data: ParticipantRule[] }) {
       {data.map((d, i) => {
         const jx = ((i * 7 + 3) % 17 - 8) * 1.8;
         return (
-          <g key={i}>
+          <g key={i} className="cursor-pointer">
             <line x1={x0 + jx} y1={yScale(d.confirmCount)} x2={x1 + jx} y2={yScale(d.disconfirmCount)}
               stroke="#6b7280" strokeWidth={0.7} opacity={0.35} />
-            <circle cx={x0 + jx} cy={yScale(d.confirmCount)} r={4} fill="#f97316" opacity={0.75} />
-            <circle cx={x1 + jx} cy={yScale(d.disconfirmCount)} r={4} fill="#34d399" opacity={0.75} />
+            <circle cx={x0 + jx} cy={yScale(d.confirmCount)} r={4} fill="#f97316" opacity={0.75}>
+              <title>{d.name}: {d.confirmCount} confirming</title>
+            </circle>
+            <circle cx={x1 + jx} cy={yScale(d.disconfirmCount)} r={4} fill="#34d399" opacity={0.75}>
+              <title>{d.name}: {d.disconfirmCount} disconfirming</title>
+            </circle>
           </g>
         );
       })}
@@ -783,6 +789,8 @@ export default function TeacherPage() {
                 const biasScatterData = participants.map(p => ({
                   x: (p.ruleCorrect ? 1 : 0) + (jitterMap.get(p.sid) ?? 0),
                   y: p.biasScore,
+                  name: p.name,
+                  ruleCorrect: p.ruleCorrect,
                 }));
                 const correctBias = participants.filter(p => p.ruleCorrect).map(p => p.biasScore);
                 const wrongBias = participants.filter(p => !p.ruleCorrect).map(p => p.biasScore);
@@ -811,7 +819,18 @@ export default function TeacherPage() {
                           <YAxis dataKey="y" tick={TICK} domain={[minBias - 1, maxBias + 1]}
                             label={{ value: 'Bias score', angle: -90, position: 'insideLeft', style: LBL }} />
                           <ZAxis range={[50, 50]} />
-                          <Tooltip contentStyle={BG} formatter={(v: number | undefined) => v != null ? round1(v) : v} labelFormatter={() => ''} />
+                          <Tooltip contentStyle={BG} content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const d = payload[0]?.payload;
+                            if (!d?.name) return null;
+                            return (
+                              <div style={BG} className="px-3 py-2 text-sm">
+                                <p className="font-semibold text-white">{d.name}</p>
+                                <p style={{ color: '#c4b5fd' }}>Bias score: {d.y}</p>
+                                <p style={{ color: '#9ca3af' }}>Rule: {d.ruleCorrect ? 'Correct' : 'Incorrect'}</p>
+                              </div>
+                            );
+                          }} />
                           <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="4 4" />
                           <Scatter data={biasScatterData} fill="#a78bfa" opacity={0.7} />
                           {wrongBias.length > 0 && (
