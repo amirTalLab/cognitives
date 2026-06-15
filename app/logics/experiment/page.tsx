@@ -224,13 +224,6 @@ export default function LogicsExperiment() {
     questionOnsetRef.current = performance.now();
   }, [screen]);
 
-  useEffect(() => {
-    if (screen?.kind === 'multiplication-timer') {
-      const timer = setTimeout(handleMultiplicationSubmit, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [screen?.kind, handleMultiplicationSubmit]);
-
   const handleMultiplicationSubmit = useCallback(() => {
     if (!screen || screen.kind !== 'multiplication-timer') return;
     const block = screen.block;
@@ -240,6 +233,13 @@ export default function LogicsExperiment() {
     questionOnsetRef.current = performance.now();
     setScreen({ kind: 'multiplication-estimate', block, unitIdx: screen.unitIdx });
   }, [screen, makeResponse, resetInputState]);
+
+  useEffect(() => {
+    if (screen?.kind === 'multiplication-timer') {
+      const timer = setTimeout(handleMultiplicationSubmit, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [screen?.kind, handleMultiplicationSubmit]);
 
   // Rule discovery handlers
   const handleRuleTest = useCallback(() => {
