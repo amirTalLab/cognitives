@@ -84,25 +84,36 @@ function excludeParticipants(rows: LogicsResponse[]): { kept: LogicsResponse[]; 
 
 // ── ChartCard ──────────────────────────────────────────────────────────────
 
-function ChartCard({ title, subtitle, children }: {
-  title: string; subtitle?: string; children: (revealed: boolean) => React.ReactNode;
+function SectionCard({ title, subtitle, children }: {
+  title: string; subtitle?: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
+      <div className="mb-4">
+        <h2 className="text-base font-bold">{title}</h2>
+        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+      </div>
+      <div className="flex flex-col gap-4">{children}</div>
+    </div>
+  );
+}
+
+function FigureCard({ label, children }: {
+  label: string; children: (revealed: boolean) => React.ReactNode;
 }) {
   const [revealed, setRevealed] = useState(false);
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
-      <div className="flex items-start justify-between mb-1 gap-4">
-        <div>
-          <h2 className="text-base font-bold">{title}</h2>
-          {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
-        </div>
+    <div className="border border-gray-700/50 rounded-xl p-4 bg-gray-800/30">
+      <div className="flex items-center justify-between mb-2 gap-3">
+        <p className="text-xs text-gray-400 flex-1">{label}</p>
         <button
           onClick={() => setRevealed(r => !r)}
-          className="flex-shrink-0 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold rounded-lg transition-colors"
+          className="flex-shrink-0 px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold rounded-lg transition-colors"
         >
           {revealed ? 'Hide' : 'Reveal'}
         </button>
       </div>
-      <div className="mt-4">{children(revealed)}</div>
+      {children(revealed)}
     </div>
   );
 }
@@ -658,156 +669,132 @@ export default function TeacherPage() {
           <div className="flex flex-col gap-6">
 
             {/* 7.1 Availability */}
-            <ChartCard title="7.1 Availability Heuristic" subtitle="% choosing each option (±SEM). Green = correct answer.">
-              {(revealed) => {
-                const data = availabilityData(bySession);
-                return (
-                  <div className="flex flex-col gap-4">
-                    {data.map((qData, qi) => (
-                      <div key={qi}>
-                        <p className="text-xs text-gray-400 mb-1">{qData[0]?.question}</p>
-                        <ResponsiveContainer width="100%" height={100}>
-                          <BarChart data={qData} layout="vertical" margin={{ left: 80, right: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis type="number" domain={[0, 'auto']} tick={TICK} />
-                            <YAxis type="category" dataKey="option" tick={TICK} width={70} />
-                            <Tooltip contentStyle={BG} />
-                            {revealed && (
-                              <Bar dataKey="pct" name="%" radius={[0, 4, 4, 0]}>
-                                <ErrorBar dataKey="sem" width={4} strokeWidth={1.5} stroke="#9ca3af" direction="x" />
-                                {qData.map((d, i) => (
-                                  <Cell key={i} fill={d.isCorrect ? '#34d399' : '#f97316'} />
-                                ))}
-                              </Bar>
-                            )}
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ))}
-                  </div>
-                );
-              }}
-            </ChartCard>
+            <SectionCard title="7.1 Availability Heuristic" subtitle="% choosing each option (±SEM). Green = correct answer.">
+              {availabilityData(bySession).map((qData, qi) => (
+                <FigureCard key={qi} label={qData[0]?.question ?? ''}>
+                  {(revealed) => (
+                    <ResponsiveContainer width="100%" height={100}>
+                      <BarChart data={qData} layout="vertical" margin={{ left: 80, right: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis type="number" domain={[0, 'auto']} tick={TICK} />
+                        <YAxis type="category" dataKey="option" tick={TICK} width={70} />
+                        <Tooltip contentStyle={BG} />
+                        {revealed && (
+                          <Bar dataKey="pct" name="%" radius={[0, 4, 4, 0]}>
+                            <ErrorBar dataKey="sem" width={4} strokeWidth={1.5} stroke="#9ca3af" direction="x" />
+                            {qData.map((d, i) => (
+                              <Cell key={i} fill={d.isCorrect ? '#34d399' : '#f97316'} />
+                            ))}
+                          </Bar>
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </FigureCard>
+              ))}
+            </SectionCard>
 
             {/* 7.2 Representativeness */}
-            <ChartCard title="7.2 Representativeness Heuristic" subtitle="% choosing each option (±SEM). Green = correct answer.">
-              {(revealed) => {
-                const data = representativenessData(bySession);
-                return (
-                  <div className="flex flex-col gap-4">
-                    {data.map((qData, qi) => (
-                      <div key={qi}>
-                        <p className="text-xs text-gray-400 mb-1">{qData[0]?.question}</p>
-                        <ResponsiveContainer width="100%" height={100}>
-                          <BarChart data={qData} layout="vertical" margin={{ left: 120, right: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis type="number" domain={[0, 'auto']} tick={TICK} />
-                            <YAxis type="category" dataKey="option" tick={TICK} width={110} />
-                            <Tooltip contentStyle={BG} />
-                            {revealed && (
-                              <Bar dataKey="pct" name="%" radius={[0, 4, 4, 0]}>
-                                <ErrorBar dataKey="sem" width={4} strokeWidth={1.5} stroke="#9ca3af" direction="x" />
-                                {qData.map((d, i) => (
-                                  <Cell key={i} fill={d.isCorrect ? '#34d399' : '#f97316'} />
-                                ))}
-                              </Bar>
-                            )}
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ))}
-                  </div>
-                );
-              }}
-            </ChartCard>
+            <SectionCard title="7.2 Representativeness Heuristic" subtitle="% choosing each option (±SEM). Green = correct answer.">
+              {representativenessData(bySession).map((qData, qi) => (
+                <FigureCard key={qi} label={qData[0]?.question ?? ''}>
+                  {(revealed) => (
+                    <ResponsiveContainer width="100%" height={100}>
+                      <BarChart data={qData} layout="vertical" margin={{ left: 120, right: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis type="number" domain={[0, 'auto']} tick={TICK} />
+                        <YAxis type="category" dataKey="option" tick={TICK} width={110} />
+                        <Tooltip contentStyle={BG} />
+                        {revealed && (
+                          <Bar dataKey="pct" name="%" radius={[0, 4, 4, 0]}>
+                            <ErrorBar dataKey="sem" width={4} strokeWidth={1.5} stroke="#9ca3af" direction="x" />
+                            {qData.map((d, i) => (
+                              <Cell key={i} fill={d.isCorrect ? '#34d399' : '#f97316'} />
+                            ))}
+                          </Bar>
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </FigureCard>
+              ))}
+            </SectionCard>
 
             {/* 7.3 Anchoring */}
-            <ChartCard title="7.3 Anchoring Effect" subtitle="Median estimates: low-anchor (A) vs high-anchor (B). Error bars = SEM. Red line = true value.">
-              {(revealed) => {
-                const data = anchoringData(bySession);
-                return (
-                  <div className="flex flex-col gap-4">
-                    {data.map((item, i) => (
-                      <div key={i}>
-                        <p className="text-xs text-gray-400 mb-1">{item.question}</p>
-                        <ResponsiveContainer width="100%" height={120}>
-                          <BarChart data={[
-                            { name: 'Low anchor (A)', value: item.medianA, sem: item.semA },
-                            { name: 'High anchor (B)', value: item.medianB, sem: item.semB },
-                          ]} margin={{ left: 20, right: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis dataKey="name" tick={TICK} />
-                            <YAxis tick={TICK} domain={[0, 'auto']} />
-                            <Tooltip contentStyle={BG} />
-                            <ReferenceLine y={item.trueValue} stroke="#ef4444" strokeDasharray="4 4" label={{ value: `True: ${item.trueValue.toLocaleString()}`, fill: '#ef4444', fontSize: 10 }} />
-                            {revealed && (
-                              <Bar dataKey="value" name="Median estimate" radius={[4, 4, 0, 0]}>
-                                <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#6b7280" direction="y" />
-                                <Cell fill="#60a5fa" />
-                                <Cell fill="#f472b6" />
-                              </Bar>
-                            )}
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ))}
-                  </div>
-                );
-              }}
-            </ChartCard>
+            <SectionCard title="7.3 Anchoring Effect" subtitle="Median estimates: low-anchor (A) vs high-anchor (B). Error bars = SEM. Red line = true value.">
+              {anchoringData(bySession).map((item, i) => (
+                <FigureCard key={i} label={item.question}>
+                  {(revealed) => (
+                    <ResponsiveContainer width="100%" height={120}>
+                      <BarChart data={[
+                        { name: 'Low anchor (A)', value: item.medianA, sem: item.semA },
+                        { name: 'High anchor (B)', value: item.medianB, sem: item.semB },
+                      ]} margin={{ left: 20, right: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="name" tick={TICK} />
+                        <YAxis tick={TICK} domain={[0, 'auto']} />
+                        <Tooltip contentStyle={BG} />
+                        <ReferenceLine y={item.trueValue} stroke="#ef4444" strokeDasharray="4 4" label={{ value: `True: ${item.trueValue.toLocaleString()}`, fill: '#ef4444', fontSize: 10 }} />
+                        {revealed && (
+                          <Bar dataKey="value" name="Median estimate" radius={[4, 4, 0, 0]}>
+                            <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#6b7280" direction="y" />
+                            <Cell fill="#60a5fa" />
+                            <Cell fill="#f472b6" />
+                          </Bar>
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </FigureCard>
+              ))}
+            </SectionCard>
 
-            {/* 7.4 Wason Selection */}
-            <ChartCard title="7.4 Wason Selection Task" subtitle="% correct (exactly the 2 right cards, no extras). Abstract: E+7. Social: beer+16yo. Error bars = SEM.">
-              {(revealed) => {
-                const data = wasonData(bySession);
-                return (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={data} margin={{ left: 10, right: 10 }} barCategoryGap="30%">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="task" tick={TICK} />
-                      <YAxis domain={[0, 'auto']} tick={TICK}
-                        label={{ value: '% Correct', angle: -90, position: 'insideLeft', style: LBL }} />
-                      <Tooltip contentStyle={BG} />
-                      {revealed && (
-                        <Bar dataKey="pctCorrect" name="% Correct" fill="#34d399" radius={[4, 4, 0, 0]}>
-                          <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#059669" direction="y" />
-                        </Bar>
-                      )}
-                    </BarChart>
-                  </ResponsiveContainer>
-                );
-              }}
-            </ChartCard>
-
-            {/* 7.4b Rule Discovery (2-4-6) */}
-            <ChartCard title="7.4b Rule Discovery (2-4-6)" subtitle="Confirming = ascending with constant gap. Disconfirming = any other triple. Auto-classified rule correctness (approximate).">
-              {(revealed) => {
-                const { participants, topGuesses } = ruleDiscoveryData(bySession);
-                if (!revealed) return <div className="h-40" />;
-                if (!participants.length) return <p className="text-gray-500 text-sm">No rule discovery data</p>;
-
-                const biasScatterData = participants.map(p => ({
-                  x: (p.ruleCorrect ? 1 : 0) + (jitterMap.get(p.sid) ?? 0),
-                  y: p.biasScore,
-                  name: p.name,
-                  ruleCorrect: p.ruleCorrect,
-                }));
-                const correctBias = participants.filter(p => p.ruleCorrect).map(p => p.biasScore);
-                const wrongBias = participants.filter(p => !p.ruleCorrect).map(p => p.biasScore);
-                const minBias = Math.min(0, ...participants.map(p => p.biasScore));
-                const maxBias = Math.max(0, ...participants.map(p => p.biasScore));
-
-                return (
-                  <div className="flex flex-col gap-6">
-                    {/* Graph 1: Paired strip chart */}
-                    <div>
-                      <p className="text-xs text-gray-400 mb-2">Confirming vs disconfirming triples per participant (connected dots). Horizontal line = mean.</p>
-                      <PairedStripChart data={participants} />
-                    </div>
-
-                    {/* Graph 2: Confirmation bias score scatter */}
-                    <div>
-                      <p className="text-xs text-gray-400 mb-2">Confirmation bias score (#confirm − #disconfirm) by rule correctness. Means shown as diamonds.</p>
+            {/* 7.4 Wason + Rule Discovery */}
+            <SectionCard title="7.4 Confirmation Bias" subtitle="Wason selection task + 2-4-6 rule discovery.">
+              <FigureCard label="Wason: % correct (exactly the 2 right cards). Abstract: E+7. Social: beer+16yo. (±SEM)">
+                {(revealed) => {
+                  const data = wasonData(bySession);
+                  return (
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={data} margin={{ left: 10, right: 10 }} barCategoryGap="30%">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="task" tick={TICK} />
+                        <YAxis domain={[0, 'auto']} tick={TICK}
+                          label={{ value: '% Correct', angle: -90, position: 'insideLeft', style: LBL }} />
+                        <Tooltip contentStyle={BG} />
+                        {revealed && (
+                          <Bar dataKey="pctCorrect" name="% Correct" fill="#34d399" radius={[4, 4, 0, 0]}>
+                            <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#059669" direction="y" />
+                          </Bar>
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  );
+                }}
+              </FigureCard>
+              <FigureCard label="2-4-6: Confirming vs disconfirming triples per participant (connected dots). Line = mean.">
+                {(revealed) => {
+                  const { participants } = ruleDiscoveryData(bySession);
+                  if (!revealed) return <div className="h-32" />;
+                  if (!participants.length) return <p className="text-gray-500 text-sm">No data</p>;
+                  return <PairedStripChart data={participants} />;
+                }}
+              </FigureCard>
+              <FigureCard label="2-4-6: Confirmation bias score (#confirm − #disconfirm) by rule correctness. Diamonds = means.">
+                {(revealed) => {
+                  const { participants, topGuesses } = ruleDiscoveryData(bySession);
+                  if (!revealed) return <div className="h-32" />;
+                  if (!participants.length) return <p className="text-gray-500 text-sm">No data</p>;
+                  const biasScatterData = participants.map(p => ({
+                    x: (p.ruleCorrect ? 1 : 0) + (jitterMap.get(p.sid) ?? 0),
+                    y: p.biasScore, name: p.name, ruleCorrect: p.ruleCorrect,
+                  }));
+                  const correctBias = participants.filter(p => p.ruleCorrect).map(p => p.biasScore);
+                  const wrongBias = participants.filter(p => !p.ruleCorrect).map(p => p.biasScore);
+                  const minBias = Math.min(0, ...participants.map(p => p.biasScore));
+                  const maxBias = Math.max(0, ...participants.map(p => p.biasScore));
+                  return (
+                    <div className="flex flex-col gap-4">
                       <ResponsiveContainer width="100%" height={220}>
                         <ScatterChart margin={{ left: 10, right: 20, top: 10, bottom: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -845,31 +832,28 @@ export default function TeacherPage() {
                           )}
                         </ScatterChart>
                       </ResponsiveContainer>
+                      {topGuesses.length > 0 && (
+                        <div>
+                          <p className="text-xs text-gray-400 mb-1">Top guessed rules:</p>
+                          {topGuesses.map((g, gi) => (
+                            <p key={gi} className="text-sm text-gray-300">
+                              <span className="text-gray-500">{g.count}×</span> {g.guess}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
-
-                    {/* Top guessed rules */}
-                    {topGuesses.length > 0 && (
-                      <div>
-                        <p className="text-xs text-gray-400 mb-2">Top guessed rules:</p>
-                        {topGuesses.map((g, i) => (
-                          <p key={i} className="text-sm text-gray-300">
-                            <span className="text-gray-500">{g.count}×</span> {g.guess}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              }}
-            </ChartCard>
+                  );
+                }}
+              </FigureCard>
+            </SectionCard>
 
             {/* 7.5 Framing */}
-            <ChartCard title="7.5 Framing Effect" subtitle="Mean ratings (Likert 1-5) by frame group. Error bars = SEM.">
-              {(revealed) => {
-                const { likert, choice } = framingData(bySession);
-                return (
-                  <div className="flex flex-col gap-6">
-                    {/* Likert items */}
+            <SectionCard title="7.5 Framing Effect" subtitle="Group A = positive frame, Group B = negative frame.">
+              <FigureCard label="Likert ratings (1-5) by frame group (±SEM)">
+                {(revealed) => {
+                  const { likert } = framingData(bySession);
+                  return (
                     <ResponsiveContainer width="100%" height={200}>
                       <BarChart data={likert} margin={{ left: 10, right: 10 }} barCategoryGap="20%">
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -890,41 +874,43 @@ export default function TeacherPage() {
                         )}
                       </BarChart>
                     </ResponsiveContainer>
-                    {/* Choice item */}
-                    <div>
-                      <p className="text-xs text-gray-400 mb-2">{choice[0]?.question}: % choosing certain option (±SEM)</p>
-                      <ResponsiveContainer width="100%" height={120}>
-                        <BarChart data={choice} margin={{ left: 10, right: 10 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                          <XAxis dataKey="question" tick={TICK} />
-                          <YAxis domain={[0, 'auto']} tick={TICK} />
-                          <Tooltip contentStyle={BG} />
-                          <Legend verticalAlign="top" />
-                          {revealed && (
-                            <>
-                              <Bar dataKey="certainA" name="Saved frame (A)" fill="#60a5fa" radius={[4, 4, 0, 0]}>
-                                <ErrorBar dataKey="semA" width={4} strokeWidth={2} stroke="#3b82f6" direction="y" />
-                              </Bar>
-                              <Bar dataKey="certainB" name="Die frame (B)" fill="#f472b6" radius={[4, 4, 0, 0]}>
-                                <ErrorBar dataKey="semB" width={4} strokeWidth={2} stroke="#ec4899" direction="y" />
-                              </Bar>
-                            </>
-                          )}
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                );
-              }}
-            </ChartCard>
+                  );
+                }}
+              </FigureCard>
+              <FigureCard label="Disease problem: % choosing certain option by frame (±SEM)">
+                {(revealed) => {
+                  const { choice } = framingData(bySession);
+                  return (
+                    <ResponsiveContainer width="100%" height={120}>
+                      <BarChart data={choice} margin={{ left: 10, right: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="question" tick={TICK} />
+                        <YAxis domain={[0, 'auto']} tick={TICK} />
+                        <Tooltip contentStyle={BG} />
+                        <Legend verticalAlign="top" />
+                        {revealed && (
+                          <>
+                            <Bar dataKey="certainA" name="Saved frame (A)" fill="#60a5fa" radius={[4, 4, 0, 0]}>
+                              <ErrorBar dataKey="semA" width={4} strokeWidth={2} stroke="#3b82f6" direction="y" />
+                            </Bar>
+                            <Bar dataKey="certainB" name="Die frame (B)" fill="#f472b6" radius={[4, 4, 0, 0]}>
+                              <ErrorBar dataKey="semB" width={4} strokeWidth={2} stroke="#ec4899" direction="y" />
+                            </Bar>
+                          </>
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  );
+                }}
+              </FigureCard>
+            </SectionCard>
 
-            {/* 7.6 CRT + RT Analysis */}
-            <ChartCard title="7.6 Cognitive Reflection Test (CRT)" subtitle="Per question: correct vs tempting vs other. Score distribution. RT: correct vs tempting answers.">
-              {(revealed) => {
-                const { perQ, distribution } = crtData(bySession);
-                const rtData = crtRtData(bySession);
-                return (
-                  <div className="flex flex-col gap-6">
+            {/* 7.6 CRT + RT */}
+            <SectionCard title="7.6 Cognitive Reflection Test (CRT)" subtitle="6 questions with tempting intuitive answers.">
+              <FigureCard label="Per question: correct vs tempting vs other (% stacked)">
+                {(revealed) => {
+                  const { perQ } = crtData(bySession);
+                  return (
                     <ResponsiveContainer width="100%" height={250}>
                       <BarChart data={perQ} margin={{ left: 10, right: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -942,44 +928,52 @@ export default function TeacherPage() {
                         )}
                       </BarChart>
                     </ResponsiveContainer>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-2">Score distribution (0-6 correct)</p>
-                      <ResponsiveContainer width="100%" height={150}>
-                        <BarChart data={distribution} margin={{ left: 10, right: 10 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                          <XAxis dataKey="score" tick={TICK} label={{ value: 'Score', position: 'insideBottom', offset: -5, style: LBL }} />
-                          <YAxis tick={TICK} domain={[0, 'auto']}
-                            label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
-                          <Tooltip contentStyle={BG} />
-                          {revealed && (
-                            <Bar dataKey="count" name="Participants" fill="#a78bfa" radius={[4, 4, 0, 0]} />
-                          )}
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-2">CRT RT: correct vs tempting answers (±SEM)</p>
-                      <ResponsiveContainer width="100%" height={160}>
-                        <BarChart data={rtData} margin={{ left: 10, right: 10 }} barCategoryGap="30%">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                          <XAxis dataKey="label" tick={TICK} />
-                          <YAxis tick={TICK} domain={[0, 'auto']}
-                            label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft', style: LBL }} />
-                          <Tooltip contentStyle={BG} />
-                          {revealed && (
-                            <Bar dataKey="rt" name="Mean RT" radius={[4, 4, 0, 0]}>
-                              <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#6b7280" direction="y" />
-                              <Cell fill="#34d399" />
-                              <Cell fill="#f97316" />
-                            </Bar>
-                          )}
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                );
-              }}
-            </ChartCard>
+                  );
+                }}
+              </FigureCard>
+              <FigureCard label="Score distribution (0-6 correct)">
+                {(revealed) => {
+                  const { distribution } = crtData(bySession);
+                  return (
+                    <ResponsiveContainer width="100%" height={150}>
+                      <BarChart data={distribution} margin={{ left: 10, right: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="score" tick={TICK} label={{ value: 'Score', position: 'insideBottom', offset: -5, style: LBL }} />
+                        <YAxis tick={TICK} domain={[0, 'auto']}
+                          label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
+                        <Tooltip contentStyle={BG} />
+                        {revealed && (
+                          <Bar dataKey="count" name="Participants" fill="#a78bfa" radius={[4, 4, 0, 0]} />
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  );
+                }}
+              </FigureCard>
+              <FigureCard label="CRT reaction time: correct vs tempting answers (±SEM)">
+                {(revealed) => {
+                  const rtData = crtRtData(bySession);
+                  return (
+                    <ResponsiveContainer width="100%" height={160}>
+                      <BarChart data={rtData} margin={{ left: 10, right: 10 }} barCategoryGap="30%">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="label" tick={TICK} />
+                        <YAxis tick={TICK} domain={[0, 'auto']}
+                          label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft', style: LBL }} />
+                        <Tooltip contentStyle={BG} />
+                        {revealed && (
+                          <Bar dataKey="rt" name="Mean RT" radius={[4, 4, 0, 0]}>
+                            <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#6b7280" direction="y" />
+                            <Cell fill="#34d399" />
+                            <Cell fill="#f97316" />
+                          </Bar>
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  );
+                }}
+              </FigureCard>
+            </SectionCard>
 
           </div>
         )}
