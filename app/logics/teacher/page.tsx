@@ -190,6 +190,14 @@ function representativenessData(bySession: BySession): OptionBar[][] {
 
 interface AnchorPoint { question: string; medianA: number; medianB: number; semA: number; semB: number; q25A: number; q75A: number; q25B: number; q75B: number; trueValue: number; }
 
+function normalizeAnchoring(code: string, v: number): number {
+  if (code === 'Q-ANCH-1-s2') {
+    // Turkey population in millions: if > 1000, assume raw number
+    return v > 1000 ? v / 1_000_000 : v;
+  }
+  return v;
+}
+
 function anchoringData(bySession: BySession): AnchorPoint[] {
   const items = [
     { code: 'Q-ANCH-1-s2', label: 'Turkey population (M) — anchor 20M vs 100M', trueValue: 85 },
@@ -198,8 +206,8 @@ function anchoringData(bySession: BySession): AnchorPoint[] {
   ];
   const sessions = Object.values(bySession);
   return items.map(item => {
-    const groupA = sessions.filter(s => getGroup(s) === 'A').map(s => getNumeric(s, item.code)).filter((v): v is number => v != null);
-    const groupB = sessions.filter(s => getGroup(s) === 'B').map(s => getNumeric(s, item.code)).filter((v): v is number => v != null);
+    const groupA = sessions.filter(s => getGroup(s) === 'A').map(s => getNumeric(s, item.code)).filter((v): v is number => v != null).map(v => normalizeAnchoring(item.code, v));
+    const groupB = sessions.filter(s => getGroup(s) === 'B').map(s => getNumeric(s, item.code)).filter((v): v is number => v != null).map(v => normalizeAnchoring(item.code, v));
     return {
       question: item.label,
       medianA: round1(median(groupA)),
