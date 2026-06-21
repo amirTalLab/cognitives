@@ -1,16 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ErrorBar, Legend,
+  ResponsiveContainer, ErrorBar, Legend, Cell,
   ScatterChart, Scatter, ZAxis,
 } from 'recharts';
-import { Eye, Download, Home, RefreshCw } from 'lucide-react';
+import { Eye, Download, Home, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { RAT_TRIPLETS } from '@/lib/creativity/stimuli';
+import { generateMockData } from '@/lib/creativity/mock-data';
 
 const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
 
@@ -19,7 +20,6 @@ async function sha256(str: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-const BG = { background: '#111827', border: '1px solid #374151', borderRadius: 6 };
 const TICK = { fill: '#9ca3af', fontSize: 11 };
 const LBL = { fill: '#9ca3af', fontSize: 11 };
 
@@ -31,6 +31,7 @@ function sem(vals: number[]) {
   return Math.sqrt(v / vals.length);
 }
 function round1(n: number) { return Math.round(n * 10) / 10; }
+function round2(n: number) { return Math.round(n * 100) / 100; }
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface AUTRow {
@@ -39,7 +40,7 @@ interface AUTRow {
 }
 interface CircleRow {
   session_id: string; participant_name: string | null; label: string;
-  response_time_ms: number; time_in_task_ms: number; is_practice: boolean;
+  drawing_data: string; response_time_ms: number; time_in_task_ms: number; is_practice: boolean;
 }
 interface RATRow {
   session_id: string; participant_name: string | null; triplet_index: number;
@@ -48,30 +49,60 @@ interface RATRow {
 }
 
 interface BarPoint { name: string; value: number; sem: number; }
-interface ScatterPoint { x: number; y: number; name: string; }
+interface OrigScatterPoint { x: number; y: number; name: string; originalResponses: string[]; }
 
-// ── Chart computation ────────────────────────────────────────────────────────
+// ── Originality helpers ──────────────────────────────────────────────────────
+
+function computeResponseFrequencies(rows: { session_id: string; text: string }[]) {
+  const freq: Record<string, number> = {};
+  for (const r of rows) {
+    const key = r.text.trim().toLowerCase();
+    freq[key] = (freq[key] || 0) + 1;
+  }
+  return freq;
+}
+
+function participantOriginalityScore(
+  pRows: { text: string }[],
+  globalFreq: Record<string, number>,
+): number {
+  if (pRows.length === 0) return 0;
+  let sum = 0;
+  for (const r of pRows) {
+    const key = r.text.trim().toLowerCase();
+    const f = globalFreq[key] || 1;
+    sum += 1 / f;
+  }
+  return sum / pRows.length;
+}
+
+// ── AUT chart computation ────────────────────────────────────────────────────
 
 function computeAUTCharts(rows: AUTRow[]) {
   const sessions = [...new Set(rows.map(r => r.session_id))];
-
-  // Fluency per participant
   const fluencyPerP = sessions.map(sid => rows.filter(r => r.session_id === sid).length);
 
-  // Originality: count each use_text across all participants; rare = appeared only once
-  const useCounts: Record<string, number> = {};
-  for (const r of rows) {
-    const key = r.use_text.trim().toLowerCase();
-    useCounts[key] = (useCounts[key] || 0) + 1;
-  }
-  const totalUses = rows.length;
-  const rareUses = Object.values(useCounts).filter(c => c === 1).length;
+  const allUses = rows.map(r => ({ session_id: r.session_id, text: r.use_text }));
+  const globalFreq = computeResponseFrequencies(allUses);
 
-  // Flexibility: unique normalized uses per participant
-  const flexPerP = sessions.map(sid => {
+  // Histogram data: each unique label with its count
+  const histData = Object.entries(globalFreq)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, count]) => ({ name: label, count, unique: count === 1 }));
+
+  // Per-participant originality
+  const origPerP: OrigScatterPoint[] = sessions.map(sid => {
     const pRows = rows.filter(r => r.session_id === sid);
-    const unique = new Set(pRows.map(r => r.use_text.trim().toLowerCase()));
-    return unique.size;
+    const fluency = pRows.length;
+    const origScore = participantOriginalityScore(
+      pRows.map(r => ({ text: r.use_text })),
+      globalFreq,
+    );
+    const uniqueResponses = pRows
+      .filter(r => globalFreq[r.use_text.trim().toLowerCase()] === 1)
+      .map(r => r.use_text);
+    const name = pRows[0]?.participant_name || 'Anonymous';
+    return { x: fluency, y: round2(origScore), name, originalResponses: uniqueResponses };
   });
 
   return {
@@ -79,65 +110,59 @@ function computeAUTCharts(rows: AUTRow[]) {
       data: [{ name: 'Total Uses', value: round1(mean(fluencyPerP)), sem: round1(sem(fluencyPerP)) }],
       n: sessions.length,
     },
-    originality: {
-      totalUses,
-      uniqueUses: Object.keys(useCounts).length,
-      rareUses,
-      rarePct: totalUses > 0 ? round1((rareUses / totalUses) * 100) : 0,
-    },
-    flexibility: {
-      data: [{ name: 'Unique Uses', value: round1(mean(flexPerP)), sem: round1(sem(flexPerP)) }],
-    },
+    histogram: histData,
+    origScatter: origPerP,
   };
 }
 
+// ── Circles chart computation ────────────────────────────────────────────────
+
 function computeCirclesCharts(rows: CircleRow[]) {
   const sessions = [...new Set(rows.map(r => r.session_id))];
-
   const fluencyPerP = sessions.map(sid => rows.filter(r => r.session_id === sid).length);
 
-  const labelCounts: Record<string, number> = {};
-  for (const r of rows) {
-    const key = r.label.trim().toLowerCase();
-    labelCounts[key] = (labelCounts[key] || 0) + 1;
-  }
-  const totalLabels = rows.length;
-  const rareLabels = Object.values(labelCounts).filter(c => c === 1).length;
+  const allLabels = rows.map(r => ({ session_id: r.session_id, text: r.label }));
+  const globalFreq = computeResponseFrequencies(allLabels);
 
-  const flexPerP = sessions.map(sid => {
+  const origPerP: OrigScatterPoint[] = sessions.map(sid => {
     const pRows = rows.filter(r => r.session_id === sid);
-    const unique = new Set(pRows.map(r => r.label.trim().toLowerCase()));
-    return unique.size;
+    const fluency = pRows.length;
+    const origScore = participantOriginalityScore(
+      pRows.map(r => ({ text: r.label })),
+      globalFreq,
+    );
+    const uniqueResponses = pRows
+      .filter(r => globalFreq[r.label.trim().toLowerCase()] === 1)
+      .map(r => r.label);
+    const name = pRows[0]?.participant_name || 'Anonymous';
+    return { x: fluency, y: round2(origScore), name, originalResponses: uniqueResponses };
   });
 
-  // Top 5 rarest labels
-  const rarestEntries = Object.entries(labelCounts)
-    .filter(([, count]) => count === 1)
-    .map(([label]) => label)
-    .slice(0, 8);
+  // Carousel: sort drawings by originality (rarest first)
+  const carouselItems = rows
+    .map(r => ({
+      label: r.label,
+      drawingData: r.drawing_data,
+      participant: r.participant_name || 'Anonymous',
+      freq: globalFreq[r.label.trim().toLowerCase()] || 1,
+    }))
+    .sort((a, b) => a.freq - b.freq);
 
   return {
     fluency: {
       data: [{ name: 'Circles Completed', value: round1(mean(fluencyPerP)), sem: round1(sem(fluencyPerP)) }],
       n: sessions.length,
     },
-    originality: {
-      totalLabels,
-      uniqueLabels: Object.keys(labelCounts).length,
-      rareLabels,
-      rarePct: totalLabels > 0 ? round1((rareLabels / totalLabels) * 100) : 0,
-      rarestEntries,
-    },
-    flexibility: {
-      data: [{ name: 'Unique Labels', value: round1(mean(flexPerP)), sem: round1(sem(flexPerP)) }],
-    },
+    origScatter: origPerP,
+    carousel: carouselItems,
   };
 }
+
+// ── RAT chart computation ────────────────────────────────────────────────────
 
 function computeRATCharts(rows: RATRow[]) {
   const sessions = [...new Set(rows.map(r => r.session_id))];
 
-  // Solve rate per triplet
   const perTriplet: BarPoint[] = RAT_TRIPLETS.map(t => {
     const tRows = rows.filter(r => r.triplet_index === t.index);
     const attempts = tRows.filter(r => !r.skipped);
@@ -146,10 +171,7 @@ function computeRATCharts(rows: RATRow[]) {
     return { name: t.words.join('/'), value: round1(rate), sem: 0 };
   });
 
-  // Overall solve count per participant
   const solvedPerP = sessions.map(sid => rows.filter(r => r.session_id === sid && r.is_correct).length);
-
-  // RT for correct answers
   const rtCorrect = rows.filter(r => r.is_correct && r.response_time_ms > 0);
   const rtPerP = sessions.map(sid => {
     const pCorrect = rtCorrect.filter(r => r.session_id === sid);
@@ -158,26 +180,20 @@ function computeRATCharts(rows: RATRow[]) {
 
   return {
     perTriplet,
-    solved: {
-      data: [{ name: 'Solved', value: round1(mean(solvedPerP)), sem: round1(sem(solvedPerP)) }],
-      max: RAT_TRIPLETS.length,
-    },
-    rt: {
-      data: [{ name: 'RT (correct)', value: round1(mean(rtPerP)), sem: round1(sem(rtPerP)) }],
-    },
+    solved: { data: [{ name: 'Solved', value: round1(mean(solvedPerP)), sem: round1(sem(solvedPerP)) }] },
+    rt: { data: [{ name: 'RT (correct)', value: round1(mean(rtPerP)), sem: round1(sem(rtPerP)) }] },
   };
 }
 
-function computeDivVsConv(autRows: AUTRow[], ratRows: RATRow[]): ScatterPoint[] {
+function computeDivVsConv(autRows: AUTRow[], ratRows: RATRow[]): OrigScatterPoint[] {
   const autSessions = [...new Set(autRows.map(r => r.session_id))];
   const ratSessions = [...new Set(ratRows.map(r => r.session_id))];
-  const commonSessions = autSessions.filter(s => ratSessions.includes(s));
-
-  return commonSessions.map(sid => {
+  const common = autSessions.filter(s => ratSessions.includes(s));
+  return common.map(sid => {
     const autCount = autRows.filter(r => r.session_id === sid).length;
     const ratCount = ratRows.filter(r => r.session_id === sid && r.is_correct).length;
     const name = autRows.find(r => r.session_id === sid)?.participant_name || 'Anonymous';
-    return { x: autCount, y: ratCount, name };
+    return { x: autCount, y: ratCount, name, originalResponses: [] };
   });
 }
 
@@ -208,6 +224,71 @@ function ChartCard({ title, subtitle, revealed, onReveal, children }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const valFmt = (v: any): any => v != null ? [Number(v).toFixed(1), ''] : ['', ''];
 
+function OriginalityTooltip({ active, payload }: { active?: boolean; payload?: { payload: OrigScatterPoint }[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="px-4 py-3 text-xs shadow-xl rounded-lg max-w-[280px]"
+      style={{ background: '#1e293b', border: '1px solid #475569' }}>
+      <p className="font-bold text-white text-sm mb-1">{d.name}</p>
+      <p className="text-gray-300">Fluency: <span className="text-white font-semibold">{d.x}</span></p>
+      <p className="text-gray-300">Originality: <span className="text-white font-semibold">{d.y}</span></p>
+      {d.originalResponses.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-gray-600">
+          <p className="text-emerald-400 font-bold mb-1">Unique responses:</p>
+          {d.originalResponses.slice(0, 8).map((r, i) => (
+            <p key={i} className="text-gray-200 leading-snug">• {r}</p>
+          ))}
+          {d.originalResponses.length > 8 && (
+            <p className="text-gray-500 mt-0.5">+{d.originalResponses.length - 8} more</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DrawingCarousel({ items }: {
+  items: { label: string; drawingData: string; participant: string; freq: number }[];
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scroll = (dir: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollBy({ left: dir === 'left' ? -240 : 240, behavior: 'smooth' });
+  };
+
+  if (items.length === 0) return <p className="text-gray-500 text-sm text-center py-4">No drawings yet</p>;
+
+  return (
+    <div className="relative">
+      <button onClick={() => scroll('left')}
+        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-gray-800/90 hover:bg-gray-700 rounded-full flex items-center justify-center border border-gray-600 text-gray-300">
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+      <div ref={scrollRef}
+        className="flex gap-3 overflow-x-auto scrollbar-hide px-10 py-2"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {items.map((item, i) => (
+          <div key={i} className="flex-shrink-0 flex flex-col items-center gap-1.5 w-[140px]">
+            <div className="w-[120px] h-[120px] rounded-lg overflow-hidden border border-gray-600 bg-gray-800">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={item.drawingData} alt={item.label} className="w-full h-full object-contain" />
+            </div>
+            <span className={`text-xs font-medium text-center leading-tight ${item.freq === 1 ? 'text-emerald-400' : 'text-gray-400'}`}>
+              {item.label}
+            </span>
+            <span className="text-[10px] text-gray-500">{item.participant} {item.freq === 1 ? '(unique)' : `(×${item.freq})`}</span>
+          </div>
+        ))}
+      </div>
+      <button onClick={() => scroll('right')}
+        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-gray-800/90 hover:bg-gray-700 rounded-full flex items-center justify-center border border-gray-600 text-gray-300">
+        <ChevronRight className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function TeacherPage() {
@@ -219,6 +300,7 @@ export default function TeacherPage() {
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  const [useMock, setUseMock] = useState(false);
 
   const [autRows, setAutRows] = useState<AUTRow[]>([]);
   const [circleRows, setCircleRows] = useState<CircleRow[]>([]);
@@ -256,6 +338,20 @@ export default function TeacherPage() {
     return all;
   }
 
+  const loadMockData = useCallback(() => {
+    const mock = generateMockData();
+    setAutRows(mock.autRows as AUTRow[]);
+    setCircleRows(mock.circleRows as CircleRow[]);
+    setRatRows(mock.ratRows as RATRow[]);
+    const allSessions = new Set([
+      ...mock.autRows.map(r => r.session_id),
+      ...mock.circleRows.map(r => r.session_id),
+      ...mock.ratRows.map(r => r.session_id),
+    ]);
+    setNParticipants(allSessions.size);
+    setLoading(false);
+  }, []);
+
   const fetchData = useCallback(async () => {
     setRefreshing(true); setError(null);
     try {
@@ -267,7 +363,6 @@ export default function TeacherPage() {
       setAutRows(aut);
       setCircleRows(circles);
       setRatRows(rat);
-
       const allSessions = new Set([
         ...aut.map(r => r.session_id),
         ...circles.map(r => r.session_id),
@@ -278,7 +373,11 @@ export default function TeacherPage() {
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
-  useEffect(() => { if (authed) fetchData(); }, [authed, fetchData]);
+  useEffect(() => {
+    if (!authed) return;
+    if (useMock) loadMockData();
+    else fetchData();
+  }, [authed, useMock, loadMockData, fetchData]);
 
   const handleDownloadCSV = async (table: string, filename: string) => {
     try {
@@ -336,11 +435,20 @@ export default function TeacherPage() {
               <Eye className="w-7 h-7 text-emerald-400" />
               <h1 className="text-2xl font-bold">Teacher Dashboard — Creativity Battery</h1>
             </div>
-            {!loading && hasData && <p className="text-emerald-400 font-medium">{nParticipants} participant{nParticipants !== 1 ? 's' : ''}</p>}
+            {!loading && hasData && (
+              <p className="text-emerald-400 font-medium">
+                {nParticipants} participant{nParticipants !== 1 ? 's' : ''}
+                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+              </p>
+            )}
           </div>
           <div className="flex gap-3 flex-wrap">
-            <button onClick={fetchData} disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+            <button onClick={() => setUseMock(v => !v)}
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${useMock ? 'bg-amber-500/20 border-amber-400 text-amber-400' : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'}`}>
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
+            <button onClick={fetchData} disabled={refreshing || useMock}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 disabled:opacity-50">
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
             </button>
             <div className="relative group">
@@ -373,26 +481,25 @@ export default function TeacherPage() {
         {loading ? (
           <p className="text-center text-gray-400 py-20 text-lg">Loading…</p>
         ) : !hasData ? (
-          <p className="text-center text-gray-500 py-20 text-lg">No data yet</p>
+          <p className="text-center text-gray-500 py-20 text-lg">No data yet — try enabling mock data above</p>
         ) : (
           <div className="flex flex-col gap-6">
 
-            {/* ─── AUT Section ─── */}
+            {/* ═══════════════════ AUT Section ═══════════════════ */}
             <h2 className="text-lg font-bold text-emerald-400 border-b border-gray-700 pb-2 mt-4">
               Part 1 — Alternative Uses (AUT)
             </h2>
 
-            <ChartCard
-              title="Fluency: Mean Total Uses per Participant"
+            {/* AUT Fluency */}
+            <ChartCard title="Fluency: Mean Total Uses per Participant"
               subtitle="Error bar = SEM across participants."
-              revealed={!!revealed[1]} onReveal={() => reveal(1)}
-            >
+              revealed={!!revealed[1]} onReveal={() => reveal(1)}>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={autCharts.fluency.data} margin={{ left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                   <XAxis dataKey="name" tick={TICK} />
                   <YAxis tick={TICK} label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip contentStyle={BG} formatter={valFmt} />
+                  <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={valFmt} />
                   {revealed[1] && (
                     <Bar dataKey="value" name="Uses" fill="#34d399" radius={[4, 4, 0, 0]}>
                       <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#059669" direction="y" />
@@ -402,48 +509,89 @@ export default function TeacherPage() {
               </ResponsiveContainer>
             </ChartCard>
 
-            <ChartCard
-              title="Originality: Rare Uses"
-              subtitle="Uses that only one participant generated."
-              revealed={!!revealed[2]} onReveal={() => reveal(2)}
-            >
+            {/* AUT Originality Histogram */}
+            <ChartCard title="Originality: Response Frequency Distribution"
+              subtitle="Each bar = one unique response. Green = unique (appeared only once). Gray = common."
+              revealed={!!revealed[2]} onReveal={() => reveal(2)}>
               {revealed[2] ? (
-                <div className="grid grid-cols-2 gap-4 text-center">
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <p className="text-2xl font-bold text-emerald-400">{autCharts.originality.uniqueUses}</p>
-                    <p className="text-xs text-gray-400 mt-1">Unique uses</p>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <p className="text-2xl font-bold text-amber-400">{autCharts.originality.rareUses}</p>
-                    <p className="text-xs text-gray-400 mt-1">Rare (unique to 1 participant)</p>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-4 col-span-2">
-                    <p className="text-2xl font-bold text-sky-400">{autCharts.originality.rarePct}%</p>
-                    <p className="text-xs text-gray-400 mt-1">of all uses are rare</p>
-                  </div>
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-gray-400 leading-relaxed bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700">
+                    <span className="text-emerald-400 font-semibold">Originality scoring: </span>
+                    For each response, originality = 1 / (number of participants who gave that same response).
+                    A participant&apos;s originality score is the mean originality across all their responses.
+                    Ranges from near 0 (all common) to 1.0 (all unique).
+                  </p>
+                  <ResponsiveContainer width="100%" height={Math.max(300, Math.min(autCharts.histogram.length * 22, 600))}>
+                    <BarChart
+                      data={autCharts.histogram.slice(0, 40)}
+                      layout="vertical"
+                      margin={{ left: 120, right: 20, top: 5, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis type="number" tick={TICK}
+                        label={{ value: 'Frequency', position: 'insideBottom', offset: -5, style: LBL }} />
+                      <YAxis type="category" dataKey="name" tick={{ ...TICK, fontSize: 10 }} width={110} />
+                      <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} />
+                      <Bar dataKey="count" name="Frequency" radius={[0, 4, 4, 0]}>
+                        {autCharts.histogram.slice(0, 40).map((entry, i) => (
+                          <Cell key={i} fill={entry.unique ? '#34d399' : '#6b7280'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {autCharts.histogram.length > 40 && (
+                    <p className="text-xs text-gray-500 text-center">
+                      Showing top 40 of {autCharts.histogram.length} unique responses
+                    </p>
+                  )}
                 </div>
+              ) : <div className="h-[100px]" />}
+            </ChartCard>
+
+            {/* AUT Fluency × Originality Scatter */}
+            <ChartCard title="Individual: Fluency × Originality"
+              subtitle="Each dot = one participant. Hover for their unique responses."
+              revealed={!!revealed[3]} onReveal={() => reveal(3)}>
+              {autCharts.origScatter.length === 0 ? (
+                <div className="h-[260px] flex items-center justify-center text-gray-500 text-sm">No data</div>
               ) : (
-                <div className="h-[100px]" />
+                <ResponsiveContainer width="100%" height={300}>
+                  <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis type="number" dataKey="x" tick={TICK}
+                      label={{ value: 'Fluency (total uses)', position: 'insideBottom', offset: -10, style: LBL }} />
+                    <YAxis type="number" dataKey="y" tick={TICK} domain={[0, 1]}
+                      label={{ value: 'Originality score', angle: -90, position: 'insideLeft', style: LBL }} />
+                    <ZAxis range={[80, 80]} />
+                    <Tooltip content={<OriginalityTooltip />} />
+                    {revealed[3] && (
+                      <Scatter name="Participants" data={autCharts.origScatter} fill="#34d399">
+                        {autCharts.origScatter.map((_, i) => (
+                          <Cell key={i} fill="#34d399" stroke="#fff" strokeWidth={1.5} r={6} opacity={0.85} />
+                        ))}
+                      </Scatter>
+                    )}
+                  </ScatterChart>
+                </ResponsiveContainer>
               )}
             </ChartCard>
 
-            {/* ─── Circles Section ─── */}
+            {/* ═══════════════════ Circles Section ═══════════════════ */}
             <h2 className="text-lg font-bold text-sky-400 border-b border-gray-700 pb-2 mt-4">
               Part 2 — Circles
             </h2>
 
-            <ChartCard
-              title="Fluency: Mean Circles Completed per Participant"
+            {/* Circles Fluency */}
+            <ChartCard title="Fluency: Mean Circles Completed per Participant"
               subtitle="Error bar = SEM."
-              revealed={!!revealed[3]} onReveal={() => reveal(3)}
-            >
+              revealed={!!revealed[4]} onReveal={() => reveal(4)}>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={circlesCharts.fluency.data} margin={{ left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                   <XAxis dataKey="name" tick={TICK} />
                   <YAxis tick={TICK} domain={[0, 30]} label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip contentStyle={BG} formatter={valFmt} />
-                  {revealed[3] && (
+                  <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={valFmt} />
+                  {revealed[4] && (
                     <Bar dataKey="value" name="Circles" fill="#38bdf8" radius={[4, 4, 0, 0]}>
                       <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#0284c7" direction="y" />
                     </Bar>
@@ -452,57 +600,60 @@ export default function TeacherPage() {
               </ResponsiveContainer>
             </ChartCard>
 
-            <ChartCard
-              title="Originality: Rare Labels & Showcase"
-              subtitle="Labels unique to one participant."
-              revealed={!!revealed[4]} onReveal={() => reveal(4)}
-            >
-              {revealed[4] ? (
-                <div className="flex flex-col gap-4">
-                  <div className="grid grid-cols-2 gap-4 text-center">
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <p className="text-2xl font-bold text-sky-400">{circlesCharts.originality.uniqueLabels}</p>
-                      <p className="text-xs text-gray-400 mt-1">Unique labels</p>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <p className="text-2xl font-bold text-amber-400">{circlesCharts.originality.rareLabels}</p>
-                      <p className="text-xs text-gray-400 mt-1">Rare labels</p>
-                    </div>
-                  </div>
-                  {circlesCharts.originality.rarestEntries.length > 0 && (
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <p className="text-xs text-gray-400 mb-2">Rarest drawings (unique labels):</p>
-                      <div className="flex flex-wrap gap-2">
-                        {circlesCharts.originality.rarestEntries.map((label, i) => (
-                          <span key={i} className="px-3 py-1 bg-gray-700 text-sky-300 text-sm rounded-full">{label}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+            {/* Circles Fluency × Originality Scatter */}
+            <ChartCard title="Individual: Fluency × Originality"
+              subtitle="Each dot = one participant. Hover for unique labels."
+              revealed={!!revealed[5]} onReveal={() => reveal(5)}>
+              {circlesCharts.origScatter.length === 0 ? (
+                <div className="h-[260px] flex items-center justify-center text-gray-500 text-sm">No data</div>
               ) : (
-                <div className="h-[100px]" />
+                <ResponsiveContainer width="100%" height={300}>
+                  <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis type="number" dataKey="x" tick={TICK}
+                      label={{ value: 'Fluency (circles)', position: 'insideBottom', offset: -10, style: LBL }} />
+                    <YAxis type="number" dataKey="y" tick={TICK} domain={[0, 1]}
+                      label={{ value: 'Originality score', angle: -90, position: 'insideLeft', style: LBL }} />
+                    <ZAxis range={[80, 80]} />
+                    <Tooltip content={<OriginalityTooltip />} />
+                    {revealed[5] && (
+                      <Scatter name="Participants" data={circlesCharts.origScatter} fill="#38bdf8">
+                        {circlesCharts.origScatter.map((_, i) => (
+                          <Cell key={i} fill="#38bdf8" stroke="#fff" strokeWidth={1.5} r={6} opacity={0.85} />
+                        ))}
+                      </Scatter>
+                    )}
+                  </ScatterChart>
+                </ResponsiveContainer>
               )}
             </ChartCard>
 
-            {/* ─── RAT Section ─── */}
+            {/* Circles Drawing Carousel */}
+            <ChartCard title="Drawing Showcase (sorted by originality)"
+              subtitle="Most original (unique labels) appear first. Green label = unique."
+              revealed={!!revealed[6]} onReveal={() => reveal(6)}>
+              {revealed[6] ? (
+                <DrawingCarousel items={circlesCharts.carousel} />
+              ) : <div className="h-[100px]" />}
+            </ChartCard>
+
+            {/* ═══════════════════ RAT Section ═══════════════════ */}
             <h2 className="text-lg font-bold text-amber-400 border-b border-gray-700 pb-2 mt-4">
               Part 3 — Remote Associates (RAT)
             </h2>
 
-            <ChartCard
-              title="Solve Rate per Triplet"
+            {/* RAT Solve Rate per Triplet */}
+            <ChartCard title="Solve Rate per Triplet"
               subtitle="Percentage of non-skipped attempts that were correct."
-              revealed={!!revealed[5]} onReveal={() => reveal(5)}
-            >
+              revealed={!!revealed[7]} onReveal={() => reveal(7)}>
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={ratCharts.perTriplet} margin={{ left: 10, bottom: 60 }} barCategoryGap="20%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                   <XAxis dataKey="name" tick={{ ...TICK, fontSize: 9 }} angle={-45} textAnchor="end" interval={0} />
                   <YAxis domain={[0, 100]} tick={TICK}
                     label={{ value: 'Solve Rate (%)', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip contentStyle={BG} />
-                  {revealed[5] && (
+                  <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} />
+                  {revealed[7] && (
                     <Bar dataKey="value" name="Solve Rate" fill="#fbbf24" radius={[4, 4, 0, 0]} />
                   )}
                 </BarChart>
@@ -510,19 +661,17 @@ export default function TeacherPage() {
             </ChartCard>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ChartCard
-                title="Mean Triplets Solved"
+              <ChartCard title="Mean Triplets Solved"
                 subtitle={`Out of ${RAT_TRIPLETS.length}. Error bar = SEM.`}
-                revealed={!!revealed[6]} onReveal={() => reveal(6)}
-              >
+                revealed={!!revealed[8]} onReveal={() => reveal(8)}>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={ratCharts.solved.data} margin={{ left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                     <XAxis dataKey="name" tick={TICK} />
                     <YAxis tick={TICK} domain={[0, RAT_TRIPLETS.length]}
                       label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
-                    <Tooltip contentStyle={BG} formatter={valFmt} />
-                    {revealed[6] && (
+                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={valFmt} />
+                    {revealed[8] && (
                       <Bar dataKey="value" name="Solved" fill="#fbbf24" radius={[4, 4, 0, 0]}>
                         <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#d97706" direction="y" />
                       </Bar>
@@ -531,19 +680,17 @@ export default function TeacherPage() {
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard
-                title="Mean RT (Correct Answers)"
+              <ChartCard title="Mean RT (Correct Answers)"
                 subtitle="Error bar = SEM."
-                revealed={!!revealed[7]} onReveal={() => reveal(7)}
-              >
+                revealed={!!revealed[9]} onReveal={() => reveal(9)}>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={ratCharts.rt.data} margin={{ left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                     <XAxis dataKey="name" tick={TICK} />
                     <YAxis tick={TICK}
                       label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft', style: LBL }} />
-                    <Tooltip contentStyle={BG} />
-                    {revealed[7] && (
+                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} />
+                    {revealed[9] && (
                       <Bar dataKey="value" name="RT" fill="#fb923c" radius={[4, 4, 0, 0]}>
                         <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#c2410c" direction="y" />
                       </Bar>
@@ -553,18 +700,16 @@ export default function TeacherPage() {
               </ChartCard>
             </div>
 
-            {/* ─── Combined Section ─── */}
+            {/* ═══════════════════ Combined Section ═══════════════════ */}
             <h2 className="text-lg font-bold text-white border-b border-gray-700 pb-2 mt-4">
               Combined: Divergent vs. Convergent
             </h2>
 
-            <ChartCard
-              title="AUT Fluency vs. RAT Solved"
-              subtitle="Each dot = one participant. Divergent (AUT uses) vs. Convergent (RAT solved)."
-              revealed={!!revealed[8]} onReveal={() => reveal(8)}
-            >
+            <ChartCard title="AUT Fluency vs. RAT Solved"
+              subtitle="Each dot = one participant. Divergent (x) vs. Convergent (y)."
+              revealed={!!revealed[10]} onReveal={() => reveal(10)}>
               {scatterData.length === 0 ? (
-                <div className="h-[260px] flex items-center justify-center text-gray-500 text-sm">No participant data yet</div>
+                <div className="h-[260px] flex items-center justify-center text-gray-500 text-sm">No data</div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
@@ -575,31 +720,28 @@ export default function TeacherPage() {
                       label={{ value: 'RAT Solved (convergent)', angle: -90, position: 'insideLeft', style: LBL }} />
                     <ZAxis range={[80, 80]} />
                     <Tooltip
-                      contentStyle={BG}
+                      contentStyle={{ background: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       content={({ active, payload }: any) => {
                         if (!active || !payload?.length) return null;
                         const d = payload[0].payload;
                         return (
-                          <div style={BG} className="px-3 py-2 text-xs text-white shadow">
-                            <p className="font-semibold">{d.name}</p>
-                            <p>AUT: {d.x} uses</p>
-                            <p>RAT: {d.y} solved</p>
+                          <div className="px-3 py-2 text-xs shadow-xl rounded-lg"
+                            style={{ background: '#1e293b', border: '1px solid #475569' }}>
+                            <p className="font-bold text-white">{d.name}</p>
+                            <p className="text-gray-300">AUT: {d.x} uses</p>
+                            <p className="text-gray-300">RAT: {d.y} solved</p>
                           </div>
                         );
                       }}
                     />
                     <Legend verticalAlign="top" />
-                    {revealed[8] && (
-                      <Scatter
-                        name="Participants"
-                        data={scatterData}
-                        fill="#34d399"
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        shape={(props: any) => (
-                          <circle cx={props.cx} cy={props.cy} r={6} fill="#34d399" stroke="#fff" strokeWidth={1.5} opacity={0.85} />
-                        )}
-                      />
+                    {revealed[10] && (
+                      <Scatter name="Participants" data={scatterData} fill="#34d399">
+                        {scatterData.map((_, i) => (
+                          <Cell key={i} fill="#34d399" stroke="#fff" strokeWidth={1.5} r={6} opacity={0.85} />
+                        ))}
+                      </Scatter>
                     )}
                   </ScatterChart>
                 </ResponsiveContainer>

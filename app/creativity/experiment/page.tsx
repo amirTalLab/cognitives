@@ -101,8 +101,8 @@ function DrawingCanvas({ size, onDrawingChange }: {
         ref={canvasRef}
         width={size}
         height={size}
-        className="rounded-xl border border-gray-600 touch-manipulation"
-        style={{ width: size, height: size, cursor: 'crosshair' }}
+        className="rounded-xl border border-gray-600"
+        style={{ width: size, height: size, cursor: 'crosshair', touchAction: 'none' }}
         onMouseDown={startDraw}
         onMouseMove={moveDraw}
         onMouseUp={endDraw}
@@ -522,6 +522,9 @@ export default function ExperimentPage() {
             placeholder={isHe ? 'הקלידו שימוש...' : 'Type a use...'}
             className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-400 disabled:opacity-50"
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
           />
           <button
             onClick={submitAUTUse}
@@ -562,7 +565,7 @@ export default function ExperimentPage() {
     return (
       <div
         className="bg-[#0f172a] flex flex-col px-4 py-6"
-        style={{ height: '100dvh' }}
+        style={{ height: '100dvh', touchAction: 'none', overscrollBehavior: 'none' }}
         dir={isHe ? 'rtl' : 'ltr'}
       >
         <div className="flex-shrink-0 mb-3">
@@ -595,6 +598,9 @@ export default function ExperimentPage() {
               placeholder={isHe ? 'מה ציירתם? (תווית)' : 'What did you draw? (label)'}
               className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-400 disabled:opacity-50"
               autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
             />
             <button
               onClick={submitCircle}
@@ -678,6 +684,9 @@ export default function ExperimentPage() {
               placeholder="Type the linking word..."
               className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white text-center text-lg font-mono placeholder:text-gray-500 focus:outline-none focus:border-emerald-400 disabled:opacity-50"
               autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
             />
             <div className="flex gap-2">
               <button
