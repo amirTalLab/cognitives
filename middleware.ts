@@ -4,6 +4,7 @@ const EXPERIMENT_SLUGS = new Set([
   'stroop', 'drm', 'bouba-kiki', 'mentalRep', 'summaryStats',
   'posnerCueing', 'visualSearch', 'CompositeFace', 'wordSuperiority',
   'srt', 'twoStepTask', 'serialOrder', 'testingEffect', 'logics',
+  'creativity',
 ]);
 
 export async function middleware(request: NextRequest) {
@@ -60,5 +61,6 @@ export const config = {
     '/twoStepTask/:path*',     '/serialOrder/:path*',
     '/testingEffect/:path*',
     '/logics/:path*',
+    '/creativity/:path*',
   ],
 };
