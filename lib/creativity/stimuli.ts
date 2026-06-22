@@ -7,7 +7,7 @@ export const AUT_OBJECTS: AUTObject[] = [
   { index: 3, nameEn: 'Tin can',   nameHe: 'פחית שימורים' },
 ];
 
-export const AUT_TIME_PER_OBJECT_MS = 2 * 60 * 1000; // 2 minutes
+export const AUT_TIME_PER_OBJECT_MS = 1 * 60 * 1000; // 1 minute
 export const CIRCLES_TOTAL = 30;
 export const CIRCLES_TIME_MS = 6 * 60 * 1000; // 6 minutes
 export const RAT_TIME_MS = 5 * 60 * 1000; // 5 minutes

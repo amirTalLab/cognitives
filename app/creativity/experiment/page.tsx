@@ -390,7 +390,7 @@ export default function ExperimentPage() {
       'עבור כל חפץ, רשמו כמה שיותר שימושים שונים שאתם יכולים לחשוב עליהם.',
       'השימושים יכולים להיות יוצאי דופן או יצירתיים — אין תשובות שגויות.',
       'הקלידו כל שימוש ולחצו אנטר.',
-      'יש לכם 2 דקות לכל חפץ (4 חפצים).',
+      'יש לכם דקה לכל חפץ (4 חפצים).',
     ],
     button: 'התחילו',
   } : {
@@ -399,7 +399,7 @@ export default function ExperimentPage() {
       'For each everyday object, list as many different uses as you can.',
       'They can be unusual or creative — there are no wrong answers.',
       'Type each use and press enter.',
-      'You have 2 minutes per object (4 objects).',
+      'You have 1 minute per object (4 objects).',
     ],
     button: 'Start',
   };

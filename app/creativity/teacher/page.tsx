@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ErrorBar, Legend, Cell,
+  ResponsiveContainer, Legend, Cell, LabelList,
   ScatterChart, Scatter, ZAxis,
 } from 'recharts';
 import { Eye, Download, Home, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -22,14 +22,9 @@ async function sha256(str: string): Promise<string> {
 
 const TICK = { fill: '#9ca3af', fontSize: 11 };
 const LBL = { fill: '#9ca3af', fontSize: 11 };
+const TT_STYLE = { background: '#1e293b', border: '1px solid #475569', borderRadius: 8 };
 
 function mean(vals: number[]) { return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0; }
-function sem(vals: number[]) {
-  if (vals.length < 2) return 0;
-  const m = mean(vals);
-  const v = vals.reduce((a, x) => a + (x - m) ** 2, 0) / (vals.length - 1);
-  return Math.sqrt(v / vals.length);
-}
 function round1(n: number) { return Math.round(n * 10) / 10; }
 function round2(n: number) { return Math.round(n * 100) / 100; }
 
@@ -48,12 +43,11 @@ interface RATRow {
   skipped: boolean; response_time_ms: number; is_practice: boolean;
 }
 
-interface BarPoint { name: string; value: number; sem: number; }
 interface OrigScatterPoint { x: number; y: number; name: string; originalResponses: string[]; }
 
 // ── Originality helpers ──────────────────────────────────────────────────────
 
-function computeResponseFrequencies(rows: { session_id: string; text: string }[]) {
+function computeResponseFrequencies(rows: { text: string }[]) {
   const freq: Record<string, number> = {};
   for (const r of rows) {
     const key = r.text.trim().toLowerCase();
@@ -80,23 +74,37 @@ function participantOriginalityScore(
 
 function computeAUTCharts(rows: AUTRow[]) {
   const sessions = [...new Set(rows.map(r => r.session_id))];
-  const fluencyPerP = sessions.map(sid => rows.filter(r => r.session_id === sid).length);
 
-  const allUses = rows.map(r => ({ session_id: r.session_id, text: r.use_text }));
+  // Per-participant fluency for histogram
+  const fluencyPerP = sessions.map(sid => {
+    const name = rows.find(r => r.session_id === sid)?.participant_name || 'Anonymous';
+    const count = rows.filter(r => r.session_id === sid).length;
+    return { name, count };
+  }).sort((a, b) => b.count - a.count);
+
+  const allUses = rows.map(r => ({ text: r.use_text }));
   const globalFreq = computeResponseFrequencies(allUses);
 
-  // Histogram data: each unique label with its count
-  const histData = Object.entries(globalFreq)
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, count]) => ({ name: label, count, unique: count === 1 }));
+  // Originality distribution: group by frequency, y=count of labels at that freq
+  const freqCounts: Record<number, string[]> = {};
+  for (const [label, count] of Object.entries(globalFreq)) {
+    (freqCounts[count] ??= []).push(label);
+  }
+  const maxFreq = Math.max(...Object.keys(freqCounts).map(Number), 1);
+  const origDist = [];
+  for (let f = 1; f <= maxFreq; f++) {
+    const labels = freqCounts[f] || [];
+    if (labels.length > 0) {
+      origDist.push({ freq: f, count: labels.length, labels });
+    }
+  }
 
-  // Per-participant originality
-  const origPerP: OrigScatterPoint[] = sessions.map(sid => {
+  // Per-participant originality scatter
+  const origScatter: OrigScatterPoint[] = sessions.map(sid => {
     const pRows = rows.filter(r => r.session_id === sid);
     const fluency = pRows.length;
     const origScore = participantOriginalityScore(
-      pRows.map(r => ({ text: r.use_text })),
-      globalFreq,
+      pRows.map(r => ({ text: r.use_text })), globalFreq,
     );
     const uniqueResponses = pRows
       .filter(r => globalFreq[r.use_text.trim().toLowerCase()] === 1)
@@ -105,31 +113,28 @@ function computeAUTCharts(rows: AUTRow[]) {
     return { x: fluency, y: round2(origScore), name, originalResponses: uniqueResponses };
   });
 
-  return {
-    fluency: {
-      data: [{ name: 'Total Uses', value: round1(mean(fluencyPerP)), sem: round1(sem(fluencyPerP)) }],
-      n: sessions.length,
-    },
-    histogram: histData,
-    origScatter: origPerP,
-  };
+  return { fluencyPerP, origDist, origScatter };
 }
 
 // ── Circles chart computation ────────────────────────────────────────────────
 
 function computeCirclesCharts(rows: CircleRow[]) {
   const sessions = [...new Set(rows.map(r => r.session_id))];
-  const fluencyPerP = sessions.map(sid => rows.filter(r => r.session_id === sid).length);
 
-  const allLabels = rows.map(r => ({ session_id: r.session_id, text: r.label }));
+  const fluencyPerP = sessions.map(sid => {
+    const name = rows.find(r => r.session_id === sid)?.participant_name || 'Anonymous';
+    const count = rows.filter(r => r.session_id === sid).length;
+    return { name, count };
+  }).sort((a, b) => b.count - a.count);
+
+  const allLabels = rows.map(r => ({ text: r.label }));
   const globalFreq = computeResponseFrequencies(allLabels);
 
-  const origPerP: OrigScatterPoint[] = sessions.map(sid => {
+  const origScatter: OrigScatterPoint[] = sessions.map(sid => {
     const pRows = rows.filter(r => r.session_id === sid);
     const fluency = pRows.length;
     const origScore = participantOriginalityScore(
-      pRows.map(r => ({ text: r.label })),
-      globalFreq,
+      pRows.map(r => ({ text: r.label })), globalFreq,
     );
     const uniqueResponses = pRows
       .filter(r => globalFreq[r.label.trim().toLowerCase()] === 1)
@@ -138,7 +143,6 @@ function computeCirclesCharts(rows: CircleRow[]) {
     return { x: fluency, y: round2(origScore), name, originalResponses: uniqueResponses };
   });
 
-  // Carousel: sort drawings by originality (rarest first)
   const carouselItems = rows
     .map(r => ({
       label: r.label,
@@ -148,41 +152,35 @@ function computeCirclesCharts(rows: CircleRow[]) {
     }))
     .sort((a, b) => a.freq - b.freq);
 
-  return {
-    fluency: {
-      data: [{ name: 'Circles Completed', value: round1(mean(fluencyPerP)), sem: round1(sem(fluencyPerP)) }],
-      n: sessions.length,
-    },
-    origScatter: origPerP,
-    carousel: carouselItems,
-  };
+  return { fluencyPerP, origScatter, carousel: carouselItems };
 }
 
 // ── RAT chart computation ────────────────────────────────────────────────────
 
+interface RATTripletPoint { name: string; value: number; solution: string; }
+
 function computeRATCharts(rows: RATRow[]) {
   const sessions = [...new Set(rows.map(r => r.session_id))];
 
-  const perTriplet: BarPoint[] = RAT_TRIPLETS.map(t => {
+  const perTriplet: RATTripletPoint[] = RAT_TRIPLETS.map(t => {
     const tRows = rows.filter(r => r.triplet_index === t.index);
     const attempts = tRows.filter(r => !r.skipped);
     const correct = tRows.filter(r => r.is_correct);
     const rate = attempts.length > 0 ? (correct.length / attempts.length) * 100 : 0;
-    return { name: t.words.join('/'), value: round1(rate), sem: 0 };
+    return { name: t.words.join('/'), value: round1(rate), solution: t.solution };
   });
 
-  const solvedPerP = sessions.map(sid => rows.filter(r => r.session_id === sid && r.is_correct).length);
-  const rtCorrect = rows.filter(r => r.is_correct && r.response_time_ms > 0);
-  const rtPerP = sessions.map(sid => {
-    const pCorrect = rtCorrect.filter(r => r.session_id === sid);
-    return pCorrect.length > 0 ? mean(pCorrect.map(r => r.response_time_ms)) : 0;
-  }).filter(v => v > 0);
+  // Per-participant: solved count (fluency) and mean RT
+  const rtScatter = sessions.map(sid => {
+    const pRows = rows.filter(r => r.session_id === sid);
+    const solved = pRows.filter(r => r.is_correct).length;
+    const correctRTs = pRows.filter(r => r.is_correct && r.response_time_ms > 0).map(r => r.response_time_ms);
+    const avgRT = correctRTs.length > 0 ? round1(mean(correctRTs)) : 0;
+    const name = pRows[0]?.participant_name || 'Anonymous';
+    return { x: solved, y: avgRT, name };
+  }).filter(p => p.y > 0);
 
-  return {
-    perTriplet,
-    solved: { data: [{ name: 'Solved', value: round1(mean(solvedPerP)), sem: round1(sem(solvedPerP)) }] },
-    rt: { data: [{ name: 'RT (correct)', value: round1(mean(rtPerP)), sem: round1(sem(rtPerP)) }] },
-  };
+  return { perTriplet, rtScatter };
 }
 
 function computeDivVsConv(autRows: AUTRow[], ratRows: RATRow[]): OrigScatterPoint[] {
@@ -221,15 +219,11 @@ function ChartCard({ title, subtitle, revealed, onReveal, children }: {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const valFmt = (v: any): any => v != null ? [Number(v).toFixed(1), ''] : ['', ''];
-
 function OriginalityTooltip({ active, payload }: { active?: boolean; payload?: { payload: OrigScatterPoint }[] }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="px-4 py-3 text-xs shadow-xl rounded-lg max-w-[280px]"
-      style={{ background: '#1e293b', border: '1px solid #475569' }}>
+    <div className="px-4 py-3 text-xs shadow-xl rounded-lg max-w-[280px]" style={TT_STYLE}>
       <p className="font-bold text-white text-sm mb-1">{d.name}</p>
       <p className="text-gray-300">Fluency: <span className="text-white font-semibold">{d.x}</span></p>
       <p className="text-gray-300">Originality: <span className="text-white font-semibold">{d.y}</span></p>
@@ -237,13 +231,37 @@ function OriginalityTooltip({ active, payload }: { active?: boolean; payload?: {
         <div className="mt-2 pt-2 border-t border-gray-600">
           <p className="text-emerald-400 font-bold mb-1">Unique responses:</p>
           {d.originalResponses.slice(0, 8).map((r, i) => (
-            <p key={i} className="text-gray-200 leading-snug">• {r}</p>
+            <p key={i} className="text-gray-200 leading-snug">&bull; {r}</p>
           ))}
           {d.originalResponses.length > 8 && (
             <p className="text-gray-500 mt-0.5">+{d.originalResponses.length - 8} more</p>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function OrigDistTooltip({ active, payload }: {
+  active?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload?: { payload: { freq: number; count: number; labels: string[] } }[];
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="px-4 py-3 text-xs shadow-xl rounded-lg max-w-[320px]" style={TT_STYLE}>
+      <p className="font-bold text-white text-sm mb-1">
+        Frequency {d.freq}: {d.count} response{d.count !== 1 ? 's' : ''}
+      </p>
+      <div className="mt-1 max-h-[200px] overflow-y-auto">
+        {d.labels.slice(0, 20).map((l, i) => (
+          <p key={i} className="text-gray-200 leading-snug">&bull; {l}</p>
+        ))}
+        {d.labels.length > 20 && (
+          <p className="text-gray-500 mt-0.5">+{d.labels.length - 20} more</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -256,9 +274,7 @@ function DrawingCarousel({ items }: {
     if (!scrollRef.current) return;
     scrollRef.current.scrollBy({ left: dir === 'left' ? -240 : 240, behavior: 'smooth' });
   };
-
   if (items.length === 0) return <p className="text-gray-500 text-sm text-center py-4">No drawings yet</p>;
-
   return (
     <div className="relative">
       <button onClick={() => scroll('left')}
@@ -266,7 +282,7 @@ function DrawingCarousel({ items }: {
         <ChevronLeft className="w-4 h-4" />
       </button>
       <div ref={scrollRef}
-        className="flex gap-3 overflow-x-auto scrollbar-hide px-10 py-2"
+        className="flex gap-3 overflow-x-auto px-10 py-2"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {items.map((item, i) => (
           <div key={i} className="flex-shrink-0 flex flex-col items-center gap-1.5 w-[140px]">
@@ -360,13 +376,9 @@ export default function TeacherPage() {
         fetchPaginated<CircleRow>('creativity_circles_results'),
         fetchPaginated<RATRow>('creativity_rat_results'),
       ]);
-      setAutRows(aut);
-      setCircleRows(circles);
-      setRatRows(rat);
+      setAutRows(aut); setCircleRows(circles); setRatRows(rat);
       const allSessions = new Set([
-        ...aut.map(r => r.session_id),
-        ...circles.map(r => r.session_id),
-        ...rat.map(r => r.session_id),
+        ...aut.map(r => r.session_id), ...circles.map(r => r.session_id), ...rat.map(r => r.session_id),
       ]);
       setNParticipants(allSessions.size);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -375,8 +387,7 @@ export default function TeacherPage() {
 
   useEffect(() => {
     if (!authed) return;
-    if (useMock) loadMockData();
-    else fetchData();
+    if (useMock) loadMockData(); else fetchData();
   }, [authed, useMock, loadMockData, fetchData]);
 
   const handleDownloadCSV = async (table: string, filename: string) => {
@@ -421,7 +432,6 @@ export default function TeacherPage() {
   const circlesCharts = computeCirclesCharts(circleRows);
   const ratCharts = computeRATCharts(ratRows);
   const scatterData = computeDivVsConv(autRows, ratRows);
-
   const hasData = nParticipants > 0;
 
   return (
@@ -490,28 +500,26 @@ export default function TeacherPage() {
               Part 1 — Alternative Uses (AUT)
             </h2>
 
-            {/* AUT Fluency */}
-            <ChartCard title="Fluency: Mean Total Uses per Participant"
-              subtitle="Error bar = SEM across participants."
+            {/* AUT Fluency Histogram */}
+            <ChartCard title="Fluency: Uses per Participant"
+              subtitle="One bar per participant, sorted by total uses."
               revealed={!!revealed[1]} onReveal={() => reveal(1)}>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={autCharts.fluency.data} margin={{ left: 10, bottom: 5 }}>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={autCharts.fluencyPerP} margin={{ left: 10, bottom: 40 }} barCategoryGap="15%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="name" tick={TICK} />
-                  <YAxis tick={TICK} label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={valFmt} />
+                  <XAxis dataKey="name" tick={{ ...TICK, fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
+                  <YAxis tick={TICK} label={{ value: 'Total uses', angle: -90, position: 'insideLeft', style: LBL }} />
+                  <Tooltip contentStyle={TT_STYLE} />
                   {revealed[1] && (
-                    <Bar dataKey="value" name="Uses" fill="#34d399" radius={[4, 4, 0, 0]}>
-                      <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#059669" direction="y" />
-                    </Bar>
+                    <Bar dataKey="count" name="Uses" fill="#34d399" radius={[4, 4, 0, 0]} />
                   )}
                 </BarChart>
               </ResponsiveContainer>
             </ChartCard>
 
-            {/* AUT Originality Histogram */}
+            {/* AUT Originality Distribution */}
             <ChartCard title="Originality: Response Frequency Distribution"
-              subtitle="Each bar = one unique response. Green = unique (appeared only once). Gray = common."
+              subtitle="X = how many participants gave a response. Y = how many unique responses have that frequency. Hover for examples."
               revealed={!!revealed[2]} onReveal={() => reveal(2)}>
               {revealed[2] ? (
                 <div className="flex flex-col gap-3">
@@ -521,29 +529,21 @@ export default function TeacherPage() {
                     A participant&apos;s originality score is the mean originality across all their responses.
                     Ranges from near 0 (all common) to 1.0 (all unique).
                   </p>
-                  <ResponsiveContainer width="100%" height={Math.max(300, Math.min(autCharts.histogram.length * 22, 600))}>
-                    <BarChart
-                      data={autCharts.histogram.slice(0, 40)}
-                      layout="vertical"
-                      margin={{ left: 120, right: 20, top: 5, bottom: 5 }}
-                    >
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={autCharts.origDist} margin={{ left: 10, bottom: 20, right: 10 }} barCategoryGap="20%">
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis type="number" tick={TICK}
-                        label={{ value: 'Frequency', position: 'insideBottom', offset: -5, style: LBL }} />
-                      <YAxis type="category" dataKey="name" tick={{ ...TICK, fontSize: 10 }} width={110} />
-                      <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} />
-                      <Bar dataKey="count" name="Frequency" radius={[0, 4, 4, 0]}>
-                        {autCharts.histogram.slice(0, 40).map((entry, i) => (
-                          <Cell key={i} fill={entry.unique ? '#34d399' : '#6b7280'} />
+                      <XAxis dataKey="freq" tick={TICK} type="number" domain={[0, 'auto']}
+                        label={{ value: 'Frequency (# participants who gave this response)', position: 'insideBottom', offset: -10, style: LBL }} />
+                      <YAxis tick={TICK}
+                        label={{ value: '# unique responses', angle: -90, position: 'insideLeft', style: LBL }} />
+                      <Tooltip content={<OrigDistTooltip />} />
+                      <Bar dataKey="count" name="Responses" radius={[4, 4, 0, 0]}>
+                        {autCharts.origDist.map((entry, i) => (
+                          <Cell key={i} fill={entry.freq === 1 ? '#34d399' : '#6b7280'} />
                         ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                  {autCharts.histogram.length > 40 && (
-                    <p className="text-xs text-gray-500 text-center">
-                      Showing top 40 of {autCharts.histogram.length} unique responses
-                    </p>
-                  )}
                 </div>
               ) : <div className="h-[100px]" />}
             </ChartCard>
@@ -581,20 +581,19 @@ export default function TeacherPage() {
               Part 2 — Circles
             </h2>
 
-            {/* Circles Fluency */}
-            <ChartCard title="Fluency: Mean Circles Completed per Participant"
-              subtitle="Error bar = SEM."
+            {/* Circles Fluency Histogram */}
+            <ChartCard title="Fluency: Circles Completed per Participant"
+              subtitle="One bar per participant, sorted by count."
               revealed={!!revealed[4]} onReveal={() => reveal(4)}>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={circlesCharts.fluency.data} margin={{ left: 10, bottom: 5 }}>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={circlesCharts.fluencyPerP} margin={{ left: 10, bottom: 40 }} barCategoryGap="15%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="name" tick={TICK} />
-                  <YAxis tick={TICK} domain={[0, 30]} label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={valFmt} />
+                  <XAxis dataKey="name" tick={{ ...TICK, fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
+                  <YAxis tick={TICK} domain={[0, 30]}
+                    label={{ value: 'Circles completed', angle: -90, position: 'insideLeft', style: LBL }} />
+                  <Tooltip contentStyle={TT_STYLE} />
                   {revealed[4] && (
-                    <Bar dataKey="value" name="Circles" fill="#38bdf8" radius={[4, 4, 0, 0]}>
-                      <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#0284c7" direction="y" />
-                    </Bar>
+                    <Bar dataKey="count" name="Circles" fill="#38bdf8" radius={[4, 4, 0, 0]} />
                   )}
                 </BarChart>
               </ResponsiveContainer>
@@ -642,63 +641,67 @@ export default function TeacherPage() {
               Part 3 — Remote Associates (RAT)
             </h2>
 
-            {/* RAT Solve Rate per Triplet */}
+            {/* RAT Solve Rate per Triplet with solutions */}
             <ChartCard title="Solve Rate per Triplet"
-              subtitle="Percentage of non-skipped attempts that were correct."
+              subtitle="Correct answer shown above each bar."
               revealed={!!revealed[7]} onReveal={() => reveal(7)}>
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={ratCharts.perTriplet} margin={{ left: 10, bottom: 60 }} barCategoryGap="20%">
+              <ResponsiveContainer width="100%" height={380}>
+                <BarChart data={ratCharts.perTriplet} margin={{ left: 10, bottom: 60, top: 25 }} barCategoryGap="20%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                   <XAxis dataKey="name" tick={{ ...TICK, fontSize: 9 }} angle={-45} textAnchor="end" interval={0} />
                   <YAxis domain={[0, 100]} tick={TICK}
                     label={{ value: 'Solve Rate (%)', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} />
+                  <Tooltip contentStyle={TT_STYLE} />
                   {revealed[7] && (
-                    <Bar dataKey="value" name="Solve Rate" fill="#fbbf24" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="value" name="Solve Rate" fill="#fbbf24" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="solution" position="top"
+                        style={{ fill: '#fbbf24', fontSize: 10, fontWeight: 'bold', fontFamily: 'monospace' }} />
+                    </Bar>
                   )}
                 </BarChart>
               </ResponsiveContainer>
             </ChartCard>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ChartCard title="Mean Triplets Solved"
-                subtitle={`Out of ${RAT_TRIPLETS.length}. Error bar = SEM.`}
-                revealed={!!revealed[8]} onReveal={() => reveal(8)}>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={ratCharts.solved.data} margin={{ left: 10, bottom: 5 }}>
+            {/* RAT: RT × Solved scatter */}
+            <ChartCard title="Individual: Solved × Mean RT"
+              subtitle="Each dot = one participant. X = triplets solved, Y = mean RT on correct answers."
+              revealed={!!revealed[8]} onReveal={() => reveal(8)}>
+              {ratCharts.rtScatter.length === 0 ? (
+                <div className="h-[260px] flex items-center justify-center text-gray-500 text-sm">No data</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="name" tick={TICK} />
-                    <YAxis tick={TICK} domain={[0, RAT_TRIPLETS.length]}
-                      label={{ value: 'Count', angle: -90, position: 'insideLeft', style: LBL }} />
-                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={valFmt} />
+                    <XAxis type="number" dataKey="x" tick={TICK} domain={[0, 15]}
+                      label={{ value: 'Triplets solved', position: 'insideBottom', offset: -10, style: LBL }} />
+                    <YAxis type="number" dataKey="y" tick={TICK}
+                      label={{ value: 'Mean RT (ms)', angle: -90, position: 'insideLeft', style: LBL }} />
+                    <ZAxis range={[80, 80]} />
+                    <Tooltip
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0].payload;
+                        return (
+                          <div className="px-3 py-2 text-xs shadow-xl rounded-lg" style={TT_STYLE}>
+                            <p className="font-bold text-white">{d.name}</p>
+                            <p className="text-gray-300">Solved: <span className="text-white font-semibold">{d.x}</span></p>
+                            <p className="text-gray-300">Mean RT: <span className="text-white font-semibold">{d.y} ms</span></p>
+                          </div>
+                        );
+                      }}
+                    />
                     {revealed[8] && (
-                      <Bar dataKey="value" name="Solved" fill="#fbbf24" radius={[4, 4, 0, 0]}>
-                        <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#d97706" direction="y" />
-                      </Bar>
+                      <Scatter name="Participants" data={ratCharts.rtScatter} fill="#fbbf24">
+                        {ratCharts.rtScatter.map((_, i) => (
+                          <Cell key={i} fill="#fbbf24" stroke="#fff" strokeWidth={1.5} r={6} opacity={0.85} />
+                        ))}
+                      </Scatter>
                     )}
-                  </BarChart>
+                  </ScatterChart>
                 </ResponsiveContainer>
-              </ChartCard>
-
-              <ChartCard title="Mean RT (Correct Answers)"
-                subtitle="Error bar = SEM."
-                revealed={!!revealed[9]} onReveal={() => reveal(9)}>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={ratCharts.rt.data} margin={{ left: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="name" tick={TICK} />
-                    <YAxis tick={TICK}
-                      label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft', style: LBL }} />
-                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} />
-                    {revealed[9] && (
-                      <Bar dataKey="value" name="RT" fill="#fb923c" radius={[4, 4, 0, 0]}>
-                        <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#c2410c" direction="y" />
-                      </Bar>
-                    )}
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-            </div>
+              )}
+            </ChartCard>
 
             {/* ═══════════════════ Combined Section ═══════════════════ */}
             <h2 className="text-lg font-bold text-white border-b border-gray-700 pb-2 mt-4">
@@ -720,14 +723,12 @@ export default function TeacherPage() {
                       label={{ value: 'RAT Solved (convergent)', angle: -90, position: 'insideLeft', style: LBL }} />
                     <ZAxis range={[80, 80]} />
                     <Tooltip
-                      contentStyle={{ background: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       content={({ active, payload }: any) => {
                         if (!active || !payload?.length) return null;
                         const d = payload[0].payload;
                         return (
-                          <div className="px-3 py-2 text-xs shadow-xl rounded-lg"
-                            style={{ background: '#1e293b', border: '1px solid #475569' }}>
+                          <div className="px-3 py-2 text-xs shadow-xl rounded-lg" style={TT_STYLE}>
                             <p className="font-bold text-white">{d.name}</p>
                             <p className="text-gray-300">AUT: {d.x} uses</p>
                             <p className="text-gray-300">RAT: {d.y} solved</p>

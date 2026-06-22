@@ -17,7 +17,7 @@ export default function CreativityLanding() {
     subtitle: 'שלוש משימות קצרות שבודקות חשיבה יצירתית',
     inst: [
       'תבצעו שלוש משימות, אחת אחרי השנייה.',
-      'חלק 1: רשימת שימושים לחפצי יומיום (2 דקות לכל חפץ).',
+      'חלק 1: רשימת שימושים לחפצי יומיום (דקה לכל חפץ).',
       'חלק 2: הפיכת עיגולים ריקים לציורים (6 דקות).',
       'חלק 3: מציאת מילה מקשרת לשלישיות מילים (5 דקות).',
       'כל חלק מתוזמן — עבדו מהר ככל האפשר!',
@@ -31,7 +31,7 @@ export default function CreativityLanding() {
     subtitle: 'Three short tasks measuring creative thinking',
     inst: [
       'You will complete three tasks, one after another.',
-      'Part 1: List uses for everyday objects (2 minutes each).',
+      'Part 1: List uses for everyday objects (1 minute each).',
       'Part 2: Turn empty circles into drawings (6 minutes).',
       'Part 3: Find the word linking three-word sets (5 minutes).',
       'Each part is timed — work as quickly as you can!',
