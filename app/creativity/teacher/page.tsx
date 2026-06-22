@@ -520,13 +520,15 @@ export default function TeacherPage() {
                     label={{ value: 'Total uses', position: 'insideBottom', offset: -10, style: LBL }} />
                   <YAxis tick={TICK} allowDecimals={false}
                     label={{ value: '# participants', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip content={({ active, payload }: { active?: boolean; payload?: { payload: { uses: number; count: number; names: string[] } }[] }) => {
+                  <Tooltip
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    content={({ active, payload }: any) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
                     return (
                       <div className="px-3 py-2 text-xs shadow-xl rounded-lg" style={TT_STYLE}>
                         <p className="font-bold text-white">{d.uses} uses: {d.count} participant{d.count !== 1 ? 's' : ''}</p>
-                        <div className="mt-1">{d.names.map((n, i) => <p key={i} className="text-gray-300">&bull; {n}</p>)}</div>
+                        <div className="mt-1">{d.names.map((n: string, i: number) => <p key={i} className="text-gray-300">&bull; {n}</p>)}</div>
                       </div>
                     );
                   }} />
@@ -612,13 +614,15 @@ export default function TeacherPage() {
                     label={{ value: 'Circles completed', position: 'insideBottom', offset: -10, style: LBL }} />
                   <YAxis tick={TICK} allowDecimals={false}
                     label={{ value: '# participants', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip content={({ active, payload }: { active?: boolean; payload?: { payload: { uses: number; count: number; names: string[] } }[] }) => {
+                  <Tooltip
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    content={({ active, payload }: any) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
                     return (
                       <div className="px-3 py-2 text-xs shadow-xl rounded-lg" style={TT_STYLE}>
                         <p className="font-bold text-white">{d.uses} circles: {d.count} participant{d.count !== 1 ? 's' : ''}</p>
-                        <div className="mt-1">{d.names.map((n, i) => <p key={i} className="text-gray-300">&bull; {n}</p>)}</div>
+                        <div className="mt-1">{d.names.map((n: string, i: number) => <p key={i} className="text-gray-300">&bull; {n}</p>)}</div>
                       </div>
                     );
                   }} />
