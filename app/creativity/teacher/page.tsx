@@ -91,16 +91,22 @@ function computeAUTCharts(rows: AUTRow[]) {
   const globalFreq = computeResponseFrequencies(allUses);
 
   // Originality distribution: group by frequency, y=count of labels at that freq
-  const freqCounts: Record<number, string[]> = {};
+  // Track which object each response came from
+  const labelToObject: Record<string, string> = {};
+  for (const r of rows) {
+    const key = r.use_text.trim().toLowerCase();
+    if (!labelToObject[key]) labelToObject[key] = r.object_name;
+  }
+  const freqCounts: Record<number, { text: string; object: string }[]> = {};
   for (const [label, count] of Object.entries(globalFreq)) {
-    (freqCounts[count] ??= []).push(label);
+    (freqCounts[count] ??= []).push({ text: label, object: labelToObject[label] || '' });
   }
   const maxFreq = Math.max(...Object.keys(freqCounts).map(Number), 1);
   const origDist = [];
   for (let f = 1; f <= maxFreq; f++) {
-    const labels = freqCounts[f] || [];
-    if (labels.length > 0) {
-      origDist.push({ freq: f, count: labels.length, labels });
+    const items = freqCounts[f] || [];
+    if (items.length > 0) {
+      origDist.push({ freq: f, count: items.length, items });
     }
   }
 
@@ -254,22 +260,33 @@ function OriginalityTooltip({ active, payload }: { active?: boolean; payload?: {
 function OrigDistTooltip({ active, payload }: {
   active?: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload?: { payload: { freq: number; count: number; labels: string[] } }[];
+  payload?: { payload: { freq: number; count: number; items: { text: string; object: string }[] } }[];
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
+  // Group by object
+  const byObject: Record<string, string[]> = {};
+  for (const item of d.items) {
+    (byObject[item.object || 'Other'] ??= []).push(item.text);
+  }
+  const objects = Object.entries(byObject);
   return (
     <div className="px-4 py-3 text-xs shadow-xl rounded-lg max-w-[320px]" style={TT_STYLE}>
       <p className="font-bold text-white text-sm mb-1">
         Frequency {d.freq}: {d.count} response{d.count !== 1 ? 's' : ''}
       </p>
-      <div className="mt-1 max-h-[200px] overflow-y-auto">
-        {d.labels.slice(0, 20).map((l, i) => (
-          <p key={i} className="text-gray-200 leading-snug">&bull; {l}</p>
+      <div className="mt-1 max-h-[240px] overflow-y-auto">
+        {objects.map(([obj, labels], oi) => (
+          <div key={oi} className={oi > 0 ? 'mt-1.5' : ''}>
+            <p className="text-emerald-400 font-semibold">{obj}</p>
+            {labels.slice(0, 8).map((l, i) => (
+              <p key={i} className="text-gray-200 leading-snug pl-2">&bull; {l}</p>
+            ))}
+            {labels.length > 8 && (
+              <p className="text-gray-500 pl-2">+{labels.length - 8} more</p>
+            )}
+          </div>
         ))}
-        {d.labels.length > 20 && (
-          <p className="text-gray-500 mt-0.5">+{d.labels.length - 20} more</p>
-        )}
       </div>
     </div>
   );
@@ -544,29 +561,21 @@ export default function TeacherPage() {
               subtitle="X = how many participants gave a response. Y = how many unique responses have that frequency. Hover for examples."
               revealed={!!revealed[2]} onReveal={() => reveal(2)}>
               {revealed[2] ? (
-                <div className="flex flex-col gap-3">
-                  <p className="text-xs text-gray-400 leading-relaxed bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700">
-                    <span className="text-emerald-400 font-semibold">Originality scoring: </span>
-                    For each response, originality = 1 / (number of participants who gave that same response).
-                    A participant&apos;s originality score is the mean originality across all their responses.
-                    Ranges from near 0 (all common) to 1.0 (all unique).
-                  </p>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={autCharts.origDist} margin={{ left: 10, bottom: 20, right: 10 }} barCategoryGap="20%">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="freq" tick={TICK} type="number" domain={[0, 'auto']}
-                        label={{ value: 'Frequency (# participants who gave this response)', position: 'insideBottom', offset: -10, style: LBL }} />
-                      <YAxis tick={TICK}
-                        label={{ value: '# unique responses', angle: -90, position: 'insideLeft', style: LBL }} />
-                      <Tooltip content={<OrigDistTooltip />} />
-                      <Bar dataKey="count" name="Responses" radius={[4, 4, 0, 0]}>
-                        {autCharts.origDist.map((entry, i) => (
-                          <Cell key={i} fill={entry.freq === 1 ? '#34d399' : '#6b7280'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={autCharts.origDist} margin={{ left: 10, bottom: 20, right: 10 }} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis dataKey="freq" tick={TICK} type="number" domain={[0, 'auto']}
+                      label={{ value: 'Frequency (# participants who gave this response)', position: 'insideBottom', offset: -10, style: LBL }} />
+                    <YAxis tick={TICK}
+                      label={{ value: '# unique responses', angle: -90, position: 'insideLeft', style: LBL }} />
+                    <Tooltip content={<OrigDistTooltip />} />
+                    <Bar dataKey="count" name="Responses" radius={[4, 4, 0, 0]}>
+                      {autCharts.origDist.map((entry, i) => (
+                        <Cell key={i} fill={entry.freq === 1 ? '#34d399' : '#6b7280'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               ) : <div className="h-[100px]" />}
             </ChartCard>
 
@@ -577,6 +586,13 @@ export default function TeacherPage() {
               {autCharts.origScatter.length === 0 ? (
                 <div className="h-[260px] flex items-center justify-center text-gray-500 text-sm">No data</div>
               ) : (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-gray-400 leading-relaxed bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700">
+                    <span className="text-emerald-400 font-semibold">Originality scoring: </span>
+                    For each response, originality = 1 / (number of participants who gave that same response).
+                    A participant&apos;s originality score is the mean originality across all their responses.
+                    Ranges from near 0 (all common) to 1.0 (all unique).
+                  </p>
                 <ResponsiveContainer width="100%" height={300}>
                   <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -595,6 +611,7 @@ export default function TeacherPage() {
                     )}
                   </ScatterChart>
                 </ResponsiveContainer>
+                </div>
               )}
             </ChartCard>
 
