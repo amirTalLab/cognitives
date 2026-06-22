@@ -75,12 +75,17 @@ function participantOriginalityScore(
 function computeAUTCharts(rows: AUTRow[]) {
   const sessions = [...new Set(rows.map(r => r.session_id))];
 
-  // Per-participant fluency for histogram
-  const fluencyPerP = sessions.map(sid => {
+  // Per-participant fluency counts
+  const pCounts = sessions.map(sid => rows.filter(r => r.session_id === sid).length);
+  // Histogram: x = total uses, y = how many participants had that count
+  const fluencyBins: Record<number, string[]> = {};
+  sessions.forEach((sid, i) => {
     const name = rows.find(r => r.session_id === sid)?.participant_name || 'Anonymous';
-    const count = rows.filter(r => r.session_id === sid).length;
-    return { name, count };
-  }).sort((a, b) => b.count - a.count);
+    (fluencyBins[pCounts[i]] ??= []).push(name);
+  });
+  const fluencyHist = Object.entries(fluencyBins)
+    .map(([uses, names]) => ({ uses: Number(uses), count: names.length, names }))
+    .sort((a, b) => a.uses - b.uses);
 
   const allUses = rows.map(r => ({ text: r.use_text }));
   const globalFreq = computeResponseFrequencies(allUses);
@@ -113,7 +118,7 @@ function computeAUTCharts(rows: AUTRow[]) {
     return { x: fluency, y: round2(origScore), name, originalResponses: uniqueResponses };
   });
 
-  return { fluencyPerP, origDist, origScatter };
+  return { fluencyHist, origDist, origScatter };
 }
 
 // ── Circles chart computation ────────────────────────────────────────────────
@@ -121,11 +126,15 @@ function computeAUTCharts(rows: AUTRow[]) {
 function computeCirclesCharts(rows: CircleRow[]) {
   const sessions = [...new Set(rows.map(r => r.session_id))];
 
-  const fluencyPerP = sessions.map(sid => {
+  const pCounts = sessions.map(sid => rows.filter(r => r.session_id === sid).length);
+  const fluencyBins: Record<number, string[]> = {};
+  sessions.forEach((sid, i) => {
     const name = rows.find(r => r.session_id === sid)?.participant_name || 'Anonymous';
-    const count = rows.filter(r => r.session_id === sid).length;
-    return { name, count };
-  }).sort((a, b) => b.count - a.count);
+    (fluencyBins[pCounts[i]] ??= []).push(name);
+  });
+  const fluencyHist = Object.entries(fluencyBins)
+    .map(([uses, names]) => ({ uses: Number(uses), count: names.length, names }))
+    .sort((a, b) => a.uses - b.uses);
 
   const allLabels = rows.map(r => ({ text: r.label }));
   const globalFreq = computeResponseFrequencies(allLabels);
@@ -152,7 +161,7 @@ function computeCirclesCharts(rows: CircleRow[]) {
     }))
     .sort((a, b) => a.freq - b.freq);
 
-  return { fluencyPerP, origScatter, carousel: carouselItems };
+  return { fluencyHist, origScatter, carousel: carouselItems };
 }
 
 // ── RAT chart computation ────────────────────────────────────────────────────
@@ -501,17 +510,28 @@ export default function TeacherPage() {
             </h2>
 
             {/* AUT Fluency Histogram */}
-            <ChartCard title="Fluency: Uses per Participant"
-              subtitle="One bar per participant, sorted by total uses."
+            <ChartCard title="Fluency Distribution"
+              subtitle="X = total uses given by a participant. Y = how many participants had that count. Hover for names."
               revealed={!!revealed[1]} onReveal={() => reveal(1)}>
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={autCharts.fluencyPerP} margin={{ left: 10, bottom: 40 }} barCategoryGap="15%">
+                <BarChart data={autCharts.fluencyHist} margin={{ left: 10, bottom: 20 }} barCategoryGap="20%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="name" tick={{ ...TICK, fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
-                  <YAxis tick={TICK} label={{ value: 'Total uses', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip contentStyle={TT_STYLE} />
+                  <XAxis dataKey="uses" tick={TICK} type="number" domain={['dataMin - 1', 'dataMax + 1']}
+                    label={{ value: 'Total uses', position: 'insideBottom', offset: -10, style: LBL }} />
+                  <YAxis tick={TICK} allowDecimals={false}
+                    label={{ value: '# participants', angle: -90, position: 'insideLeft', style: LBL }} />
+                  <Tooltip content={({ active, payload }: { active?: boolean; payload?: { payload: { uses: number; count: number; names: string[] } }[] }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="px-3 py-2 text-xs shadow-xl rounded-lg" style={TT_STYLE}>
+                        <p className="font-bold text-white">{d.uses} uses: {d.count} participant{d.count !== 1 ? 's' : ''}</p>
+                        <div className="mt-1">{d.names.map((n, i) => <p key={i} className="text-gray-300">&bull; {n}</p>)}</div>
+                      </div>
+                    );
+                  }} />
                   {revealed[1] && (
-                    <Bar dataKey="count" name="Uses" fill="#34d399" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" name="Participants" fill="#34d399" radius={[4, 4, 0, 0]} />
                   )}
                 </BarChart>
               </ResponsiveContainer>
@@ -582,18 +602,28 @@ export default function TeacherPage() {
             </h2>
 
             {/* Circles Fluency Histogram */}
-            <ChartCard title="Fluency: Circles Completed per Participant"
-              subtitle="One bar per participant, sorted by count."
+            <ChartCard title="Fluency Distribution"
+              subtitle="X = circles completed by a participant. Y = how many participants had that count. Hover for names."
               revealed={!!revealed[4]} onReveal={() => reveal(4)}>
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={circlesCharts.fluencyPerP} margin={{ left: 10, bottom: 40 }} barCategoryGap="15%">
+                <BarChart data={circlesCharts.fluencyHist} margin={{ left: 10, bottom: 20 }} barCategoryGap="20%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="name" tick={{ ...TICK, fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
-                  <YAxis tick={TICK} domain={[0, 30]}
-                    label={{ value: 'Circles completed', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip contentStyle={TT_STYLE} />
+                  <XAxis dataKey="uses" tick={TICK} type="number" domain={['dataMin - 1', 'dataMax + 1']}
+                    label={{ value: 'Circles completed', position: 'insideBottom', offset: -10, style: LBL }} />
+                  <YAxis tick={TICK} allowDecimals={false}
+                    label={{ value: '# participants', angle: -90, position: 'insideLeft', style: LBL }} />
+                  <Tooltip content={({ active, payload }: { active?: boolean; payload?: { payload: { uses: number; count: number; names: string[] } }[] }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="px-3 py-2 text-xs shadow-xl rounded-lg" style={TT_STYLE}>
+                        <p className="font-bold text-white">{d.uses} circles: {d.count} participant{d.count !== 1 ? 's' : ''}</p>
+                        <div className="mt-1">{d.names.map((n, i) => <p key={i} className="text-gray-300">&bull; {n}</p>)}</div>
+                      </div>
+                    );
+                  }} />
                   {revealed[4] && (
-                    <Bar dataKey="count" name="Circles" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" name="Participants" fill="#38bdf8" radius={[4, 4, 0, 0]} />
                   )}
                 </BarChart>
               </ResponsiveContainer>

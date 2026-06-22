@@ -18,7 +18,7 @@ export default function CreativityLanding() {
     inst: [
       'תבצעו שלוש משימות, אחת אחרי השנייה.',
       'חלק 1: רשימת שימושים לחפצי יומיום (דקה לכל חפץ).',
-      'חלק 2: הפיכת עיגולים ריקים לציורים (6 דקות).',
+      'חלק 2: חשבו על כמה שיותר רעיונות יצירתיים למה שעיגול יכול להיות, וציירו בהתאם (4 דקות).',
       'חלק 3: מציאת מילה מקשרת לשלישיות מילים (5 דקות).',
       'כל חלק מתוזמן — עבדו מהר ככל האפשר!',
     ],
@@ -32,7 +32,7 @@ export default function CreativityLanding() {
     inst: [
       'You will complete three tasks, one after another.',
       'Part 1: List uses for everyday objects (1 minute each).',
-      'Part 2: Turn empty circles into drawings (6 minutes).',
+      'Part 2: Think of as many creative ideas as you can for what a circle could be, and draw accordingly (4 minutes).',
       'Part 3: Find the word linking three-word sets (5 minutes).',
       'Each part is timed — work as quickly as you can!',
     ],

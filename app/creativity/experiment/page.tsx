@@ -408,18 +408,18 @@ export default function ExperimentPage() {
     title: 'חלק 2 — עיגולים',
     instructions: [
       'לפניכם עיגולים ריקים.',
-      'הפכו כמה שיותר מהם לציורים של דברים אמיתיים — שכל עיגול יהיה חלק מחפץ מזוהה.',
-      'אחרי כל ציור, הקלידו תווית קצרה שמתארת מה זה.',
-      'עבדו במהירות; יש לכם 6 דקות.',
+      'חשבו על כמה שיותר רעיונות יצירתיים למה שהעיגול יכול להיות — וציירו בהתאם.',
+      'נסו לחשוב על דברים מקוריים ומפתיעים! אחרי כל ציור, הקלידו תווית קצרה.',
+      'עבדו במהירות; יש לכם 4 דקות.',
     ],
     button: 'התחילו',
   } : {
     title: 'Part 2 — Circles',
     instructions: [
       'Below are empty circles.',
-      'Turn as many as you can into drawings of real things — make each circle part of a recognizable object.',
-      'After each drawing, type a short label for what it is.',
-      'Work quickly; you have 6 minutes.',
+      'Think of as many creative ideas as you can for what each circle could be — and draw accordingly.',
+      'Try to come up with original, surprising ideas! After each drawing, type a short label.',
+      'Work quickly; you have 4 minutes.',
     ],
     button: 'Start',
   };
