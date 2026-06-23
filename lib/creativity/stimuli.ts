@@ -30,6 +30,24 @@ export const RAT_TRIPLETS: RATTriplet[] = [
   { index: 14, words: ['WIDOW', 'BITE', 'MONKEY'],          solution: 'SPIDER' },
 ];
 
+export const RAT_TRIPLETS_HE: RATTriplet[] = [
+  { index: 0,  words: ['חברתי', 'דם', 'סיר'],          solution: 'לחץ' },
+  { index: 1,  words: ['מחשב', 'עשן', 'מגע'],          solution: 'מסך' },
+  { index: 2,  words: ['שוודי', 'סול', 'בית'],          solution: 'מפתח' },
+  { index: 3,  words: ['עבודה', 'כתיבה', 'ערוך'],       solution: 'שולחן' },
+  { index: 4,  words: ['בית', 'שחורה', 'שולחן'],        solution: 'עבודה' },
+  { index: 5,  words: ['גלגלים', 'חשמלי', 'מלכות'],     solution: 'כיסא' },
+  { index: 6,  words: ['הצלה', 'מזלות', 'שיניים'],      solution: 'גלגל' },
+  { index: 7,  words: ['לכת', 'נולד', 'ים'],            solution: 'כוכב' },
+  { index: 8,  words: ['ים', 'הרע', 'רבים'],            solution: 'לשון' },
+  { index: 9,  words: ['תעופה', 'קרב', 'ראייה'],        solution: 'שדה' },
+  { index: 10, words: ['שדה', 'מגע', 'דו'],             solution: 'קרב' },
+  { index: 11, words: ['ראווה', 'הזדמנויות', 'זמן'],    solution: 'חלון' },
+  { index: 12, words: ['הולך', 'שביל', 'פרשת'],         solution: 'דרך' },
+  { index: 13, words: ['קצר', 'זיכרון', 'רוח'],         solution: 'טווח' },
+  { index: 14, words: ['חתול', 'ספר', 'מזל'],           solution: 'שחור' },
+];
+
 export function checkRATAnswer(answer: string, solution: string): boolean {
   const a = answer.trim().toLowerCase();
   const s = solution.toLowerCase();

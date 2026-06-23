@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { Eye, Download, Home, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
-import { RAT_TRIPLETS } from '@/lib/creativity/stimuli';
+import { RAT_TRIPLETS, RAT_TRIPLETS_HE } from '@/lib/creativity/stimuli';
 import { generateMockData } from '@/lib/creativity/mock-data';
 
 const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
@@ -177,7 +177,10 @@ interface RATTripletPoint { name: string; value: number; solution: string; }
 function computeRATCharts(rows: RATRow[]) {
   const sessions = [...new Set(rows.map(r => r.session_id))];
 
-  const perTriplet: RATTripletPoint[] = RAT_TRIPLETS.map(t => {
+  // Detect which triplet set to display from the data
+  const tripletSet = rows.some(r => r.triplet_words && /[֐-׿]/.test(r.triplet_words))
+    ? RAT_TRIPLETS_HE : RAT_TRIPLETS;
+  const perTriplet: RATTripletPoint[] = tripletSet.map(t => {
     const tRows = rows.filter(r => r.triplet_index === t.index);
     const attempts = tRows.filter(r => !r.skipped);
     const correct = tRows.filter(r => r.is_correct);

@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import {
   AUT_OBJECTS, AUT_TIME_PER_OBJECT_MS,
   CIRCLES_TOTAL, CIRCLES_TIME_MS,
-  RAT_TRIPLETS, RAT_TIME_MS,
+  RAT_TRIPLETS, RAT_TRIPLETS_HE, RAT_TIME_MS,
   checkRATAnswer, formatTime,
 } from '@/lib/creativity/stimuli';
 import { getSupabase } from '@/lib/supabase';
@@ -201,6 +201,7 @@ export default function ExperimentPage() {
   const circleLabelRef = useRef<HTMLInputElement>(null);
 
   // RAT state
+  const ratTriplets = language === 'he' ? RAT_TRIPLETS_HE : RAT_TRIPLETS;
   const [ratIdx, setRatIdx] = useState(0);
   const [ratTimeLeft, setRatTimeLeft] = useState(RAT_TIME_MS);
   const [ratInput, setRatInput] = useState('');
@@ -342,7 +343,7 @@ export default function ExperimentPage() {
   // ── RAT: submit answer ────────────────────────────────────────────────
   const submitRAT = useCallback(async (skipped: boolean) => {
     if (part !== 'rat') return;
-    const triplet = RAT_TRIPLETS[ratIdx];
+    const triplet = ratTriplets[ratIdx];
     if (!triplet) return;
 
     const response = skipped ? '' : ratInput.trim();
@@ -369,14 +370,14 @@ export default function ExperimentPage() {
 
     setRatInput('');
     const nextIdx = ratIdx + 1;
-    if (nextIdx >= RAT_TRIPLETS.length) {
+    if (nextIdx >= ratTriplets.length) {
       finishExperiment();
     } else {
       setRatIdx(nextIdx);
       ratTrialStartRef.current = Date.now();
       setTimeout(() => ratInputRef.current?.focus(), 50);
     }
-  }, [part, ratIdx, ratInput, sessionId, participantName, language]);
+  }, [part, ratIdx, ratInput, sessionId, participantName, language, ratTriplets]);
 
   const finishExperiment = () => {
     sessionStorage.setItem(`${KEY}_completed`, '1');
@@ -637,7 +638,7 @@ export default function ExperimentPage() {
 
   // ── RAT Task ───────────────────────────────────────────────────────────
   if (part === 'rat') {
-    const triplet = RAT_TRIPLETS[ratIdx];
+    const triplet = ratTriplets[ratIdx];
     const locked = ratTimeLeft <= 0;
 
     if (!triplet) {
@@ -649,26 +650,26 @@ export default function ExperimentPage() {
       <div
         className="bg-[#0f172a] flex flex-col px-4 py-6"
         style={{ height: '100dvh' }}
-        dir="ltr"
+        dir={isHe ? 'rtl' : 'ltr'}
       >
         <div className="flex-shrink-0 mb-4">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2" dir="ltr">
             <span className="text-gray-400 text-xs">
-              Triplet {ratIdx + 1} of {RAT_TRIPLETS.length}
+              Triplet {ratIdx + 1} of {ratTriplets.length}
             </span>
             <span className="text-gray-400 text-xs">
-              {ratSolved} solved
+              {ratSolved} {isHe ? 'נפתרו' : 'solved'}
             </span>
           </div>
           <TimerBar remaining={ratTimeLeft} total={RAT_TIME_MS} />
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center gap-8">
-          <div className="flex items-center gap-4 text-center">
+          <div className="flex items-center gap-4 text-center" dir={isHe ? 'rtl' : 'ltr'}>
             {triplet.words.map((word, i) => (
               <React.Fragment key={i}>
                 {i > 0 && <span className="text-gray-500 text-xl">/</span>}
-                <span className="text-2xl font-bold text-white font-mono tracking-wide">{word}</span>
+                <span className={`text-2xl font-bold text-white tracking-wide ${isHe ? '' : 'font-mono'}`}>{word}</span>
               </React.Fragment>
             ))}
           </div>
@@ -681,8 +682,9 @@ export default function ExperimentPage() {
               onChange={e => setRatInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && ratInput.trim() && submitRAT(false)}
               disabled={locked}
-              placeholder="Type the linking word..."
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white text-center text-lg font-mono placeholder:text-gray-500 focus:outline-none focus:border-emerald-400 disabled:opacity-50"
+              dir={isHe ? 'rtl' : 'ltr'}
+              placeholder={isHe ? 'הקלידו את המילה המקשרת...' : 'Type the linking word...'}
+              className={`w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white text-center text-lg placeholder:text-gray-500 focus:outline-none focus:border-emerald-400 disabled:opacity-50 ${isHe ? '' : 'font-mono'}`}
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="off"

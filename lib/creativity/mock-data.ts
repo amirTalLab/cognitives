@@ -45,13 +45,13 @@ const CIRCLE_LABELS: { common: string[]; rare: string[] } = {
   rare: ['portal', 'atom', 'cyclops', 'vinyl record', 'gong', 'compass', 'petri dish', 'disco ball', 'mandala', 'hamster wheel', 'dream catcher', 'eyeball', 'pomegranate', 'bubble', 'dartboard', 'magnifying glass', 'yoyo', 'pancake', 'steering wheel', 'bagel', 'lollipop', 'peace sign', 'yin yang', 'olympic ring', 'hula hoop', 'oreo', 'emoji', 'radar', 'life saver'],
 };
 
-const RAT_SOLUTIONS = ['CHEESE', 'ICE', 'SORE', 'BOAT', 'WATCH', 'BILL', 'BANK', 'BLUE', 'DAY', 'GOLD', 'PARTY', 'TAPE', 'STAR', 'GLASS', 'SPIDER'];
+const RAT_SOLUTIONS = ['לחץ', 'מסך', 'מפתח', 'שולחן', 'עבודה', 'כיסא', 'גלגל', 'כוכב', 'לשון', 'שדה', 'קרב', 'חלון', 'דרך', 'טווח', 'שחור'];
 const RAT_WORDS = [
-  'COTTAGE / SWISS / CAKE', 'CREAM / SKATE / WATER', 'LOSER / THROAT / SPOT',
-  'SHOW / LIFE / ROW', 'NIGHT / WRIST / STOP', 'DUCK / FOLD / DOLLAR',
-  'RIVER / NOTE / ACCOUNT', 'PRINT / BERRY / BIRD', 'DREAM / BREAK / LIGHT',
-  'FISH / MINE / RUSH', 'POLITICAL / SURPRISE / LINE', 'MEASURE / WORM / VIDEO',
-  'FALLING / ACTOR / DUST', 'BROKEN / CLEAR / EYE', 'WIDOW / BITE / MONKEY',
+  'חברתי / דם / סיר', 'מחשב / עשן / מגע', 'שוודי / סול / בית',
+  'עבודה / כתיבה / ערוך', 'בית / שחורה / שולחן', 'גלגלים / חשמלי / מלכות',
+  'הצלה / מזלות / שיניים', 'לכת / נולד / ים', 'ים / הרע / רבים',
+  'תעופה / קרב / ראייה', 'שדה / מגע / דו', 'ראווה / הזדמנויות / זמן',
+  'הולך / שביל / פרשת', 'קצר / זיכרון / רוח', 'חתול / ספר / מזל',
 ];
 
 function seededRandom(seed: number) {
