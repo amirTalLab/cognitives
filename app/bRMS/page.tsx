@@ -137,7 +137,7 @@ export default function BRMSLanding() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
     } catch {}
-    try { await screen.orientation.lock('landscape'); } catch {}
+    try { await (screen.orientation as any).lock('landscape'); } catch {}
     router.push('/bRMS/practice');
   };
 
