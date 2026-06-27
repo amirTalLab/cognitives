@@ -123,10 +123,12 @@ export default function BRMSPracticePage() {
         } else {
           faceEl.style.opacity = '0';
           maskEl.style.opacity = String(maskAlpha);
-          mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
-          const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
-          const ctx = maskEl.getContext('2d');
-          if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
+          if (cyclePos % 2 === 0) {
+            mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
+            const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
+            const ctx = maskEl.getContext('2d');
+            if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
+          }
         }
       }
 
@@ -186,6 +188,7 @@ export default function BRMSPracticePage() {
     rotateMsg: 'סובבו את הטלפון לרוחב',
     instrTitle: 'תרגול',
     instrBody: 'מסכות צבעוניות יהבהבו על המסך. פנים יופיעו בהדרגה משמאל או מימין למרכז. ברגע שתבחינו בפנים — לחצו על הצד שבו הן הופיעו.',
+    instrFix: 'שמרו את המבט על סימן ה-+ במרכז המסך לאורך כל הניסוי.',
     instrTip: 'לחצו על חצי המסך השמאלי או הימני, או השתמשו במקשי החצים.',
     instrStart: 'התחל תרגול',
   } : {
@@ -201,6 +204,7 @@ export default function BRMSPracticePage() {
     rotateMsg: 'Rotate your phone to landscape',
     instrTitle: 'Practice',
     instrBody: 'Colorful masks will flash on screen. A face will gradually appear to the left or right of center. As soon as you see it — tap the side it appeared on.',
+    instrFix: 'Keep your eyes on the + at the center of the screen throughout the task.',
     instrTip: 'Tap the left or right half of the screen, or use the arrow keys.',
     instrStart: 'Start Practice',
   };
@@ -254,7 +258,7 @@ export default function BRMSPracticePage() {
           <div style={{
             position: 'absolute', left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)', zIndex: 5,
-            color: '#333', fontSize: '2rem', fontWeight: 200, userSelect: 'none', lineHeight: 1,
+            color: '#333', fontSize: '2.8rem', fontWeight: 700, userSelect: 'none', lineHeight: 1,
           }}>+</div>
         )}
 
@@ -290,6 +294,7 @@ export default function BRMSPracticePage() {
               className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
               <h2 className="text-2xl font-bold text-white">{t.instrTitle}</h2>
               <p className="text-gray-300 text-sm leading-relaxed">{t.instrBody}</p>
+              <p className="text-amber-400 text-sm font-medium">{t.instrFix}</p>
               <p className="text-gray-500 text-xs">{t.instrTip}</p>
               <button
                 onPointerDown={e => { e.preventDefault(); setPhase('fixation'); }}

@@ -161,10 +161,12 @@ export default function BRMSExperimentPage() {
         } else {
           faceEl.style.opacity = '0';
           maskEl.style.opacity = String(maskAlpha);
-          mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
-          const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
-          const ctx = maskEl.getContext('2d');
-          if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
+          if (cyclePos % 2 === 0) {
+            mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
+            const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
+            const ctx = maskEl.getContext('2d');
+            if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
+          }
         }
       }
 
@@ -251,6 +253,7 @@ export default function BRMSExperimentPage() {
     rotateMsg: 'סובבו את הטלפון לרוחב',
     instrTitle: 'הניסוי מתחיל',
     instrBody: 'כעת יתחיל הניסוי האמיתי. המשימה זהה — לחצו על הצד שבו מופיעות הפנים, מהר ככל האפשר.',
+    instrFix: 'שמרו את המבט על סימן ה-+ במרכז המסך לאורך כל הניסוי.',
     instrNoFeedback: 'מעתה לא תוצג משוב לאחר כל ניסוי.',
     instrStart: 'התחל ניסוי',
   } : {
@@ -264,6 +267,7 @@ export default function BRMSExperimentPage() {
     rotateMsg: 'Rotate your phone to landscape',
     instrTitle: 'Experiment Begins',
     instrBody: 'The real experiment will now begin. The task is the same — tap the side where the face appears, as fast as you can.',
+    instrFix: 'Keep your eyes on the + at the center of the screen throughout the task.',
     instrNoFeedback: 'From now on, you will not receive feedback after each trial.',
     instrStart: 'Start Experiment',
   };
@@ -319,7 +323,7 @@ export default function BRMSExperimentPage() {
           <div style={{
             position: 'absolute', left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)', zIndex: 5,
-            color: '#333', fontSize: '2rem', fontWeight: 200, userSelect: 'none', lineHeight: 1,
+            color: '#333', fontSize: '2.8rem', fontWeight: 700, userSelect: 'none', lineHeight: 1,
           }}>+</div>
         )}
 
@@ -355,6 +359,7 @@ export default function BRMSExperimentPage() {
               className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
               <h2 className="text-2xl font-bold text-white">{t.instrTitle}</h2>
               <p className="text-gray-300 text-sm leading-relaxed">{t.instrBody}</p>
+              <p className="text-amber-400 text-sm font-medium">{t.instrFix}</p>
               <p className="text-amber-400 text-sm font-medium">{t.instrNoFeedback}</p>
               <button
                 onPointerDown={e => { e.preventDefault(); setPhase('fixation'); }}
