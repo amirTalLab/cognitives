@@ -5,6 +5,7 @@ const EXPERIMENT_SLUGS = new Set([
   'posnerCueing', 'visualSearch', 'CompositeFace', 'wordSuperiority',
   'srt', 'twoStepTask', 'serialOrder', 'testingEffect', 'logics',
   'creativity',
+  'bRMS',
 ]);
 
 export async function middleware(request: NextRequest) {
@@ -62,5 +63,6 @@ export const config = {
     '/testingEffect/:path*',
     '/logics/:path*',
     '/creativity/:path*',
+    '/bRMS/:path*',
   ],
 };
