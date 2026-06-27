@@ -80,7 +80,7 @@ function buildSvg(id: string, emotion: EmotionCode, inverted: boolean): string {
 
   const rotation = inverted ? `transform="rotate(180 ${cx} ${cy})"` : '';
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" preserveAspectRatio="none">
   <defs>
     <clipPath id="oval">
       <ellipse cx="${cx}" cy="${cy}" rx="${p.headRx}" ry="${p.headRy}"/>

@@ -22,7 +22,12 @@ export const TRIALS_PER_CELL = 20;
 export const PRACTICE_PER_CELL = 2;
 
 export const COIN_DIAMETER_MM = 18; // 1 NIS coin
-export const FACE_SIZE_MM     = 25; // target physical face size
+export const FACE_SIZE_MM     = 25; // legacy — unused with proportional sizing
+
+export const FRAME_ASPECT      = 2.38;  // 34.5° / 14.5°
+export const FACE_W_RATIO      = 0.25;  // face width  = 0.25 × frame width
+export const FACE_OFFSET_RATIO = 0.26;  // center→face center = 0.26 × frame width
+export const FACE_H_RATIO      = 0.97;  // face height = 0.97 × frame height
 
 // ── Emotion / orientation code mapping ────────────────────────────────────────
 

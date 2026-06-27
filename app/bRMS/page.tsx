@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import { COIN_DIAMETER_MM } from '@/lib/brms-emotion/stimuli';
 
-type Step = 'intro' | 'calibrate' | 'hardwareCheck';
+type Step = 'intro' | 'calibrate' | 'hardwareCheck' | 'prepareDisplay';
 
 export default function BRMSLanding() {
   const router = useRouter();
@@ -16,6 +16,7 @@ export default function BRMSLanding() {
   const [coinPx, setCoinPx] = useState(80);
   const [checkPassed, setCheckPassed] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(false);
+  const [viewingDistCm, setViewingDistCm] = useState(40);
   const dragRef = useRef<{ startY: number; startSize: number } | null>(null);
   const isHe = language === 'he';
 
@@ -40,7 +41,12 @@ export default function BRMSLanding() {
     hwPass: 'המסך תקין — אפשר להתחיל!',
     hwFail: 'ביצועי המסך לא אופטימליים. סגרו אפליקציות אחרות ונסו שוב.',
     hwRetry: 'נסה שוב',
-    hwStart: 'התחל תרגול',
+    hwStart: 'המשך',
+    prepTitle: 'הכנה לניסוי',
+    prepFullscreen: 'המסך יעבור למצב מלא בפריסה אופקית.',
+    prepRotate: 'סובבו את הטלפון לרוחב והחזיקו אותו כך לכל אורך הניסוי.',
+    prepDistance: (cm: number) => `החזיקו את הטלפון במרחק של כ-${cm} ס"מ מהעיניים — כאורך אמה.`,
+    prepReady: 'מוכן — התחל תרגול',
   } : {
     title: 'bRMS — Emotion × Orientation',
     subtitle: 'Breaking Repeated Masking Suppression',
@@ -62,7 +68,12 @@ export default function BRMSLanding() {
     hwPass: 'Screen looks good — ready to start!',
     hwFail: 'Screen performance is not optimal. Close other apps and try again.',
     hwRetry: 'Retry',
-    hwStart: 'Start Practice',
+    hwStart: 'Continue',
+    prepTitle: 'Display Setup',
+    prepFullscreen: 'The screen will switch to fullscreen landscape mode.',
+    prepRotate: 'Rotate your phone to landscape and keep it that way for the entire task.',
+    prepDistance: (cm: number) => `Hold your phone about ${cm} cm from your eyes — roughly a forearm's length.`,
+    prepReady: 'Ready — Start Practice',
   };
 
   const handleIntroNext = () => {
@@ -110,7 +121,23 @@ export default function BRMSLanding() {
     requestAnimationFrame(tick);
   }, []);
 
-  const handleStart = () => {
+  const handleGoToPrepare = () => {
+    const pxPerMm = parseFloat(sessionStorage.getItem('brms_px_per_mm') || '4');
+    const landscapeW = Math.max(window.innerWidth, window.innerHeight);
+    const frameWidthCm = landscapeW / pxPerMm / 10;
+    const dist = Math.round(1.61 * frameWidthCm);
+    setViewingDistCm(dist);
+    setStep('prepareDisplay');
+  };
+
+  const handleStartPractice = async () => {
+    try {
+      const el = document.documentElement;
+      if (el.requestFullscreen) await el.requestFullscreen();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
+    } catch {}
+    try { await screen.orientation.lock('landscape'); } catch {}
     router.push('/bRMS/practice');
   };
 
@@ -233,7 +260,7 @@ export default function BRMSLanding() {
               <div className="flex flex-col items-center gap-4">
                 <p className="text-green-400 text-sm font-medium text-center">{t.hwPass}</p>
                 <button
-                  onPointerDown={e => { e.preventDefault(); handleStart(); }}
+                  onPointerDown={e => { e.preventDefault(); handleGoToPrepare(); }}
                   className="w-full py-4 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl text-lg transition-colors touch-manipulation shadow-lg"
                 >
                   {t.hwStart}
@@ -252,7 +279,7 @@ export default function BRMSLanding() {
                     {t.hwRetry}
                   </button>
                   <button
-                    onPointerDown={e => { e.preventDefault(); handleStart(); }}
+                    onPointerDown={e => { e.preventDefault(); handleGoToPrepare(); }}
                     className="flex-1 py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl transition-colors touch-manipulation"
                   >
                     {t.hwStart}
@@ -260,6 +287,36 @@ export default function BRMSLanding() {
                 </div>
               </div>
             )}
+          </motion.div>
+        )}
+
+        {step === 'prepareDisplay' && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="bg-gray-900 border border-gray-700 rounded-2xl p-8 flex flex-col items-center gap-6"
+          >
+            <h2 className="text-xl font-bold text-white text-center">{t.prepTitle}</h2>
+
+            <ul className="flex flex-col gap-3">
+              <li className="flex gap-2 text-gray-300 text-sm leading-relaxed">
+                <span className="text-purple-400 font-bold mt-0.5">1</span>
+                <span>{t.prepFullscreen}</span>
+              </li>
+              <li className="flex gap-2 text-gray-300 text-sm leading-relaxed">
+                <span className="text-purple-400 font-bold mt-0.5">2</span>
+                <span>{t.prepRotate}</span>
+              </li>
+              <li className="flex gap-2 text-gray-300 text-sm leading-relaxed">
+                <span className="text-purple-400 font-bold mt-0.5">3</span>
+                <span>{t.prepDistance(viewingDistCm)}</span>
+              </li>
+            </ul>
+
+            <button
+              onPointerDown={e => { e.preventDefault(); handleStartPractice(); }}
+              className="w-full py-4 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl text-lg transition-colors touch-manipulation shadow-lg"
+            >
+              {t.prepReady}
+            </button>
           </motion.div>
         )}
       </div>
