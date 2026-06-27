@@ -11,7 +11,7 @@ import {
 } from '@/lib/brms-emotion/stimuli';
 import { Trial } from '@/types/brms-emotion';
 
-type Phase = 'fixation' | 'alternation' | 'feedback' | 'iti';
+type Phase = 'instructions' | 'fixation' | 'alternation' | 'feedback' | 'iti';
 
 const TOTAL = 12;
 const MONDRIAN_POOL_SIZE = 20;
@@ -22,7 +22,7 @@ export default function BRMSPracticePage() {
   const [language, setLanguage] = useState<'en' | 'he'>('he');
   const [trials, setTrials] = useState<Trial[]>([]);
   const [idx, setIdx] = useState(0);
-  const [phase, setPhase] = useState<Phase>('fixation');
+  const [phase, setPhase] = useState<Phase>('instructions');
   const [feedbackCorrect, setFeedbackCorrect] = useState<boolean | null>(null);
   const [feedbackSide, setFeedbackSide] = useState<string>('');
   const [isPortrait, setIsPortrait] = useState(false);
@@ -123,12 +123,10 @@ export default function BRMSPracticePage() {
         } else {
           faceEl.style.opacity = '0';
           maskEl.style.opacity = String(maskAlpha);
-          if (cyclePos === 0) {
-            mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
-            const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
-            const ctx = maskEl.getContext('2d');
-            if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
-          }
+          mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
+          const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
+          const ctx = maskEl.getContext('2d');
+          if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
         }
       }
 
@@ -186,6 +184,10 @@ export default function BRMSPracticePage() {
     tapLeft: '◀',
     tapRight: '▶',
     rotateMsg: 'סובבו את הטלפון לרוחב',
+    instrTitle: 'תרגול',
+    instrBody: 'מסכות צבעוניות יהבהבו על המסך. פנים יופיעו בהדרגה משמאל או מימין למרכז. ברגע שתבחינו בפנים — לחצו על הצד שבו הן הופיעו.',
+    instrTip: 'לחצו על חצי המסך השמאלי או הימני, או השתמשו במקשי החצים.',
+    instrStart: 'התחל תרגול',
   } : {
     practice: 'Practice',
     trialOf: `${idx + 1} / ${TOTAL}`,
@@ -197,6 +199,10 @@ export default function BRMSPracticePage() {
     tapLeft: '◀',
     tapRight: '▶',
     rotateMsg: 'Rotate your phone to landscape',
+    instrTitle: 'Practice',
+    instrBody: 'Colorful masks will flash on screen. A face will gradually appear to the left or right of center. As soon as you see it — tap the side it appeared on.',
+    instrTip: 'Tap the left or right half of the screen, or use the arrow keys.',
+    instrStart: 'Start Practice',
   };
 
   if (!trial) {
@@ -272,6 +278,26 @@ export default function BRMSPracticePage() {
           <div style={{ position: 'absolute', bottom: 6, left: 14, fontSize: 14, color: 'rgba(0,0,0,0.25)', zIndex: 16, userSelect: 'none' }}>{t.tapLeft}</div>
           <div style={{ position: 'absolute', bottom: 6, right: 14, fontSize: 14, color: 'rgba(0,0,0,0.25)', zIndex: 16, userSelect: 'none' }}>{t.tapRight}</div>
         </>)}
+
+        {/* Instructions overlay */}
+        {phase === 'instructions' && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.92)', zIndex: 20,
+          }}>
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
+              <h2 className="text-2xl font-bold text-white">{t.instrTitle}</h2>
+              <p className="text-gray-300 text-sm leading-relaxed">{t.instrBody}</p>
+              <p className="text-gray-500 text-xs">{t.instrTip}</p>
+              <button
+                onPointerDown={e => { e.preventDefault(); setPhase('fixation'); }}
+                className="mt-2 px-10 py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl text-base transition-colors touch-manipulation shadow-lg"
+              >{t.instrStart}</button>
+            </motion.div>
+          </div>
+        )}
 
         {/* Feedback overlay */}
         {phase === 'feedback' && (

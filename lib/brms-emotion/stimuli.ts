@@ -75,10 +75,10 @@ export function generateMondrianCanvas(w: number, h: number): HTMLCanvasElement 
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#222';
   ctx.fillRect(0, 0, w, h);
-  const nRects = 80 + Math.floor(Math.random() * 40);
+  const nRects = 200 + Math.floor(Math.random() * 80);
   for (let i = 0; i < nRects; i++) {
-    const rw = 10 + Math.random() * (w * 0.4);
-    const rh = 10 + Math.random() * (h * 0.4);
+    const rw = 4 + Math.random() * (w * 0.2);
+    const rh = 4 + Math.random() * (h * 0.2);
     const rx = Math.random() * (w - rw / 2) - rw / 4;
     const ry = Math.random() * (h - rh / 2) - rh / 4;
     ctx.fillStyle = MONDRIAN_COLORS[Math.floor(Math.random() * MONDRIAN_COLORS.length)];

@@ -13,7 +13,7 @@ import {
 import { Trial, TrialResult } from '@/types/brms-emotion';
 import { getSupabase } from '@/lib/supabase';
 
-type Phase = 'fixation' | 'alternation' | 'iti' | 'break' | 'saving';
+type Phase = 'instructions' | 'fixation' | 'alternation' | 'iti' | 'break' | 'saving';
 
 const TOTAL = 120;
 const MONDRIAN_POOL_SIZE = 20;
@@ -25,7 +25,7 @@ export default function BRMSExperimentPage() {
   const [language, setLanguage] = useState<'en' | 'he'>('he');
   const [trials, setTrials] = useState<Trial[]>([]);
   const [idx, setIdx] = useState(0);
-  const [phase, setPhase] = useState<Phase>('fixation');
+  const [phase, setPhase] = useState<Phase>('instructions');
   const [isPortrait, setIsPortrait] = useState(false);
   const [frameW, setFrameW] = useState(800);
   const [frameH, setFrameH] = useState(336);
@@ -161,12 +161,10 @@ export default function BRMSExperimentPage() {
         } else {
           faceEl.style.opacity = '0';
           maskEl.style.opacity = String(maskAlpha);
-          if (cyclePos === 0) {
-            mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
-            const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
-            const ctx = maskEl.getContext('2d');
-            if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
-          }
+          mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
+          const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
+          const ctx = maskEl.getContext('2d');
+          if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
         }
       }
 
@@ -251,6 +249,10 @@ export default function BRMSExperimentPage() {
     breakMsg: (n: number) => `השלמת ${n} מתוך ${TOTAL} ניסויים. קח רגע ולחץ כשתהיה מוכן.`,
     breakContinue: 'המשך',
     rotateMsg: 'סובבו את הטלפון לרוחב',
+    instrTitle: 'הניסוי מתחיל',
+    instrBody: 'כעת יתחיל הניסוי האמיתי. המשימה זהה — לחצו על הצד שבו מופיעות הפנים, מהר ככל האפשר.',
+    instrNoFeedback: 'מעתה לא תוצג משוב לאחר כל ניסוי.',
+    instrStart: 'התחל ניסוי',
   } : {
     trialOf: `${idx + 1} / ${TOTAL}`,
     saving: 'Saving...',
@@ -260,6 +262,10 @@ export default function BRMSExperimentPage() {
     breakMsg: (n: number) => `You've completed ${n} of ${TOTAL} trials. Take a moment and tap when ready.`,
     breakContinue: 'Continue',
     rotateMsg: 'Rotate your phone to landscape',
+    instrTitle: 'Experiment Begins',
+    instrBody: 'The real experiment will now begin. The task is the same — tap the side where the face appears, as fast as you can.',
+    instrNoFeedback: 'From now on, you will not receive feedback after each trial.',
+    instrStart: 'Start Experiment',
   };
 
   if (!trial || phase === 'saving') {
@@ -337,6 +343,26 @@ export default function BRMSExperimentPage() {
           <div style={{ position: 'absolute', bottom: 6, left: 14, fontSize: 14, color: 'rgba(0,0,0,0.25)', zIndex: 16, userSelect: 'none' }}>{t.tapLeft}</div>
           <div style={{ position: 'absolute', bottom: 6, right: 14, fontSize: 14, color: 'rgba(0,0,0,0.25)', zIndex: 16, userSelect: 'none' }}>{t.tapRight}</div>
         </>)}
+
+        {/* Instructions overlay */}
+        {phase === 'instructions' && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.92)', zIndex: 20,
+          }}>
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
+              <h2 className="text-2xl font-bold text-white">{t.instrTitle}</h2>
+              <p className="text-gray-300 text-sm leading-relaxed">{t.instrBody}</p>
+              <p className="text-amber-400 text-sm font-medium">{t.instrNoFeedback}</p>
+              <button
+                onPointerDown={e => { e.preventDefault(); setPhase('fixation'); }}
+                className="mt-2 px-10 py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl text-base transition-colors touch-manipulation shadow-lg"
+              >{t.instrStart}</button>
+            </motion.div>
+          </div>
+        )}
 
         {/* Break overlay */}
         {phase === 'break' && (
