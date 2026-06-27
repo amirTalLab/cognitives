@@ -43,11 +43,15 @@ export function getFaceUrl(identityId: string, emotion: Emotion, orientation: Or
 
 // ── Image preloading ─────────────────────────────────────────────────────────
 
+const preloadedCache: HTMLImageElement[] = [];
+
 export function preloadAllImages(): void {
+  if (preloadedCache.length > 0) return;
   const urls = getAllMockImageUrls();
   for (const url of urls) {
     const img = new Image();
     img.src = url;
+    preloadedCache.push(img);
   }
 }
 

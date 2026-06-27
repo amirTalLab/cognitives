@@ -94,6 +94,11 @@ export default function BRMSExperimentPage() {
     frameTimestampsRef.current = [];
 
     const faceUrl = getFaceUrl(trial.identityId, trial.emotion, trial.orientation);
+    const faceEl0 = faceImgRef.current;
+    if (faceEl0) {
+      faceEl0.src = faceUrl;
+      faceEl0.style.opacity = '0';
+    }
 
     function tick(ts: number) {
       if (respondedRef.current) return;
@@ -129,7 +134,6 @@ export default function BRMSExperimentPage() {
         if (showFace) {
           maskEl.style.opacity = '0';
           faceEl.style.opacity = String(faceAlpha);
-          faceEl.src = faceUrl;
         } else {
           faceEl.style.opacity = '0';
           maskEl.style.opacity = String(maskAlpha);

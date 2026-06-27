@@ -279,10 +279,12 @@ export default function BRMSTeacherPage() {
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
-  const [sdClean, setSdClean] = useState(false);
-  const [excludeSubs, setExcludeSubs] = useState(false);
+  const [cleanTrials, setCleanTrials] = useState(false);
+  const [cleanParticipants, setCleanParticipants] = useState(false);
   const [aggMode, setAggMode] = useState<AggMode>('median');
   const [excludedCount, setExcludedCount] = useState(0);
+  const [cleanedTrialCount, setCleanedTrialCount] = useState(0);
+  const [rawTrialCount, setRawTrialCount] = useState(0);
 
   useEffect(() => { if (sessionStorage.getItem('brms_teacher_authed') === '1') setAuthed(true); }, []);
 
@@ -314,11 +316,16 @@ export default function BRMSTeacherPage() {
     return all;
   }, []);
 
-  const recompute = useCallback((allRows: TrialResult[], sd: boolean, exSubs: boolean, agg: AggMode) => {
+  const recompute = useCallback((allRows: TrialResult[], clean: boolean, exPart: boolean, agg: AggMode) => {
     if (!allRows.length) { setData(null); return; }
-    let cleaned = cleanRows(allRows);
-    if (sd) cleaned = sdCleanRows(cleaned);
-    const { kept, excludedIds } = exSubs ? excludeParticipants(cleaned, allRows) : { kept: cleaned, excludedIds: new Set<string>() };
+    let displayRows = allRows.filter(r => !r.is_practice);
+    setRawTrialCount(displayRows.length);
+    if (clean) {
+      displayRows = cleanRows(displayRows);
+      displayRows = sdCleanRows(displayRows);
+    }
+    setCleanedTrialCount(clean ? displayRows.length : 0);
+    const { kept, excludedIds } = exPart ? excludeParticipants(displayRows, allRows) : { kept: displayRows, excludedIds: new Set<string>() };
     setExcludedCount(excludedIds.size);
     setData(kept.length > 0 ? computeDashboard(kept, allRows, agg) : null);
   }, []);
@@ -328,16 +335,16 @@ export default function BRMSTeacherPage() {
     try {
       const rows = await fetchAllRows();
       setRawRows(rows);
-      recompute(rows, sdClean, excludeSubs, aggMode);
+      recompute(rows, cleanTrials, cleanParticipants, aggMode);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); setRefreshing(false); }
-  }, [fetchAllRows, recompute, sdClean, excludeSubs, aggMode]);
+  }, [fetchAllRows, recompute, cleanTrials, cleanParticipants, aggMode]);
 
   useEffect(() => { if (authed) fetchData(); }, [authed, fetchData]);
 
   useEffect(() => {
-    if (rawRows.length > 0) recompute(rawRows, sdClean, excludeSubs, aggMode);
-  }, [sdClean, excludeSubs, aggMode, rawRows, recompute]);
+    if (rawRows.length > 0) recompute(rawRows, cleanTrials, cleanParticipants, aggMode);
+  }, [cleanTrials, cleanParticipants, aggMode, rawRows, recompute]);
 
   const handleDownloadCSV = async () => {
     try {
@@ -408,17 +415,19 @@ export default function BRMSTeacherPage() {
 
         {/* Toggle buttons */}
         <div className="flex gap-3 mb-6 flex-wrap">
-          <button onClick={() => setSdClean(v => !v)}
+          <button onClick={() => setCleanTrials(v => !v)}
             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-              sdClean ? 'border-purple-400 text-purple-400' : 'border-gray-600 text-gray-400 hover:border-gray-400'
+              cleanTrials ? 'border-purple-400 text-purple-400' : 'border-gray-600 text-gray-400 hover:border-gray-400'
             }`}>
-            {sdClean ? '✓ SD-Clean (±3 SD/cell)' : 'Raw Trials'}
+            {cleanTrials
+              ? `✓ Clean Trials (${cleanedTrialCount}/${rawTrialCount})`
+              : `Raw Trials (${rawTrialCount})`}
           </button>
-          <button onClick={() => setExcludeSubs(v => !v)}
+          <button onClick={() => setCleanParticipants(v => !v)}
             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-              excludeSubs ? 'border-purple-400 text-purple-400' : 'border-gray-600 text-gray-400 hover:border-gray-400'
+              cleanParticipants ? 'border-purple-400 text-purple-400' : 'border-gray-600 text-gray-400 hover:border-gray-400'
             }`}>
-            {excludeSubs ? `✓ Excl. Participants (${excludedCount})` : 'All Participants'}
+            {cleanParticipants ? `✓ Clean Participants (−${excludedCount})` : 'All Participants'}
           </button>
           <button onClick={() => setAggMode(m => m === 'mean' ? 'median' : 'mean')}
             className="text-xs px-3 py-1.5 rounded-full border border-gray-600 text-gray-400 hover:border-gray-400 transition-colors">
