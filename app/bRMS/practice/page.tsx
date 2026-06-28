@@ -135,12 +135,10 @@ export default function BRMSPracticePage() {
         } else {
           faceEl.style.opacity = '0';
           maskEl.style.opacity = String(maskAlpha);
-          if (cyclePos % 2 === 0) {
-            mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
-            const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
-            const ctx = maskEl.getContext('2d');
-            if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
-          }
+          mondrianIdxRef.current = (mondrianIdxRef.current + 1) % mondrianPoolRef.current.length;
+          const mondrian = mondrianPoolRef.current[mondrianIdxRef.current];
+          const ctx = maskEl.getContext('2d');
+          if (ctx) ctx.drawImage(mondrian, 0, 0, maskEl.width, maskEl.height);
         }
       }
 
