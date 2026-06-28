@@ -123,7 +123,13 @@ export default function BRMSExperimentPage() {
 
     const faceUrl = getFaceUrl(trial.identityId, trial.emotion, trial.orientation);
     const faceEl0 = faceImgRef.current;
-    if (faceEl0) { faceEl0.src = faceUrl; faceEl0.style.opacity = '0'; }
+    const maskEl0 = maskCanvasRef.current;
+    if (faceEl0) { faceEl0.style.opacity = '0'; faceEl0.src = faceUrl; }
+    if (maskEl0 && mondrianPoolRef.current.length > 0) {
+      maskEl0.style.opacity = '0';
+      const ctx = maskEl0.getContext('2d');
+      if (ctx) ctx.drawImage(mondrianPoolRef.current[0], 0, 0, maskEl0.width, maskEl0.height);
+    }
 
     function tick(ts: number) {
       if (respondedRef.current) return;
@@ -133,6 +139,8 @@ export default function BRMSExperimentPage() {
       if (elapsed >= RESCUE_END_MS) {
         respondedRef.current = true;
         stopAlternation();
+        if (maskCanvasRef.current) maskCanvasRef.current.style.opacity = '0';
+        if (faceImgRef.current) faceImgRef.current.style.opacity = '0';
         return;
       }
 
@@ -207,6 +215,8 @@ export default function BRMSExperimentPage() {
     respondedRef.current = true;
     const bt = Math.round(performance.now() - startTimeRef.current);
     stopAlternation();
+    if (maskCanvasRef.current) maskCanvasRef.current.style.opacity = '0';
+    if (faceImgRef.current) faceImgRef.current.style.opacity = '0';
 
     const result: TrialResult = {
       session_id: sessionStorage.getItem('brms_session_id') ?? '',
@@ -248,27 +258,27 @@ export default function BRMSExperimentPage() {
     tapLeft: '◀',
     tapRight: '▶',
     breakTitle: 'הפסקה',
-    breakMsg: (n: number) => `השלמת ${n} מתוך ${TOTAL} ניסויים. קח רגע ולחץ כשתהיה מוכן.`,
+    breakMsg: (n: number) => `השלמתם ${n} מתוך ${TOTAL} תורות. קחו רגע ולחצו כשתהיו מוכנים.`,
     breakContinue: 'המשך',
     rotateMsg: 'סובבו את הטלפון לרוחב',
-    instrTitle: 'הניסוי מתחיל',
-    instrBody: 'כעת יתחיל הניסוי האמיתי. המשימה זהה — לחצו על הצד שבו מופיעות הפנים, מהר ככל האפשר.',
-    instrFix: 'שמרו את המבט על סימן ה-+ במרכז המסך לאורך כל הניסוי.',
-    instrNoFeedback: 'מעתה לא תוצג משוב לאחר כל ניסוי.',
-    instrStart: 'התחל ניסוי',
+    instrTitle: 'המשימה מתחילה',
+    instrBody: 'עכשיו מתחילה המשימה האמיתית. הכול זהה — לחצו על הצד שבו מופיעות הפנים, מהר ככל האפשר.',
+    instrFix: 'שמרו מבט על ה-+ שבמרכז המסך.',
+    instrNoFeedback: 'הפעם לא יוצג משוב אחרי כל תור.',
+    instrStart: 'מתחילים',
   } : {
     trialOf: `${idx + 1} / ${TOTAL}`,
     saving: 'Saving...',
     tapLeft: '◀',
     tapRight: '▶',
     breakTitle: 'Break',
-    breakMsg: (n: number) => `You've completed ${n} of ${TOTAL} trials. Take a moment and tap when ready.`,
+    breakMsg: (n: number) => `You've completed ${n} of ${TOTAL} rounds. Take a moment and tap when ready.`,
     breakContinue: 'Continue',
     rotateMsg: 'Rotate your phone to landscape',
     instrTitle: 'Experiment Begins',
-    instrBody: 'The real experiment will now begin. The task is the same — tap the side where the face appears, as fast as you can.',
-    instrFix: 'Keep your eyes on the + at the center of the screen throughout the task.',
-    instrNoFeedback: 'From now on, you will not receive feedback after each trial.',
+    instrBody: 'The real task will now begin. Everything is the same — tap the side where the face appears, as fast as you can.',
+    instrFix: 'Keep your eyes on the + at the center of the screen.',
+    instrNoFeedback: 'This time, you will not receive feedback after each round.',
     instrStart: 'Start Experiment',
   };
 
@@ -311,19 +321,21 @@ export default function BRMSExperimentPage() {
       <div style={{
         position: 'relative',
         width: frameW, height: frameH,
-        backgroundColor: '#b0b0b0',
+        backgroundColor: phase === 'iti' ? '#000' : '#b0b0b0',
         overflow: 'hidden', flexShrink: 0,
+        transition: 'background-color 0s',
       }}>
         {/* Full-field Mondrian mask */}
         <canvas ref={maskCanvasRef} width={mondrianW} height={mondrianH}
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, zIndex: 2 }} />
 
         {/* Fixation cross */}
-        {(phase === 'fixation' || phase === 'alternation' || phase === 'iti') && (
+        {phase !== 'instructions' && (
           <div style={{
             position: 'absolute', left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)', zIndex: 5,
-            color: '#333', fontSize: '2.8rem', fontWeight: 700, userSelect: 'none', lineHeight: 1,
+            color: phase === 'iti' ? '#e5e5e5' : '#333',
+            fontSize: '2.8rem', fontWeight: 700, userSelect: 'none', lineHeight: 1,
           }}>+</div>
         )}
 

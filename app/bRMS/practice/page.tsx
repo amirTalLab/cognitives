@@ -97,12 +97,24 @@ export default function BRMSPracticePage() {
 
     const faceUrl = getFaceUrl(trial.identityId, trial.emotion, trial.orientation);
     const faceEl0 = faceImgRef.current;
-    if (faceEl0) { faceEl0.src = faceUrl; faceEl0.style.opacity = '0'; }
+    const maskEl0 = maskCanvasRef.current;
+    if (faceEl0) { faceEl0.style.opacity = '0'; faceEl0.src = faceUrl; }
+    if (maskEl0 && mondrianPoolRef.current.length > 0) {
+      maskEl0.style.opacity = '0';
+      const ctx = maskEl0.getContext('2d');
+      if (ctx) ctx.drawImage(mondrianPoolRef.current[0], 0, 0, maskEl0.width, maskEl0.height);
+    }
 
     function tick() {
       if (respondedRef.current) return;
       const elapsed = performance.now() - startTimeRef.current;
-      if (elapsed >= RESCUE_END_MS) { respondedRef.current = true; stopAlternation(); return; }
+      if (elapsed >= RESCUE_END_MS) {
+        respondedRef.current = true;
+        stopAlternation();
+        if (maskCanvasRef.current) maskCanvasRef.current.style.opacity = '0';
+        if (faceImgRef.current) faceImgRef.current.style.opacity = '0';
+        return;
+      }
 
       const frame = frameCountRef.current;
       const cyclePos = frame % CYCLE_FRAMES;
@@ -160,6 +172,8 @@ export default function BRMSPracticePage() {
     if (phase !== 'alternation' || !trial || respondedRef.current) return;
     respondedRef.current = true;
     stopAlternation();
+    if (maskCanvasRef.current) maskCanvasRef.current.style.opacity = '0';
+    if (faceImgRef.current) faceImgRef.current.style.opacity = '0';
     setFeedbackCorrect(side === trial.side);
     setFeedbackSide(trial.side);
     setPhase('feedback');
@@ -187,10 +201,10 @@ export default function BRMSPracticePage() {
     tapRight: '▶',
     rotateMsg: 'סובבו את הטלפון לרוחב',
     instrTitle: 'תרגול',
-    instrBody: 'מסכות צבעוניות יהבהבו על המסך. פנים יופיעו בהדרגה משמאל או מימין למרכז. ברגע שתבחינו בפנים — לחצו על הצד שבו הן הופיעו.',
-    instrFix: 'שמרו את המבט על סימן ה-+ במרכז המסך לאורך כל הניסוי.',
+    instrBody: 'ריבועים צבעוניים יהבהבו על המסך. פנים יופיעו בהדרגה משמאל או מימין לסימן ה-+. ברגע שתבחינו בפנים — לחצו על הצד שבו הן הופיעו.',
+    instrFix: 'שמרו מבט על ה-+ שבמרכז המסך לכל אורך המשימה.',
     instrTip: 'לחצו על חצי המסך השמאלי או הימני, או השתמשו במקשי החצים.',
-    instrStart: 'התחל תרגול',
+    instrStart: 'התחילו תרגול',
   } : {
     practice: 'Practice',
     trialOf: `${idx + 1} / ${TOTAL}`,
@@ -203,7 +217,7 @@ export default function BRMSPracticePage() {
     tapRight: '▶',
     rotateMsg: 'Rotate your phone to landscape',
     instrTitle: 'Practice',
-    instrBody: 'Colorful masks will flash on screen. A face will gradually appear to the left or right of center. As soon as you see it — tap the side it appeared on.',
+    instrBody: 'Colorful squares will flash on screen. A face will gradually appear to the left or right of the +. As soon as you see it — tap the side it appeared on.',
     instrFix: 'Keep your eyes on the + at the center of the screen throughout the task.',
     instrTip: 'Tap the left or right half of the screen, or use the arrow keys.',
     instrStart: 'Start Practice',
@@ -246,19 +260,21 @@ export default function BRMSPracticePage() {
       <div style={{
         position: 'relative',
         width: frameW, height: frameH,
-        backgroundColor: '#b0b0b0',
+        backgroundColor: (phase === 'feedback' || phase === 'iti') ? '#000' : '#b0b0b0',
         overflow: 'hidden', flexShrink: 0,
+        transition: 'background-color 0s',
       }}>
         {/* Full-field Mondrian mask */}
         <canvas ref={maskCanvasRef} width={mondrianW} height={mondrianH}
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, zIndex: 2 }} />
 
         {/* Fixation cross */}
-        {(phase === 'fixation' || phase === 'alternation' || phase === 'iti') && (
+        {phase !== 'instructions' && (
           <div style={{
             position: 'absolute', left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)', zIndex: 5,
-            color: '#333', fontSize: '2.8rem', fontWeight: 700, userSelect: 'none', lineHeight: 1,
+            color: (phase === 'feedback' || phase === 'iti') ? '#e5e5e5' : '#333',
+            fontSize: '2.8rem', fontWeight: 700, userSelect: 'none', lineHeight: 1,
           }}>+</div>
         )}
 
