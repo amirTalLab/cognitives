@@ -26,7 +26,7 @@ export default function BRMSLanding() {
     inst: [
       'בכל תור יהבהבו על המסך ריבועים צבעוניים. פנים יופיעו בהדרגה משמאל או מימין לסימן ה-+.',
       'ברגע שתבחינו בפנים — לחצו על הצד שבו הן הופיעו, מהר ככל האפשר.',
-      'המשימה כוללת 120 תורות ואורכת כ-15–18 דקות, עם 2 הפסקות.',
+      'המשימה כוללת 108 תורות ואורכת כ-12–15 דקות, עם 2 הפסקות.',
     ],
     nameLabel: 'שמך',
     namePH: 'הזן את שמך',
@@ -53,7 +53,7 @@ export default function BRMSLanding() {
     inst: [
       'On each round, colorful squares will flash on screen. A face will gradually appear to the left or right of the +.',
       'As soon as you see the face, tap the side it appeared on (left or right) — as fast as you can.',
-      'The task has 120 rounds and takes about 15–18 minutes, with 2 breaks.',
+      'The task has 108 rounds and takes about 12–15 minutes, with 2 breaks.',
     ],
     nameLabel: 'Your name',
     namePH: 'Enter your name',

@@ -15,7 +15,7 @@ import { getSupabase } from '@/lib/supabase';
 
 type Phase = 'instructions' | 'fixation' | 'alternation' | 'iti' | 'break' | 'saving';
 
-const TOTAL = 120;
+const TOTAL = 108;
 const MONDRIAN_POOL_SIZE = 20;
 const MONDRIAN_CAP_W = 640;
 const TIMING_TOLERANCE = 0.15;
@@ -321,9 +321,8 @@ export default function BRMSExperimentPage() {
       <div style={{
         position: 'relative',
         width: frameW, height: frameH,
-        backgroundColor: phase === 'iti' ? '#000' : '#b0b0b0',
+        backgroundColor: '#b0b0b0',
         overflow: 'hidden', flexShrink: 0,
-        transition: 'background-color 0s',
       }}>
         {/* Full-field Mondrian mask */}
         <canvas ref={maskCanvasRef} width={mondrianW} height={mondrianH}
@@ -334,7 +333,7 @@ export default function BRMSExperimentPage() {
           <div style={{
             position: 'absolute', left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)', zIndex: 5,
-            color: phase === 'iti' ? '#e5e5e5' : '#333',
+            color: '#333',
             fontSize: '2.8rem', fontWeight: 700, userSelect: 'none', lineHeight: 1,
           }}>+</div>
         )}

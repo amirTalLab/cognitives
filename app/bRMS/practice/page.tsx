@@ -13,7 +13,7 @@ import { Trial } from '@/types/brms-emotion';
 
 type Phase = 'instructions' | 'fixation' | 'alternation' | 'feedback' | 'iti';
 
-const TOTAL = 12;
+const TOTAL = 8;
 const MONDRIAN_POOL_SIZE = 20;
 const MONDRIAN_CAP_W = 640;
 
@@ -260,9 +260,8 @@ export default function BRMSPracticePage() {
       <div style={{
         position: 'relative',
         width: frameW, height: frameH,
-        backgroundColor: (phase === 'feedback' || phase === 'iti') ? '#000' : '#b0b0b0',
+        backgroundColor: '#b0b0b0',
         overflow: 'hidden', flexShrink: 0,
-        transition: 'background-color 0s',
       }}>
         {/* Full-field Mondrian mask */}
         <canvas ref={maskCanvasRef} width={mondrianW} height={mondrianH}
@@ -273,7 +272,7 @@ export default function BRMSPracticePage() {
           <div style={{
             position: 'absolute', left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)', zIndex: 5,
-            color: (phase === 'feedback' || phase === 'iti') ? '#e5e5e5' : '#333',
+            color: '#333',
             fontSize: '2.8rem', fontWeight: 700, userSelect: 'none', lineHeight: 1,
           }}>+</div>
         )}

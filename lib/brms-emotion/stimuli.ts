@@ -16,10 +16,10 @@ export const RESCUE_END_MS  = 20_000;   // trial hard-stop
 export const RESCUE_DUR_MS  = RESCUE_END_MS - RESCUE_START_MS;
 export const FIXATION_MS    = 500;
 export const ITI_MS         = 500;
-export const BREAK_EVERY    = 40;
+export const BREAK_EVERY    = 36;
 
-export const TRIALS_PER_CELL = 20;
-export const PRACTICE_PER_CELL = 2;
+export const TRIALS_PER_CELL = 18;
+export const PRACTICE_TOTAL = 8;
 
 export const COIN_DIAMETER_MM = 18; // 1 NIS coin
 export const FACE_SIZE_MM     = 25; // legacy — unused with proportional sizing
@@ -106,12 +106,17 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-function constrainedShuffle(trials: Trial[], maxAttempts = 200): Trial[] {
+function conditionKey(t: Trial): string {
+  return `${t.emotion}_${t.orientation}`;
+}
+
+function constrainedShuffle(trials: Trial[], maxAttempts = 500): Trial[] {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const shuffled = shuffle(trials);
     let valid = true;
     for (let i = 1; i < shuffled.length; i++) {
-      if (shuffled[i].identityId === shuffled[i - 1].identityId) {
+      if (shuffled[i].identityId === shuffled[i - 1].identityId ||
+          conditionKey(shuffled[i]) === conditionKey(shuffled[i - 1])) {
         valid = false;
         break;
       }
@@ -159,13 +164,23 @@ export function buildTrialList(): Trial[] {
 export function buildPracticeList(): Trial[] {
   const emotions: Emotion[] = ['fearful', 'happy', 'neutral'];
   const orientations: Orientation[] = ['upright', 'inverted'];
-  const all: Trial[] = [];
-
+  const cells: { emotion: Emotion; orientation: Orientation }[] = [];
   for (const emotion of emotions) {
     for (const orientation of orientations) {
-      all.push(...buildCellTrials(emotion, orientation, PRACTICE_PER_CELL, true));
+      cells.push({ emotion, orientation });
     }
   }
-
-  return shuffle(all);
+  const ids = shuffle(IDENTITY_IDS);
+  const all: Trial[] = [];
+  for (let i = 0; i < PRACTICE_TOTAL; i++) {
+    const cell = cells[i % cells.length];
+    all.push({
+      emotion: cell.emotion,
+      orientation: cell.orientation,
+      identityId: ids[i % ids.length],
+      side: i % 2 === 0 ? 'left' : 'right',
+      isPractice: true,
+    });
+  }
+  return constrainedShuffle(all);
 }
