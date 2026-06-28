@@ -8,7 +8,7 @@ export const STIMULUS_SET: 'mock' | 'kdef' = 'mock';
 export const MASK_FRAMES    = 4;        // 4 frames @ 60 Hz ≈ 66.67 ms
 export const FACE_FRAMES    = 2;        // 2 frames @ 60 Hz ≈ 33.34 ms
 export const CYCLE_FRAMES   = MASK_FRAMES + FACE_FRAMES; // 6 frames = 100 ms
-export const RAMP_MS        = 2000;     // face contrast ramps over 2 s
+export const RAMP_MS        = 3000;     // face contrast ramps over 3 s
 export const MAX_CONTRAST   = 0.7;      // 70% max face alpha
 export const DEADLINE_MS    = 15_000;   // BT analysis deadline
 export const RESCUE_START_MS = 15_000;  // mask fade begins
