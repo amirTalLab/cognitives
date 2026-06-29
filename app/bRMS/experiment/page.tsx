@@ -345,6 +345,7 @@ export default function BRMSExperimentPage() {
             top: faceTop,
             left: trial.side === 'left' ? faceLeftL : faceLeftR,
             opacity: 0, zIndex: 1,
+            objectFit: 'contain',
             transform: trial.orientation === 'inverted' ? 'rotate(180deg)' : undefined,
           }} />
 
