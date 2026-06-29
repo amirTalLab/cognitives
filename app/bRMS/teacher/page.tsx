@@ -11,6 +11,7 @@ import {
 import { Eye, Download, Home, RefreshCw } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { TrialResult } from '@/types/brms-emotion';
+import { generateMockData } from '@/lib/brms-emotion/mock-data';
 
 const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
 
@@ -279,6 +280,7 @@ export default function BRMSTeacherPage() {
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  const [useMock, setUseMock] = useState(false);
   const [cleanTrials, setCleanTrials] = useState(false);
   const [cleanParticipants, setCleanParticipants] = useState(false);
   const [aggMode, setAggMode] = useState<AggMode>('median');
@@ -330,6 +332,13 @@ export default function BRMSTeacherPage() {
     setData(kept.length > 0 ? computeDashboard(kept, allRows, agg) : null);
   }, []);
 
+  const loadMockData = useCallback(() => {
+    const rows = generateMockData();
+    setRawRows(rows);
+    recompute(rows, cleanTrials, cleanParticipants, aggMode);
+    setLoading(false);
+  }, [recompute, cleanTrials, cleanParticipants, aggMode]);
+
   const fetchData = useCallback(async () => {
     setRefreshing(true); setError(null);
     try {
@@ -340,7 +349,10 @@ export default function BRMSTeacherPage() {
     finally { setLoading(false); setRefreshing(false); }
   }, [fetchAllRows, recompute, cleanTrials, cleanParticipants, aggMode]);
 
-  useEffect(() => { if (authed) fetchData(); }, [authed, fetchData]);
+  useEffect(() => {
+    if (!authed) return;
+    if (useMock) loadMockData(); else fetchData();
+  }, [authed, useMock, loadMockData, fetchData]);
 
   useEffect(() => {
     if (rawRows.length > 0) recompute(rawRows, cleanTrials, cleanParticipants, aggMode);
@@ -394,11 +406,16 @@ export default function BRMSTeacherPage() {
             {!loading && data && (
               <p className="text-purple-400 font-medium">
                 {data.nParticipants} participant{data.nParticipants !== 1 ? 's' : ''} · {data.nTrials} trials
+                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
               </p>
             )}
           </div>
           <div className="flex gap-3 flex-wrap">
-            <button onClick={fetchData} disabled={refreshing}
+            <button onClick={() => setUseMock(v => !v)}
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${useMock ? 'bg-amber-500/20 border-amber-400 text-amber-400' : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'}`}>
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
+            <button onClick={fetchData} disabled={refreshing || useMock}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
             </button>
@@ -445,7 +462,7 @@ export default function BRMSTeacherPage() {
         {loading ? (
           <p className="text-center text-gray-400 py-20 text-lg">Loading...</p>
         ) : !data || data.nParticipants === 0 ? (
-          <p className="text-center text-gray-500 py-20 text-lg">No data yet</p>
+          <p className="text-center text-gray-500 py-20 text-lg">No data yet — try enabling mock data above</p>
         ) : (
           <div className="flex flex-col gap-6">
 
