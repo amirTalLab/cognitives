@@ -82,18 +82,25 @@ export function generateMondrianCanvas(w: number, h: number, shape: MaskShape = 
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#222';
   ctx.fillRect(0, 0, w, h);
-  const nShapes = 200 + Math.floor(Math.random() * 80);
+  const nShapes = shape === 'ovals'
+    ? 40 + Math.floor(Math.random() * 20)
+    : 200 + Math.floor(Math.random() * 80);
   for (let i = 0; i < nShapes; i++) {
-    const rw = 4 + Math.random() * (w * 0.2);
-    const rh = 4 + Math.random() * (h * 0.2);
-    const rx = Math.random() * (w - rw / 2) - rw / 4;
-    const ry = Math.random() * (h - rh / 2) - rh / 4;
     ctx.fillStyle = MONDRIAN_COLORS[Math.floor(Math.random() * MONDRIAN_COLORS.length)];
     if (shape === 'ovals') {
+      const rx = FACE_W_RATIO * w / 2;
+      const ry = FACE_H_RATIO * h / 2;
+      const cx = Math.random() * w;
+      const cy = Math.random() * h;
+      const horizontal = Math.random() < 0.5;
       ctx.beginPath();
-      ctx.ellipse(rx + rw / 2, ry + rh / 2, rw / 2, rh / 2, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, horizontal ? ry : rx, horizontal ? rx : ry, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
+      const rw = 4 + Math.random() * (w * 0.2);
+      const rh = 4 + Math.random() * (h * 0.2);
+      const rx = Math.random() * (w - rw / 2) - rw / 4;
+      const ry = Math.random() * (h - rh / 2) - rh / 4;
       ctx.fillRect(rx, ry, rw, rh);
     }
   }
