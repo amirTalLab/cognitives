@@ -72,21 +72,30 @@ const MONDRIAN_COLORS = [
   '#3949ab', '#c0ca33', '#039be5', '#e53935', '#ffb300',
 ];
 
-export function generateMondrianCanvas(w: number, h: number): HTMLCanvasElement {
+export type MaskShape = 'ovals' | 'rectangles';
+export const MASK_SHAPE: MaskShape = 'ovals';
+
+export function generateMondrianCanvas(w: number, h: number, shape: MaskShape = MASK_SHAPE): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#222';
   ctx.fillRect(0, 0, w, h);
-  const nRects = 200 + Math.floor(Math.random() * 80);
-  for (let i = 0; i < nRects; i++) {
+  const nShapes = 200 + Math.floor(Math.random() * 80);
+  for (let i = 0; i < nShapes; i++) {
     const rw = 4 + Math.random() * (w * 0.2);
     const rh = 4 + Math.random() * (h * 0.2);
     const rx = Math.random() * (w - rw / 2) - rw / 4;
     const ry = Math.random() * (h - rh / 2) - rh / 4;
     ctx.fillStyle = MONDRIAN_COLORS[Math.floor(Math.random() * MONDRIAN_COLORS.length)];
-    ctx.fillRect(rx, ry, rw, rh);
+    if (shape === 'ovals') {
+      ctx.beginPath();
+      ctx.ellipse(rx + rw / 2, ry + rh / 2, rw / 2, rh / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(rx, ry, rw, rh);
+    }
   }
   return canvas;
 }
