@@ -88,12 +88,13 @@ export function generateMondrianCanvas(w: number, h: number, shape: MaskShape = 
   for (let i = 0; i < nShapes; i++) {
     ctx.fillStyle = MONDRIAN_COLORS[Math.floor(Math.random() * MONDRIAN_COLORS.length)];
     if (shape === 'ovals') {
-      // Match displayed face size: width constrained by objectFit:contain
-      // Face image is 608×464, so displayed height = faceW × (464/608)
+      // Face oval is smaller than the 608×464 image (transparent corners).
+      // Base size ~0.7× image dims; vary uniformly from 0.5× to 0.9×.
       const faceDispW = FACE_W_RATIO * w;
       const faceDispH = faceDispW * (464 / 608);
-      const rx = faceDispW / 2;
-      const ry = faceDispH / 2;
+      const scale = 0.5 + Math.random() * 0.4;
+      const rx = (faceDispW / 2) * scale;
+      const ry = (faceDispH / 2) * scale;
       const cx = Math.random() * w;
       const cy = Math.random() * h;
       const horizontal = Math.random() < 0.5;
