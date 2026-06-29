@@ -26,6 +26,7 @@ export const FRAME_ASPECT      = 2.38;  // 34.5° / 14.5°
 export const FACE_W_RATIO      = 0.25;  // face width  = 0.25 × frame width
 export const FACE_OFFSET_RATIO = 0.26;  // center→face center = 0.26 × frame width
 export const FACE_H_RATIO      = 0.97;  // face height = 0.97 × frame height
+export const FACE_JITTER_RATIO = 0.03;  // ±3% of frame width horizontal jitter
 
 // ── Face identities & URLs ──────────────────────────────────────────────────
 
@@ -66,11 +67,16 @@ export function preloadAllImages(): void {
 
 // ── Mondrian mask generation ─────────────────────────────────────────────────
 
-const MONDRIAN_COLORS = [
+const MONDRIAN_COLORS_RGB = [
   '#e53935', '#1e88e5', '#fdd835', '#43a047', '#fb8c00',
   '#8e24aa', '#00acc1', '#d81b60', '#7cb342', '#f4511e',
   '#3949ab', '#c0ca33', '#039be5', '#e53935', '#ffb300',
 ];
+
+function randomGrey(): string {
+  const v = Math.floor(Math.random() * 256);
+  return `rgb(${v},${v},${v})`;
+}
 
 export type MaskShape = 'ovals' | 'rectangles';
 export const MASK_SHAPE: MaskShape = 'ovals';
@@ -80,13 +86,15 @@ export function generateMondrianCanvas(w: number, h: number, shape: MaskShape = 
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#222';
+  ctx.fillStyle = shape === 'ovals' ? '#808080' : '#222';
   ctx.fillRect(0, 0, w, h);
   const nShapes = shape === 'ovals'
     ? 40 + Math.floor(Math.random() * 20)
     : 200 + Math.floor(Math.random() * 80);
   for (let i = 0; i < nShapes; i++) {
-    ctx.fillStyle = MONDRIAN_COLORS[Math.floor(Math.random() * MONDRIAN_COLORS.length)];
+    ctx.fillStyle = shape === 'ovals'
+      ? randomGrey()
+      : MONDRIAN_COLORS_RGB[Math.floor(Math.random() * MONDRIAN_COLORS_RGB.length)];
     if (shape === 'ovals') {
       // Face oval is smaller than the 608×464 image (transparent corners).
       // Base size ~0.7× image dims; vary uniformly from 0.5× to 0.9×.

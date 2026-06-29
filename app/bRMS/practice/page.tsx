@@ -7,7 +7,7 @@ import {
   buildPracticeList, getFaceUrl, generateMondrianPool, preloadAllImages,
   FIXATION_MS, CYCLE_FRAMES, MASK_FRAMES, RAMP_MS, MAX_CONTRAST,
   RESCUE_START_MS, RESCUE_END_MS, RESCUE_DUR_MS, ITI_MS,
-  FRAME_ASPECT, FACE_W_RATIO, FACE_OFFSET_RATIO, FACE_H_RATIO,
+  FRAME_ASPECT, FACE_W_RATIO, FACE_OFFSET_RATIO, FACE_H_RATIO, FACE_JITTER_RATIO,
 } from '@/lib/brms-emotion/stimuli';
 import { Trial } from '@/types/brms-emotion';
 
@@ -39,6 +39,7 @@ export default function BRMSPracticePage() {
 
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const faceImgRef = useRef<HTMLImageElement>(null);
+  const jitterRef = useRef(0);
 
   const isHe = language === 'he';
 
@@ -94,6 +95,7 @@ export default function BRMSPracticePage() {
     frameCountRef.current = 0;
     startTimeRef.current = performance.now();
     mondrianIdxRef.current = 0;
+    jitterRef.current = Math.round((Math.random() * 2 - 1) * FACE_JITTER_RATIO * frameW);
 
     const faceUrl = getFaceUrl(trial.identityId, trial.emotion, trial.orientation);
     const faceEl0 = faceImgRef.current;
@@ -282,10 +284,12 @@ export default function BRMSPracticePage() {
             position: 'absolute',
             width: faceW, height: faceH,
             top: faceTop,
-            left: trial.side === 'left' ? faceLeftL : faceLeftR,
+            left: (trial.side === 'left' ? faceLeftL : faceLeftR) + jitterRef.current,
             opacity: 0, zIndex: 1,
             objectFit: 'contain',
             transform: trial.orientation === 'inverted' ? 'rotate(180deg)' : undefined,
+            maskImage: 'radial-gradient(ellipse 45% 45% at center, black 50%, transparent 100%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 45% 45% at center, black 50%, transparent 100%)',
           }} />
 
         {/* Tap zones + side indicators (during alternation) */}
