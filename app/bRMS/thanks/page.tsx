@@ -89,6 +89,15 @@ export default function BRMSThanksPage() {
             ))}
           </div>
         )}
+
+        <a
+          href="https://www.huji.ac.il/seker/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-emerald-400 underline text-sm mt-2 hover:text-emerald-300 transition-colors"
+        >
+          {isHe ? 'סיימת מוקדם? נא להקיש כאן' : 'Finished early? Please click here'}
+        </a>
       </div>
     </div>
   );
