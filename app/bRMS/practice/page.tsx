@@ -284,6 +284,7 @@ export default function BRMSPracticePage() {
             top: faceTop,
             left: trial.side === 'left' ? faceLeftL : faceLeftR,
             opacity: 0, zIndex: 1,
+            transform: trial.orientation === 'inverted' ? 'rotate(180deg)' : undefined,
           }} />
 
         {/* Tap zones + side indicators (during alternation) */}

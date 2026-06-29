@@ -1,9 +1,8 @@
 import { Emotion, Orientation, Side, Trial } from '@/types/brms-emotion';
-import { getMockImageUrl, IDENTITY_IDS, EmotionKey, OrientationKey, getAllMockImageUrls } from './mockStimuli';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-export const STIMULUS_SET: 'mock' | 'kdef' = 'mock';
+export const STIMULUS_SET = 'real';
 
 export const MASK_FRAMES    = 4;        // 4 frames @ 60 Hz ≈ 66.67 ms
 export const FACE_FRAMES    = 2;        // 2 frames @ 60 Hz ≈ 33.34 ms
@@ -22,28 +21,33 @@ export const TRIALS_PER_CELL = 18;
 export const PRACTICE_TOTAL = 8;
 
 export const COIN_DIAMETER_MM = 18; // 1 NIS coin
-export const FACE_SIZE_MM     = 25; // legacy — unused with proportional sizing
 
 export const FRAME_ASPECT      = 2.38;  // 34.5° / 14.5°
 export const FACE_W_RATIO      = 0.25;  // face width  = 0.25 × frame width
 export const FACE_OFFSET_RATIO = 0.26;  // center→face center = 0.26 × frame width
 export const FACE_H_RATIO      = 0.97;  // face height = 0.97 × frame height
 
-// ── Emotion / orientation code mapping ────────────────────────────────────────
+// ── Face identities & URLs ──────────────────────────────────────────────────
 
-const EMOTION_CODE: Record<Emotion, EmotionKey> = {
-  fearful: 'AF', happy: 'HA', neutral: 'NE',
-};
-const ORIENTATION_CODE: Record<Orientation, OrientationKey> = {
-  upright: 'up', inverted: 'inv',
+export const IDENTITY_IDS = ['1', '2', '3', '4', '5', '6'];
+
+const EMOTION_FILE: Record<Emotion, string> = {
+  fearful: 'f', happy: 'h', neutral: 'n',
 };
 
-export function getFaceUrl(identityId: string, emotion: Emotion, orientation: Orientation): string {
-  if (STIMULUS_SET === 'mock') {
-    return getMockImageUrl(identityId, EMOTION_CODE[emotion], ORIENTATION_CODE[orientation]);
+export function getFaceUrl(identityId: string, emotion: Emotion, _orientation: Orientation): string {
+  return `/brms-faces/${identityId}_${EMOTION_FILE[emotion]}.png`;
+}
+
+function getAllImageUrls(): string[] {
+  const urls: string[] = [];
+  const emotions: Emotion[] = ['fearful', 'happy', 'neutral'];
+  for (const id of IDENTITY_IDS) {
+    for (const em of emotions) {
+      urls.push(getFaceUrl(id, em, 'upright'));
+    }
   }
-  // KDEF path (future): return `/stimuli/kdef/${identityId}_${EMOTION_CODE[emotion]}_${ORIENTATION_CODE[orientation]}.jpg`;
-  return getMockImageUrl(identityId, EMOTION_CODE[emotion], ORIENTATION_CODE[orientation]);
+  return urls;
 }
 
 // ── Image preloading ─────────────────────────────────────────────────────────
@@ -52,7 +56,7 @@ const preloadedCache: HTMLImageElement[] = [];
 
 export function preloadAllImages(): void {
   if (preloadedCache.length > 0) return;
-  const urls = getAllMockImageUrls();
+  const urls = getAllImageUrls();
   for (const url of urls) {
     const img = new Image();
     img.src = url;
