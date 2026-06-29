@@ -349,8 +349,9 @@ export default function BRMSExperimentPage() {
             opacity: 0, zIndex: 1,
             objectFit: 'contain',
             transform: trial.orientation === 'inverted' ? 'rotate(180deg)' : undefined,
-            maskImage: 'radial-gradient(ellipse 45% 45% at center, black 50%, transparent 100%)',
-            WebkitMaskImage: 'radial-gradient(ellipse 45% 45% at center, black 50%, transparent 100%)',
+            filter: 'grayscale(100%)',
+            maskImage: 'radial-gradient(ellipse 40% 40% at center, black 30%, transparent 80%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 40% 40% at center, black 30%, transparent 80%)',
           }} />
 
         {/* Tap zones (during alternation) */}
