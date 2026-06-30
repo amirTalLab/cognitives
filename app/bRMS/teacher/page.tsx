@@ -120,6 +120,8 @@ interface LinePt { name: string; upright: number; inverted: number; }
 interface ScatterPt { x: number; y: number; name: string; }
 interface AccPt { name: string; upright: number; uprightSem: number; inverted: number; invertedSem: number; }
 
+interface SpeedAccPt { x: number; y: number; name: string; }
+
 interface DashboardData {
   fig1: BarPt[];
   fig2: GroupedPt[];
@@ -128,6 +130,7 @@ interface DashboardData {
   fig4lines: LinePt[];
   fig5: ScatterPt[];
   fig6: AccPt[];
+  fig7: SpeedAccPt[];
   nParticipants: number;
   nTrials: number;
 }
@@ -219,7 +222,18 @@ function computeDashboard(rows: TrialResult[], allRows: TrialResult[], aggMode: 
     };
   });
 
-  return { fig1, fig2, fig3, fig4, fig4lines, fig5, fig6, nParticipants: sessions.length, nTrials: rows.length };
+  // Fig 7: Speed × Accuracy scatter
+  const fig7: SpeedAccPt[] = sessions.map(sid => {
+    const all = allRows.filter(r => r.session_id === sid && !r.is_practice);
+    const correct = all.filter(r => r.is_correct);
+    const acc = all.length ? (correct.length / all.length) * 100 : 0;
+    const s = rows.filter(r => r.session_id === sid);
+    const medBT = s.length ? r2(median(s.map(r => r.reaction_time_ms / 1000))) : 0;
+    const name = allRows.find(r => r.session_id === sid && r.participant_name)?.participant_name ?? 'Anon';
+    return { x: medBT, y: r2(acc), name };
+  }).filter(p => p.x > 0);
+
+  return { fig1, fig2, fig3, fig4, fig4lines, fig5, fig6, fig7, nParticipants: sessions.length, nTrials: rows.length };
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -258,6 +272,18 @@ const ScatterTooltip = ({ active, payload }: { active?: boolean; payload?: { pay
       <p className="font-semibold">{d.name}</p>
       <p>Upright: {d.x}s</p>
       <p>Inverted: {d.y}s</p>
+    </div>
+  );
+};
+
+const SpeedAccTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: SpeedAccPt }[] }) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div style={BG} className="px-3 py-2 text-xs text-white shadow">
+      <p className="font-semibold">{d.name}</p>
+      <p>Median BT: {d.x}s</p>
+      <p>Accuracy: {d.y}%</p>
     </div>
   );
 };
@@ -626,6 +652,33 @@ export default function BRMSTeacherPage() {
                   </>)}
                 </BarChart>
               </ResponsiveContainer>
+            </ChartCard>
+
+            {/* Fig 7 — Speed × Accuracy scatter */}
+            <ChartCard title="Figure 7 — Speed × Accuracy"
+              subtitle="Each dot = one participant. X = median BT (s), Y = accuracy (%)."
+              teachingPoint="Checks for speed-accuracy tradeoff: fast responders should not be less accurate."
+              revealed={!!revealed[7]} onReveal={() => reveal(7)}>
+              {data.fig7.length === 0 ? (
+                <div className="h-[260px] flex items-center justify-center text-gray-500 text-sm">No data</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <ScatterChart margin={{ left: 10, bottom: 20, right: 20, top: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis dataKey="x" type="number" name="Median BT"
+                      label={{ value: 'Median BT (s)', position: 'insideBottom', offset: -12, style: LBL }} tick={TICK} />
+                    <YAxis dataKey="y" type="number" name="Accuracy" domain={[0, 100]}
+                      label={{ value: 'Accuracy (%)', angle: -90, position: 'insideLeft', style: LBL }} tick={TICK} />
+                    <ZAxis range={[60, 60]} />
+                    <Tooltip content={<SpeedAccTooltip />} />
+                    {revealed[7] && (
+                      <Scatter data={data.fig7} shape={<Dot />}>
+                        {data.fig7.map((_, i) => <Cell key={i} fill="#a78bfa" />)}
+                      </Scatter>
+                    )}
+                  </ScatterChart>
+                </ResponsiveContainer>
+              )}
             </ChartCard>
 
           </div>
