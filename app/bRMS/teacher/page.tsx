@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ErrorBar, LineChart, Line,
+  ResponsiveContainer, ErrorBar,
   ScatterChart, Scatter, ZAxis, Cell,
 } from 'recharts';
 import { Eye, Download, Home, RefreshCw } from 'lucide-react';
@@ -116,7 +116,7 @@ type AggMode = 'mean' | 'median';
 
 interface BarPt { name: string; value: number; sem: number; }
 interface GroupedPt { name: string; upright: number; uprightSem: number; inverted: number; invertedSem: number; }
-interface LinePt { name: string; upright: number; inverted: number; }
+
 interface ScatterPt { x: number; y: number; name: string; }
 interface AccPt { name: string; upright: number; uprightSem: number; inverted: number; invertedSem: number; }
 
@@ -125,9 +125,6 @@ interface SpeedAccPt { x: number; y: number; name: string; }
 interface DashboardData {
   fig1: BarPt[];
   fig2: GroupedPt[];
-  fig3: BarPt[];
-  fig4: BarPt[];
-  fig4lines: LinePt[];
   fig5: ScatterPt[];
   fig6: AccPt[];
   fig7: SpeedAccPt[];
@@ -151,12 +148,7 @@ function computeDashboard(rows: TrialResult[], allRows: TrialResult[], aggMode: 
       const c = s.filter(r => r.orientation === ori);
       return c.length ? agg(c.map(r => r.reaction_time_ms / 1000)) : NaN;
     };
-    const emBT = (em: string) => {
-      const c = s.filter(r => r.emotion === em && r.orientation === 'upright');
-      return c.length ? agg(c.map(r => r.reaction_time_ms / 1000)) : NaN;
-    };
-
-    return { name, sid, cellBT, oriBT, emBT, uprightBT: oriBT('upright'), invertedBT: oriBT('inverted') };
+    return { name, sid, cellBT, oriBT, uprightBT: oriBT('upright'), invertedBT: oriBT('inverted') };
   });
 
   const valid = (vals: number[]) => vals.filter(v => !isNaN(v));
@@ -176,28 +168,6 @@ function computeDashboard(rows: TrialResult[], allRows: TrialResult[], aggMode: 
       upright: r2(mean(upVals)), uprightSem: r2(sem(upVals)),
       inverted: r2(mean(invVals)), invertedSem: r2(sem(invVals)),
     };
-  });
-
-  // Fig 3: Emotion, upright only
-  const fig3: BarPt[] = EMOTIONS.map(em => {
-    const vals = valid(perPart.map(p => p.emBT(em)));
-    return { name: EM_LABELS[em], value: r2(mean(vals)), sem: r2(sem(vals)) };
-  });
-
-  // Fig 4: Inversion cost per emotion
-  const fig4: BarPt[] = EMOTIONS.map(em => {
-    const costs = valid(perPart.map(p => {
-      const up = p.cellBT(em, 'upright');
-      const inv = p.cellBT(em, 'inverted');
-      return (!isNaN(up) && !isNaN(inv)) ? inv - up : NaN;
-    }));
-    return { name: EM_LABELS[em], value: r2(mean(costs)), sem: r2(sem(costs)) };
-  });
-
-  const fig4lines: LinePt[] = EMOTIONS.map(em => {
-    const upVals = valid(perPart.map(p => p.cellBT(em, 'upright')));
-    const invVals = valid(perPart.map(p => p.cellBT(em, 'inverted')));
-    return { name: EM_LABELS[em], upright: r2(mean(upVals)), inverted: r2(mean(invVals)) };
   });
 
   // Fig 5: Individual scatter
@@ -233,7 +203,7 @@ function computeDashboard(rows: TrialResult[], allRows: TrialResult[], aggMode: 
     return { x: medBT, y: r2(acc), name };
   }).filter(p => p.x > 0);
 
-  return { fig1, fig2, fig3, fig4, fig4lines, fig5, fig6, fig7, nParticipants: sessions.length, nTrials: rows.length };
+  return { fig1, fig2, fig5, fig6, fig7, nParticipants: sessions.length, nTrials: rows.length };
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -534,61 +504,6 @@ export default function BRMSTeacherPage() {
                   </>)}
                 </BarChart>
               </ResponsiveContainer>
-            </ChartCard>
-
-            {/* Fig 3 — Emotion, upright only */}
-            <ChartCard title="Figure 3 — Emotion Effect (Upright Only)"
-              subtitle="BT (s) for fearful / happy / neutral faces, upright trials only."
-              teachingPoint="Does fear break fastest? Is happy ≠ neutral? The classic emotion-prioritization test."
-              revealed={!!revealed[3]} onReveal={() => reveal(3)}>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={data.fig3} margin={{ left: 10, bottom: 5 }} barCategoryGap="30%">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="name" tick={TICK} />
-                  <YAxis tick={TICK} label={{ value: 'BT (s)', angle: -90, position: 'insideLeft', style: LBL }} />
-                  <Tooltip contentStyle={BG} formatter={sFmt} />
-                  {revealed[3] && (
-                    <Bar dataKey="value" name="BT" fill="#34d399" radius={[4, 4, 0, 0]}>
-                      <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#059669" direction="y" />
-                    </Bar>
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-
-            {/* Fig 4 — Interaction / confound diagnostic */}
-            <ChartCard title="Figure 4 — Interaction: Inversion Cost by Emotion"
-              subtitle="BT(inverted) − BT(upright) per emotion, plus an interaction line plot."
-              teachingPoint="If emotion differences shrink under inversion → higher-level. If they persist → low-level confound."
-              revealed={!!revealed[4]} onReveal={() => reveal(4)}>
-              <div className="flex flex-col gap-4">
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={data.fig4} margin={{ left: 10, bottom: 5 }} barCategoryGap="30%">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="name" tick={TICK} />
-                    <YAxis tick={TICK} label={{ value: 'Inversion Cost (s)', angle: -90, position: 'insideLeft', style: LBL }} />
-                    <Tooltip contentStyle={BG} formatter={sFmt} />
-                    {revealed[4] && (
-                      <Bar dataKey="value" name="Cost" fill="#f59e0b" radius={[4, 4, 0, 0]}>
-                        <ErrorBar dataKey="sem" width={4} strokeWidth={2} stroke="#b45309" direction="y" />
-                      </Bar>
-                    )}
-                  </BarChart>
-                </ResponsiveContainer>
-                {revealed[4] && (
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={data.fig4lines} margin={{ left: 10, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="name" tick={TICK} />
-                      <YAxis tick={TICK} label={{ value: 'BT (s)', angle: -90, position: 'insideLeft', style: LBL }} />
-                      <Tooltip contentStyle={BG} formatter={sFmt} />
-                      <Legend verticalAlign="top" />
-                      <Line type="monotone" dataKey="upright" name="Upright" stroke="#34d399" strokeWidth={2} dot={{ r: 5 }} />
-                      <Line type="monotone" dataKey="inverted" name="Inverted" stroke="#f97316" strokeWidth={2} dot={{ r: 5 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
             </ChartCard>
 
             {/* Fig 5 — Individual differences scatter */}
