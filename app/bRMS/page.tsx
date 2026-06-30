@@ -25,28 +25,28 @@ export default function BRMSLanding() {
     subtitle: 'Breaking Repeated Masking Suppression',
     inst: [
       'בכל תור יהבהבו על המסך ריבועים צבעוניים. פנים יופיעו בהדרגה משמאל או מימין לסימן ה-+.',
-      'ברגע שתבחינו בפנים — לחצו על הצד שבו הן הופיעו, מהר ככל האפשר.',
+      'ברגע שתבחיני בפנים — לחצי על הצד שבו הן הופיעו, מהר ככל האפשר.',
       'המשימה כוללת 108 תורות ואורכת כ-12–15 דקות, עם 2 הפסקות.',
     ],
     nameLabel: 'שמך',
-    namePH: 'הזן את שמך',
-    start: 'המשך לכיול',
+    namePH: 'הזיני את שמך',
+    start: 'המשיכי לכיול',
     toggle: 'English',
     calTitle: 'כיול גודל המסך',
-    calInst: 'הצמידו מטבע של 1 ₪ למסך וגררו את העיגול עד שיתאים בדיוק לגודל המטבע.',
-    calDone: 'המשך',
-    calDrag: 'גררו למעלה / למטה לשינוי גודל',
+    calInst: 'הצמידי מטבע של 1 ₪ למסך וגררי את העיגול עד שיתאים בדיוק לגודל המטבע.',
+    calDone: 'המשיכי',
+    calDrag: 'גררי למעלה / למטה לשינוי גודל',
     hwTitle: 'בדיקת מסך',
-    hwChecking: 'בודק יציבות מסגרות...',
+    hwChecking: 'בודקת יציבות מסגרות...',
     hwPass: 'המסך תקין — אפשר להתחיל!',
-    hwFail: 'ביצועי המסך לא אופטימליים. סגרו אפליקציות אחרות ונסו שוב.',
-    hwRetry: 'נסה שוב',
-    hwStart: 'המשך',
+    hwFail: 'ביצועי המסך לא אופטימליים. סגרי אפליקציות אחרות ונסי שוב.',
+    hwRetry: 'נסי שוב',
+    hwStart: 'המשיכי',
     prepTitle: 'הכנה למשימה',
     prepFullscreen: 'המסך יעבור למצב מסך מלא בפריסה אופקית.',
-    prepRotate: 'סובבו את הטלפון לרוחב והחזיקו אותו ככה לכל אורך המשימה.',
-    prepDistance: (cm: number) => `החזיקו את הטלפון במרחק של כ-${cm} ס"מ מהעיניים — בערך אורך אמה.`,
-    prepReady: 'מוכן — התחל תרגול',
+    prepRotate: 'סובבי את הטלפון לרוחב והחזיקי אותו ככה לכל אורך המשימה.',
+    prepDistance: (cm: number) => `החזיקי את הטלפון במרחק של כ-${cm} ס"מ מהעיניים — בערך אורך אמה.`,
+    prepReady: 'מוכנה — התחילי תרגול',
   } : {
     title: 'bRMS — Emotion × Orientation',
     subtitle: 'Breaking Repeated Masking Suppression',
@@ -78,7 +78,7 @@ export default function BRMSLanding() {
 
   const handleIntroNext = () => {
     if (!name.trim()) {
-      alert(isHe ? 'אנא הזן את שמך' : 'Please enter your name');
+      alert(isHe ? 'אנא הזיני את שמך' : 'Please enter your name');
       return;
     }
     sessionStorage.setItem('brms_session_id', uuidv4());
