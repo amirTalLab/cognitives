@@ -13,8 +13,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ScatterChart,
-  Scatter,
 } from 'recharts';
 import { ScanningTrialResult, RotationTrialResult, MentalRepSummary } from '@/types/mental-rep';
 import { calculateCorrelation as calcScanningCorr, groupByDistanceBins } from '@/lib/mental-rep/scanning';
@@ -67,8 +65,10 @@ export default function MentalRepResults() {
           .order('trial_number', { ascending: true });
 
         if (!error && data) {
-          scanningData = data.filter((r: any) => r.experiment_type === 'scanning') as ScanningTrialResult[];
-          rotationData = data.filter((r: any) => r.experiment_type === 'rotation' && !r.is_practice) as RotationTrialResult[];
+          scanningData = (data as (ScanningTrialResult | RotationTrialResult)[])
+            .filter((r): r is ScanningTrialResult => r.experiment_type === 'scanning');
+          rotationData = (data as (ScanningTrialResult | RotationTrialResult)[])
+            .filter((r): r is RotationTrialResult => r.experiment_type === 'rotation' && !r.is_practice);
         }
       }
     }
@@ -304,7 +304,7 @@ export default function MentalRepResults() {
                 <YAxis
                   label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft' }}
                 />
-                <Tooltip formatter={(value: any) => `${Number(value).toFixed(0)}ms`} />
+                <Tooltip formatter={(value) => `${Number(value).toFixed(0)}ms`} />
                 <Legend />
                 <Line
                   type="monotone"
@@ -363,7 +363,7 @@ export default function MentalRepResults() {
                 <YAxis
                   label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft' }}
                 />
-                <Tooltip formatter={(value: any) => `${Number(value).toFixed(0)}ms`} />
+                <Tooltip formatter={(value) => `${Number(value).toFixed(0)}ms`} />
                 <Legend />
                 <Line
                   type="monotone"

@@ -10,7 +10,6 @@ import {
   Legend,
   ResponsiveContainer,
   ZAxis,
-  ReferenceLine,
 } from 'recharts';
 import { LanguageGroup } from '@/lib/stroop/language-groups';
 
@@ -34,7 +33,12 @@ const LANGUAGE_GROUP_COLORS: Record<LanguageGroup, string> = {
   'Non-words': '#6b7280',
 };
 
-const CustomTooltip = ({ active, payload }: any) => {
+interface ScatterTooltipProps {
+  active?: boolean;
+  payload?: { payload: { participantName?: string; x: number; y: number } }[];
+}
+
+const CustomTooltip = ({ active, payload }: ScatterTooltipProps) => {
   if (!active || !payload || !payload[0]) return null;
 
   const data = payload[0].payload;

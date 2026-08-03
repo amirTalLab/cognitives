@@ -174,7 +174,7 @@ export default function PosnerResultsPage() {
               <Tooltip
                 contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }}
                 labelStyle={{ color: '#fff' }}
-                formatter={(v: any) => [`${v}ms`, 'RT'] as any}
+                formatter={(v) => [`${v}ms`, 'RT']}
               />
               <Bar dataKey="rt" fill="#fbbf24" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -195,7 +195,7 @@ export default function PosnerResultsPage() {
               <Tooltip
                 contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }}
                 labelStyle={{ color: '#fff' }}
-                formatter={(v: any, name: any) => [`${v}ms`, name === 'valid' ? 'Valid' : 'Invalid'] as any}
+                formatter={(v, name) => [`${v}ms`, name === 'valid' ? 'Valid' : 'Invalid']}
               />
               <Legend
                 formatter={(value) => (value === 'valid' ? 'Valid' : 'Invalid')}
@@ -212,7 +212,7 @@ export default function PosnerResultsPage() {
           <h2 className="text-lg font-semibold mb-3">ניסיונות Catch</h2>
           <div className="flex gap-6 text-sm text-muted" dir="rtl">
             <span>
-              סה"כ ניסיונות catch: <strong className="text-foreground">{stats.catchTotal}</strong>
+              סה&quot;כ ניסיונות catch: <strong className="text-foreground">{stats.catchTotal}</strong>
             </span>
             <span>
               אזעקות שקר: <strong className="text-rose-400">{stats.catchFalseAlarms}</strong>

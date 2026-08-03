@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { COLORS, ColorKey } from '@/types/stroop';
+import { ColorKey } from '@/types/stroop';
 import { getColorFromKey } from '@/lib/stroop/experiment';
 
 interface ResponseButtonsProps {

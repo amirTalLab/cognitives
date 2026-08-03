@@ -125,7 +125,7 @@ export default function BRMSPracticePage() {
       const faceEl = faceImgRef.current;
 
       if (maskEl && faceEl) {
-        let faceAlpha = Math.min(MAX_CONTRAST, (elapsed / RAMP_MS) * MAX_CONTRAST);
+        const faceAlpha = Math.min(MAX_CONTRAST, (elapsed / RAMP_MS) * MAX_CONTRAST);
         let maskAlpha = 1;
         if (elapsed >= RESCUE_START_MS) {
           maskAlpha = Math.max(0, 1 - (elapsed - RESCUE_START_MS) / RESCUE_DUR_MS);

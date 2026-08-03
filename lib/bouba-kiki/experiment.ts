@@ -17,13 +17,6 @@ function shuffle<T>(array: T[]): T[] {
 }
 
 /**
- * Randomly select items from an array
- */
-function randomSample<T>(array: T[], n: number): T[] {
-  const shuffled = shuffle(array);
-  return shuffled.slice(0, n);
-}
-
 /**
  * Generate main trials (2AFC: which shape matches the word?)
  */

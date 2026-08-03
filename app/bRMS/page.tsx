@@ -132,12 +132,15 @@ export default function BRMSLanding() {
 
   const handleStartPractice = async () => {
     try {
-      const el = document.documentElement;
+      const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
       if (el.requestFullscreen) await el.requestFullscreen();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
     } catch {}
-    try { await (screen.orientation as any).lock('landscape'); } catch {}
+    try {
+      // ScreenOrientation.lock() is experimental and absent from TS DOM types
+      const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+      await orientation.lock?.('landscape');
+    } catch {}
     router.push('/bRMS/practice');
   };
 

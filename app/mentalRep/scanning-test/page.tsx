@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin } from 'lucide-react';
 import { ScanningTrial, ScanningTrialResult } from '@/types/mental-rep';
-import { generateScanningTrials, SCANNING_CONTENT, LANDMARKS } from '@/lib/mental-rep/scanning';
+import { generateScanningTrials, SCANNING_CONTENT } from '@/lib/mental-rep/scanning';
 
 export default function ScanningTest() {
   const router = useRouter();

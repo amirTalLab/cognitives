@@ -722,7 +722,7 @@ interface AnchoringScreen1Props {
   t: Record<string, string>;
 }
 
-function AnchoringScreen1({ block, group, language, isHe, anchorResponse, setAnchorResponse, onSubmit, t }: AnchoringScreen1Props) {
+function AnchoringScreen1({ block, group, language, anchorResponse, setAnchorResponse, onSubmit, t }: AnchoringScreen1Props) {
   const text = getQuestionText(block.screen1, group, language);
   return (
     <motion.div
@@ -761,7 +761,7 @@ interface MultiplicationScreen1Props {
   t: Record<string, string>;
 }
 
-function MultiplicationScreen1({ block, group, language, isHe, onView, t }: MultiplicationScreen1Props) {
+function MultiplicationScreen1({ isHe, onView }: MultiplicationScreen1Props) {
   const instructions = isHe
     ? 'עוד רגע תוצג סדרת כפל למשך 5 שניות. נסו להעריך את התוצאה בראש.'
     : 'A multiplication sequence will appear for 5 seconds. Try to estimate the result in your head.';
@@ -784,7 +784,7 @@ function MultiplicationScreen1({ block, group, language, isHe, onView, t }: Mult
   );
 }
 
-function MultiplicationTimerScreen({ block, group, language, isHe }: {
+function MultiplicationTimerScreen({ block, group, language }: {
   block: AnchoringBlock; group: Group; language: Language; isHe: boolean;
 }) {
   const [countdown, setCountdown] = useState(5);

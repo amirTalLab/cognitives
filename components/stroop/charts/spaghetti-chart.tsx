@@ -1,14 +1,12 @@
 'use client';
 
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Scatter,
   ComposedChart,
 } from 'recharts';
 import { TrialResult, WORDS } from '@/types/stroop';

@@ -19,8 +19,6 @@ export default function DRMPracticePage() {
   const [distractorTime, setDistractorTime] = useState(10);
   const [distractorNum, setDistractorNum] = useState(0);
   const [distractorAnswer, setDistractorAnswer] = useState<'odd' | 'even' | null>(null);
-  const [distractorCorrect, setDistractorCorrect] = useState(0);
-  const [distractorTotal, setDistractorTotal] = useState(0);
   const [recallText, setRecallText] = useState('');
   const [recallTime, setRecallTime] = useState(15);
   const [feedbackWords, setFeedbackWords] = useState<string[]>([]);
@@ -65,10 +63,7 @@ export default function DRMPracticePage() {
   }, [phase, recallTime]);
 
   const handleDistractor = (answer: 'odd' | 'even') => {
-    const correct = distractorNum % 2 === 0 ? 'even' : 'odd';
     setDistractorAnswer(answer);
-    setDistractorTotal(t => t + 1);
-    if (answer === correct) setDistractorCorrect(c => c + 1);
     setTimeout(() => {
       setDistractorAnswer(null);
       setDistractorNum(Math.floor(Math.random() * 90) + 10);

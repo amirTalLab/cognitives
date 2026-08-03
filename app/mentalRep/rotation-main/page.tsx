@@ -53,25 +53,6 @@ export default function RotationMain() {
     }
   }, [phase, currentIndex, trials.length]);
 
-  // Save all results to Supabase
-  const saveAllResults = async () => {
-    const supabase = getSupabase();
-    if (!supabase || !sessionId) return;
-
-    // Get scanning results from session storage
-    const scanningResultsStr = sessionStorage.getItem('mental_rep_scanning_results');
-    const scanningResults = scanningResultsStr ? JSON.parse(scanningResultsStr) : [];
-
-    // Combine all results
-    const allResults = [...scanningResults, ...results];
-
-    const { error } = await supabase.from('mental_rep_results').insert(allResults);
-
-    if (error) {
-      console.error('Error saving results:', error);
-    }
-  };
-
   // Handle keyboard input
   const handleKeyPress = useCallback(
     async (event: KeyboardEvent) => {

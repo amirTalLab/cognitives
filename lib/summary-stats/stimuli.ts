@@ -1,7 +1,7 @@
 // Summary Statistics – Stimulus & Trial Generation
 
 import {
-  StimulusType, StatType, ArrayItem, ProbeType,
+  StimulusType, ArrayItem, ProbeType,
   EnsembleTrial, RecognitionTrial, Trial,
 } from '@/types/summary-stats';
 

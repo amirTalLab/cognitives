@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { StimulusType } from '@/types/summary-stats';
 import { SingleItemDisplay } from './ArrayDisplay';
-import { sliderToValue, VALUE_RANGES, STAT_LABELS } from '@/lib/summary-stats/stimuli';
+import { sliderToValue, STAT_LABELS } from '@/lib/summary-stats/stimuli';
 
 interface ResponseScaleProps {
   stimulusType: StimulusType;

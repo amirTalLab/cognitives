@@ -89,7 +89,7 @@ export default function BlockFigure({
     const centeredZ = z - 0.5;
 
     // Apply mirror if needed
-    let [mx, my, mz] = isMirror
+    const [mx, my, mz] = isMirror
       ? mirrorPoint(centeredX, centeredY, centeredZ)
       : [centeredX, centeredY, centeredZ];
 

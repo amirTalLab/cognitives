@@ -62,7 +62,7 @@ export default function VisualSearchIntroPage() {
     setTargetColor(tc);
 
     const savedLang = sessionStorage.getItem('vs_language') as Lang | null;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     if (savedLang) setLang(savedLang);
   }, []);
 

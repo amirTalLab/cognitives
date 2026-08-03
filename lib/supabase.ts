@@ -36,9 +36,10 @@ export const supabase = {
         eq: () => Promise.resolve(notConfiguredError),
         neq: () => Promise.resolve(notConfiguredError),
         delete: () => mockQuery,
-        then: (resolve: any) => resolve({ data: [], error: new Error('Supabase not configured') }),
+        then: (resolve: (value: { data: never[]; error: Error }) => void) =>
+          resolve({ data: [], error: new Error('Supabase not configured') }),
       };
-      return mockQuery as any;
+      return mockQuery as unknown as ReturnType<SupabaseClient['from']>;
     }
     return client.from(table);
   },

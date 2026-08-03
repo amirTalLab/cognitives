@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { CheckCircle, Heart } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 
 export default function ThanksPage() {
   return (
