@@ -9,8 +9,8 @@ import {
 } from 'recharts';
 import { GraduationCap, RefreshCw, Search, Download } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
+import { verifyPassword } from '@/lib/auth';
 
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
 const SS_LEVELS = [1, 2, 4, 8];
 const BIN_MS = 100;
 const DIST_BINS = [
@@ -19,11 +19,6 @@ const DIST_BINS = [
   { label: 'Far 200–300', min: 200, max: 300 },
   { label: 'Edge 300+', min: 300, max: Infinity },
 ];
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 function sem(values: number[]): number {
   if (values.length < 2) return 0;
@@ -138,8 +133,8 @@ export default function VisualSearchTeacherPage() {
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    const hash = await sha256(pwInput);
-    if (hash === PW_HASH) {
+    const ok = await verifyPassword(pwInput);
+    if (ok) {
       sessionStorage.setItem('ss_teacher_authed', '1');
       setAuthed(true);
     } else {
@@ -175,7 +170,7 @@ export default function VisualSearchTeacherPage() {
         setLoading(false);
         return;
       }
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setRawRows(rows);
     } catch (err) {
       console.error(err);

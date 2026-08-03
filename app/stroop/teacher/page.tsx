@@ -9,6 +9,7 @@ import { getLanguageGroup, LANGUAGE_GROUPS, type LanguageGroup } from '@/lib/str
 import { LanguageGroupBarChart } from '@/components/stroop/charts/language-group-bar-chart';
 import { IndividualScatterChart } from '@/components/stroop/charts/individual-scatter-chart';
 import { TeacherSpeedAccuracyChart } from '@/components/stroop/charts/teacher-speed-accuracy-chart';
+import { verifyPassword } from '@/lib/auth';
 
 interface AggregateData {
   languageGroup: LanguageGroup;
@@ -27,14 +28,6 @@ interface SubjectData {
   incongruentMean: number;
   accuracy: number;
   languageGroup: LanguageGroup;
-}
-
-// SHA-256 hash of the access password (plain text never stored in source)
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 export default function TeacherDashboard() {
@@ -57,8 +50,8 @@ export default function TeacherDashboard() {
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    const hash = await sha256(pwInput);
-    if (hash === PW_HASH) {
+    const ok = await verifyPassword(pwInput);
+    if (ok) {
       sessionStorage.setItem('ss_teacher_authed', '1');
       setAuthed(true);
     } else {
@@ -332,7 +325,7 @@ export default function TeacherDashboard() {
             <div className="bg-card border border-border rounded-xl p-6">
               <h2 className="text-2xl font-bold mb-2">Individual Subject Averages</h2>
               <p className="text-muted mb-6">
-                Each point represents one participant's average reaction time for congruent vs incongruent trials
+                Each point represents one participant&apos;s average reaction time for congruent vs incongruent trials
                 within each language group.
               </p>
               <IndividualScatterChart data={subjectData} />

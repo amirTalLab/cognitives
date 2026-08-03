@@ -10,13 +10,7 @@ import {
   ResponsiveContainer, BarChart, Bar, ScatterChart, Scatter, ZAxis,
   ErrorBar, ReferenceLine,
 } from 'recharts';
-
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { verifyPassword } from '@/lib/auth';
 
 function ChartCard({ title, children }: { title: string; children: (revealed: boolean) => React.ReactNode }) {
   const [revealed, setRevealed] = useState(false);
@@ -64,8 +58,8 @@ export default function SerialOrderTeacher() {
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    const hash = await sha256(pwInput);
-    if (hash === PW_HASH) {
+    const ok = await verifyPassword(pwInput);
+    if (ok) {
       sessionStorage.setItem('ss_teacher_authed', '1');
       setAuthed(true);
     } else {
@@ -686,10 +680,10 @@ export default function SerialOrderTeacher() {
                       }} />
                       {revealed && (
                         <>
-                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          { }
                           <Scatter data={[{ x: 0, y: 0 }, { x: 100, y: 100 }]}
                             line={{ stroke: '#6b7280', strokeWidth: 1.5, strokeDasharray: '6 4' }}
-                            shape={(() => <></>) as any}
+                            shape={() => <g />}
                             legendType="none" />
                           <Scatter data={recallScatter} fill="#34d399" />
                         </>

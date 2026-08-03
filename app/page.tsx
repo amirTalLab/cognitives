@@ -5,13 +5,7 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Beaker, Brain, BrainCog, BarChart2, FlaskConical, Shapes, Target, Search, Users, Type, Lock, LockOpen, Timer, GitFork, List, BookOpen, Lightbulb, Sparkles, Eye } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
-
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { verifyPassword } from '@/lib/auth';
 
 type Exp = { id: string; title: string; titleHe: string; icon: React.ElementType; color: string };
 
@@ -98,8 +92,8 @@ export default function HomePage() {
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    const hash = await sha256(pwInput);
-    if (hash === PW_HASH) {
+    const ok = await verifyPassword(pwInput);
+    if (ok) {
       sessionStorage.setItem('ss_home_authed', '1');
       // Set session cookie so middleware skips lock checks for admin
       document.cookie = 'cognitives_admin=1; path=/; SameSite=Strict';

@@ -3,12 +3,6 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
 import { motion } from 'framer-motion';
 import { BrainCog, Download, Users, ChevronLeft } from 'lucide-react';
 import {
@@ -18,15 +12,13 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
-  ScatterChart,
-  Scatter,
 } from 'recharts';
 import { ScanningTrialResult, RotationTrialResult } from '@/types/mental-rep';
 import { calculateCorrelation as calcScanningCorr, groupByDistanceBins } from '@/lib/mental-rep/scanning';
 import { calculateCorrelation as calcRotationCorr, groupByAngle } from '@/lib/mental-rep/rotation';
 import { getSupabase } from '@/lib/supabase';
+import { verifyPassword } from '@/lib/auth';
 
 interface ParticipantSummary {
   sessionId: string;
@@ -66,8 +58,8 @@ export default function MentalRepTeacher() {
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    const hash = await sha256(pwInput);
-    if (hash === PW_HASH) {
+    const ok = await verifyPassword(pwInput);
+    if (ok) {
       sessionStorage.setItem('ss_teacher_authed', '1');
       setAuthed(true);
     } else {
@@ -99,16 +91,17 @@ export default function MentalRepTeacher() {
     }
 
     if (allData.length > 0) {
-      setAllResults(allData as (ScanningTrialResult | RotationTrialResult)[]);
-      processParticipants(allData as any[]);
-      processAggregateData(allData as any[]);
+      const rows = allData as (ScanningTrialResult | RotationTrialResult)[];
+      setAllResults(rows);
+      processParticipants(rows);
+      processAggregateData(rows);
     }
 
     setLoading(false);
   };
 
-  const processParticipants = (data: any[]) => {
-    const sessionMap = new Map<string, any[]>();
+  const processParticipants = (data: (ScanningTrialResult | RotationTrialResult)[]) => {
+    const sessionMap = new Map<string, (ScanningTrialResult | RotationTrialResult)[]>();
 
     data.forEach((result) => {
       if (!sessionMap.has(result.session_id)) {
@@ -120,8 +113,8 @@ export default function MentalRepTeacher() {
     const summaries: ParticipantSummary[] = [];
 
     sessionMap.forEach((results, sessionId) => {
-      const scanningResults = results.filter((r) => r.experiment_type === 'scanning');
-      const rotationResults = results.filter((r) => r.experiment_type === 'rotation' && !r.is_practice);
+      const scanningResults = results.filter((r): r is ScanningTrialResult => r.experiment_type === 'scanning');
+      const rotationResults = results.filter((r): r is RotationTrialResult => r.experiment_type === 'rotation' && !r.is_practice);
 
       // Calculate scanning stats
       const scanningRTData = scanningResults.map((r: ScanningTrialResult) => ({
@@ -160,9 +153,9 @@ export default function MentalRepTeacher() {
     setParticipants(summaries);
   };
 
-  const processAggregateData = (data: any[]) => {
+  const processAggregateData = (data: (ScanningTrialResult | RotationTrialResult)[]) => {
     // Aggregate scanning data
-    const scanningResults = data.filter((r) => r.experiment_type === 'scanning');
+    const scanningResults = data.filter((r): r is ScanningTrialResult => r.experiment_type === 'scanning');
     const scanningRTData = scanningResults.map((r: ScanningTrialResult) => ({
       distance: r.distance,
       rt: r.reaction_time_ms,
@@ -170,7 +163,7 @@ export default function MentalRepTeacher() {
     setAggregateScanningData(groupByDistanceBins(scanningRTData, 5));
 
     // Aggregate rotation data
-    const rotationResults = data.filter((r) => r.experiment_type === 'rotation' && !r.is_practice && r.is_correct);
+    const rotationResults = data.filter((r): r is RotationTrialResult => r.experiment_type === 'rotation' && !r.is_practice && r.is_correct);
     const rotationRTData = rotationResults.map((r: RotationTrialResult) => ({
       angle: r.rotation_difference,
       rt: r.reaction_time_ms,
@@ -179,8 +172,8 @@ export default function MentalRepTeacher() {
   };
 
   const downloadAllData = () => {
-    const scanningResults = allResults.filter((r: any) => r.experiment_type === 'scanning') as ScanningTrialResult[];
-    const rotationResults = allResults.filter((r: any) => r.experiment_type === 'rotation') as RotationTrialResult[];
+    const scanningResults = allResults.filter((r): r is ScanningTrialResult => r.experiment_type === 'scanning');
+    const rotationResults = allResults.filter((r): r is RotationTrialResult => r.experiment_type === 'rotation');
 
     const scanningCSV = [
       ['Session ID', 'Participant', 'Trial', 'From', 'To', 'Distance', 'RT (ms)'].join(','),
@@ -405,7 +398,7 @@ export default function MentalRepTeacher() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="distance" label={{ value: 'Distance', position: 'bottom', offset: -5 }} />
                 <YAxis label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft' }} />
-                <Tooltip formatter={(value: any) => `${Number(value).toFixed(0)}ms`} />
+                <Tooltip formatter={(value) => `${Number(value).toFixed(0)}ms`} />
                 <Line type="monotone" dataKey="meanRT" stroke="#0891b2" strokeWidth={2} dot={{ fill: '#0891b2' }} />
               </LineChart>
             </ResponsiveContainer>
@@ -424,7 +417,7 @@ export default function MentalRepTeacher() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="angle" label={{ value: 'Rotation (°)', position: 'bottom', offset: -5 }} />
                 <YAxis label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft' }} />
-                <Tooltip formatter={(value: any) => `${Number(value).toFixed(0)}ms`} />
+                <Tooltip formatter={(value) => `${Number(value).toFixed(0)}ms`} />
                 <Line type="monotone" dataKey="meanRT" stroke="#2563eb" strokeWidth={2} dot={{ fill: '#2563eb' }} />
               </LineChart>
             </ResponsiveContainer>

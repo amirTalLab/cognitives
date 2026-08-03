@@ -3,12 +3,6 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
 import { motion } from 'framer-motion';
 import { Shapes, Download, Users, ChevronLeft } from 'lucide-react';
 import {
@@ -25,6 +19,7 @@ import {
 } from 'recharts';
 import { TrialResult } from '@/types/bouba-kiki';
 import { getSupabase } from '@/lib/supabase';
+import { verifyPassword } from '@/lib/auth';
 
 interface ParticipantSummary {
   sessionId: string;
@@ -61,8 +56,8 @@ export default function BoubaKikiTeacher() {
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    const hash = await sha256(pwInput);
-    if (hash === PW_HASH) {
+    const ok = await verifyPassword(pwInput);
+    if (ok) {
       sessionStorage.setItem('ss_teacher_authed', '1');
       setAuthed(true);
     } else {
@@ -352,7 +347,7 @@ export default function BoubaKikiTeacher() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis domain={[0, 100]} />
-              <Tooltip formatter={(value: any) => `${Number(value).toFixed(1)}%`} />
+              <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
               <Legend />
               <Bar dataKey="accuracy" fill="#6366f1" name="Accuracy (%)" />
             </BarChart>
@@ -400,7 +395,7 @@ export default function BoubaKikiTeacher() {
               </tr>
             </thead>
             <tbody>
-              {participants.map((p, index) => (
+              {participants.map((p) => (
                 <tr key={p.sessionId} className="border-b hover:bg-gray-50">
                   <td className="py-2 px-4">{p.participantName}</td>
                   <td className="py-2 px-4">{p.accuracy.toFixed(1)}%</td>

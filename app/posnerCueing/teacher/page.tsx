@@ -8,13 +8,7 @@ import {
 } from 'recharts';
 import { GraduationCap, RefreshCw, Target } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
-
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
+import { verifyPassword } from '@/lib/auth';
 
 interface AggStats {
   totalParticipants: number;
@@ -54,8 +48,8 @@ export default function PosnerTeacherPage() {
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    const hash = await sha256(pwInput);
-    if (hash === PW_HASH) {
+    const ok = await verifyPassword(pwInput);
+    if (ok) {
       sessionStorage.setItem('ss_teacher_authed', '1');
       setAuthed(true);
     } else {
@@ -307,7 +301,7 @@ export default function PosnerTeacherPage() {
                   />
                   <Tooltip
                     contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }}
-                    formatter={(v: any) => [`${v}ms`, 'Avg RT'] as any}
+                    formatter={(v) => [`${v}ms`, 'Avg RT']}
                   />
                   <Bar dataKey="rt" radius={[4, 4, 0, 0]}>
                     {rtBarData.map((entry, index) => (
@@ -345,7 +339,7 @@ export default function PosnerTeacherPage() {
                     <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="6 4" strokeWidth={2} />
                     <Tooltip
                       contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }}
-                      formatter={(v: any, name: any) => [name === 'x' ? undefined : `${v}ms`, name === 'x' ? '' : 'Effect'] as any}
+                      formatter={(v, name) => [name === 'x' ? undefined : `${v}ms`, name === 'x' ? '' : 'Effect']}
                       cursor={false}
                     />
                     <Scatter data={dotData} fill="#fbbf24" opacity={0.85} r={6} />
@@ -375,7 +369,7 @@ export default function PosnerTeacherPage() {
                     />
                     <Tooltip
                       contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }}
-                      formatter={(v: any) => (v != null ? [`${v}ms`, 'Exo RT'] : ['N/A', 'Exo RT']) as any}
+                      formatter={(v) => (v != null ? [`${v}ms`, 'Exo RT'] : ['N/A', 'Exo RT'])}
                     />
                     <Line
                       type="monotone"

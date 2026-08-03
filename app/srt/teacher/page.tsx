@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, FormEvent } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useMemo, FormEvent } from 'react';
 import {
   ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ErrorBar, ScatterChart, Scatter, Cell,
@@ -10,14 +9,9 @@ import {
 import { GraduationCap, RefreshCw, Download } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { SEQUENCE_A, SEQUENCE_B } from '@/lib/srt/stimuli';
+import { verifyPassword } from '@/lib/auth';
 
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
 const SEQUENCE_REPS_PER_BLOCK = 9;
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 function sem(values: number[]): number {
   if (values.length < 2) return 0;
@@ -178,8 +172,8 @@ export default function SrtTeacher() {
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
-    const hash = await sha256(pw);
-    if (hash === PW_HASH) { setAuthed(true); fetchData(); }
+    const ok = await verifyPassword(pw);
+    if (ok) { setAuthed(true); fetchData(); }
     else setPwError(true);
   }
 

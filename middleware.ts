@@ -8,6 +8,13 @@ const EXPERIMENT_SLUGS = new Set([
   'bRMS',
 ]);
 
+// Lock state changes at most a few times per semester, but without caching we
+// hit Supabase on every navigation to every experiment route. Cache each slug's
+// lock flag in-process for a short TTL so a class moving through pages reuses the
+// lookup instead of generating one REST call per page view.
+const LOCK_TTL_MS = 30_000;
+const lockCache = new Map<string, { isLocked: boolean; expires: number }>();
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const segments = pathname.split('/').filter(Boolean);
@@ -31,14 +38,25 @@ export async function middleware(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseKey) return NextResponse.next();
 
+  const slug = segments[0];
+
   try {
-    const slug = segments[0];
-    const res  = await fetch(
-      `${supabaseUrl}/rest/v1/experiment_locks?experiment_id=eq.${slug}&select=is_locked`,
-      { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
-    );
-    const data: { is_locked: boolean }[] = await res.json();
-    if (data?.[0]?.is_locked === true) {
+    const cached = lockCache.get(slug);
+    let isLocked: boolean;
+
+    if (cached && cached.expires > Date.now()) {
+      isLocked = cached.isLocked;
+    } else {
+      const res = await fetch(
+        `${supabaseUrl}/rest/v1/experiment_locks?experiment_id=eq.${slug}&select=is_locked`,
+        { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
+      );
+      const data: { is_locked: boolean }[] = await res.json();
+      isLocked = data?.[0]?.is_locked === true;
+      lockCache.set(slug, { isLocked, expires: Date.now() + LOCK_TTL_MS });
+    }
+
+    if (isLocked) {
       return NextResponse.redirect(
         new URL(`/locked?experiment=${slug}`, request.url)
       );

@@ -8,13 +8,7 @@ import {
 } from 'recharts';
 import { GraduationCap, RefreshCw, Download } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
-
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { verifyPassword } from '@/lib/auth';
 
 function mean(vals: number[]): number {
   if (vals.length === 0) return 0;
@@ -328,7 +322,7 @@ export default function TwoStepTeacher() {
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
-    if (await sha256(pw) === PW_HASH) { setAuthed(true); fetchData(); }
+    if (await verifyPassword(pw)) { setAuthed(true); fetchData(); }
     else setPwError(true);
   }
 

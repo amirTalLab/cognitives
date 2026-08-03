@@ -11,13 +11,7 @@ import {
 import { Eye, Download, Home, RefreshCw } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { LogicsResponse } from '@/types/logics';
-
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { verifyPassword } from '@/lib/auth';
 
 const BG = { background: '#1e293b', border: '1px solid #475569', borderRadius: 6, color: '#f1f5f9' };
 const TICK = { fill: '#9ca3af', fontSize: 11 };
@@ -526,7 +520,7 @@ export default function TeacherPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (await sha256(pwInput) === PW_HASH) {
+    if (await verifyPassword(pwInput)) {
       sessionStorage.setItem('logics_teacher_authed', '1');
       setAuthed(true);
     } else { setPwError(true); setPwInput(''); }

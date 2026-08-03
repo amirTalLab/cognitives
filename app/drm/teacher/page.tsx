@@ -10,13 +10,7 @@ import {
 import { GraduationCap, RefreshCw, Download } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { DRMResult, DRMRecallResult } from '@/types/drm';
-
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { verifyPassword } from '@/lib/auth';
 
 const TICK = { fill: '#9ca3af', fontSize: 11 };
 const BG = { background: '#111827', border: '1px solid #374151', borderRadius: 6, color: '#e5e7eb' };
@@ -124,8 +118,8 @@ export default function DRMTeacherDashboard() {
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    const hash = await sha256(pwInput);
-    if (hash === PW_HASH) {
+    const ok = await verifyPassword(pwInput);
+    if (ok) {
       sessionStorage.setItem('ss_teacher_authed', '1');
       setAuthed(true);
     } else {
@@ -190,10 +184,9 @@ export default function DRMTeacherDashboard() {
   const { kept, excludedIds } = excludeSubs
     ? excludeParticipants(trialCleanedRows)
     : { kept: trialCleanedRows, excludedIds: new Set<string>() };
-  let displayRows = kept;
+  const displayRows = kept;
 
   const nParticipants = new Set(displayRows.map(r => r.session_id)).size;
-  const nRecallParticipants = new Set(recallData.map(r => r.session_id)).size;
 
   const computeRecognitionChart = () => {
     const sessions = Array.from(new Set(displayRows.map(r => r.session_id)));

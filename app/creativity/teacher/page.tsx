@@ -12,13 +12,7 @@ import { Eye, Download, Home, RefreshCw, ChevronLeft, ChevronRight } from 'lucid
 import { getSupabase } from '@/lib/supabase';
 import { RAT_TRIPLETS, RAT_TRIPLETS_HE } from '@/lib/creativity/stimuli';
 import { generateMockData } from '@/lib/creativity/mock-data';
-
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
-
-async function sha256(str: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { verifyPassword } from '@/lib/auth';
 
 const TICK = { fill: '#9ca3af', fontSize: 11 };
 const LBL = { fill: '#9ca3af', fontSize: 11 };
@@ -262,7 +256,7 @@ function OriginalityTooltip({ active, payload }: { active?: boolean; payload?: {
 
 function OrigDistTooltip({ active, payload }: {
   active?: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   payload?: { payload: { freq: number; count: number; items: { text: string; object: string }[] } }[];
 }) {
   if (!active || !payload?.length) return null;
@@ -356,7 +350,7 @@ export default function TeacherPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (await sha256(pwInput) === PW_HASH) {
+    if (await verifyPassword(pwInput)) {
       sessionStorage.setItem('crt_teacher_authed', '1');
       setAuthed(true);
     } else { setPwError(true); setPwInput(''); }
