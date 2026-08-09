@@ -102,7 +102,7 @@ function FigureCard({ label, children }: {
         <p className="text-xs text-gray-400 flex-1">{label}</p>
         <button
           onClick={() => setRevealed(r => !r)}
-          className="flex-shrink-0 px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold rounded-lg transition-colors"
+          className="flex-shrink-0 px-3 py-1 bg-purple-500 hover:bg-purple-400 text-white text-xs font-semibold rounded-lg transition-colors"
         >
           {revealed ? 'Hide' : 'Reveal'}
         </button>
@@ -596,16 +596,16 @@ export default function TeacherPage() {
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           className="bg-gray-900 border border-gray-700 rounded-2xl p-10 w-full max-w-sm flex flex-col items-center gap-6">
-          <Eye className="w-10 h-10 text-emerald-400" />
+          <Eye className="w-10 h-10 text-purple-400" />
           <h1 className="text-xl font-bold text-white">Teacher Dashboard</h1>
           <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
             <input type="password" value={pwInput} autoFocus
               onChange={e => { setPwInput(e.target.value); setPwError(false); }}
               placeholder="Password"
-              className={`w-full px-4 py-3 rounded-xl border text-white bg-gray-800 outline-none transition-colors ${pwError ? 'border-red-500' : 'border-gray-600 focus:border-emerald-400'}`}
+              className={`w-full px-4 py-3 rounded-xl border text-white bg-gray-800 outline-none transition-colors ${pwError ? 'border-red-500' : 'border-gray-600 focus:border-purple-400'}`}
             />
             {pwError && <p className="text-red-400 text-sm text-center">Incorrect password</p>}
-            <button type="submit" className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl">Enter</button>
+            <button type="submit" className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl">Enter</button>
           </form>
         </motion.div>
       </div>
@@ -619,10 +619,10 @@ export default function TeacherPage() {
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <Eye className="w-7 h-7 text-emerald-400" />
+              <Eye className="w-7 h-7 text-purple-400" />
               <h1 className="text-2xl font-bold">Teacher Dashboard — Reasoning</h1>
             </div>
-            {!loading && <p className="text-emerald-400 font-medium">{nParticipants} participant{nParticipants !== 1 ? 's' : ''}</p>}
+            {!loading && <p className="text-purple-400 font-medium">{nParticipants} participant{nParticipants !== 1 ? 's' : ''}</p>}
           </div>
           <div className="flex gap-3 flex-wrap">
             <button onClick={fetchData} disabled={refreshing}
@@ -644,13 +644,13 @@ export default function TeacherPage() {
         <div className="flex gap-3 mb-6">
           <button onClick={() => setSdClean(v => !v)}
             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-              sdClean ? 'border-emerald-400 text-emerald-400' : 'border-gray-600 text-gray-400 hover:border-gray-400'
+              sdClean ? 'border-purple-400 text-purple-400' : 'border-gray-600 text-gray-400 hover:border-gray-400'
             }`}>
             {sdClean ? '✓ SD-Clean (±2.5)' : 'Raw Trials'}
           </button>
           <button onClick={() => setExcludeSubs(v => !v)}
             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-              excludeSubs ? 'border-emerald-400 text-emerald-400' : 'border-gray-600 text-gray-400 hover:border-gray-400'
+              excludeSubs ? 'border-purple-400 text-purple-400' : 'border-gray-600 text-gray-400 hover:border-gray-400'
             }`}>
             {excludeSubs ? `✓ Excl. Participants (${excludedIds.size})` : 'All Participants'}
           </button>
