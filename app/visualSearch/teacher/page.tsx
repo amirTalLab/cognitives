@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useMemo, FormEvent, useCallback } from 'react';
 import type { ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ErrorBar, ReferenceLine,
 } from 'recharts';
-import { GraduationCap, RefreshCw, Search, Download } from 'lucide-react';
+import { GraduationCap, RefreshCw, Search, Download, Home } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { generateMockData } from '@/lib/visual-search/mock-data';
 import { verifyPassword } from '@/lib/auth';
@@ -109,7 +110,7 @@ function ChartCard({ title, subtitle, children }: {
         </div>
         <button
           onClick={() => setRevealed(r => !r)}
-          className="text-xs px-3 py-1 rounded-full border border-gray-600 text-gray-400 hover:border-rose-400 hover:text-rose-400 transition-colors flex-shrink-0 ml-4"
+          className="text-xs px-3 py-1 rounded-full border border-gray-600 text-gray-400 hover:border-purple-400 hover:text-purple-400 transition-colors flex-shrink-0 ml-4"
         >
           {revealed ? 'Hide' : 'Reveal'}
         </button>
@@ -120,6 +121,7 @@ function ChartCard({ title, subtitle, children }: {
 }
 
 export default function VisualSearchTeacherPage() {
+  const router = useRouter();
   const [authed, setAuthed] = useState(false);
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
@@ -342,7 +344,7 @@ export default function VisualSearchTeacherPage() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-card border border-border rounded-xl p-10 w-full max-w-sm flex flex-col items-center gap-6"
         >
-          <Search className="w-10 h-10 text-rose-400" />
+          <Search className="w-10 h-10 text-purple-400" />
           <h1 className="text-xl font-bold">Teacher Dashboard</h1>
           <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
             <input
@@ -352,12 +354,12 @@ export default function VisualSearchTeacherPage() {
               placeholder="Password"
               autoFocus
               className={`w-full px-4 py-3 rounded-lg border bg-zinc-800 text-white outline-none transition-colors
-                ${pwError ? 'border-red-500' : 'border-border focus:border-rose-400'}`}
+                ${pwError ? 'border-red-500' : 'border-border focus:border-purple-400'}`}
             />
             {pwError && <p className="text-red-400 text-sm text-center">Incorrect password</p>}
             <button
               type="submit"
-              className="w-full py-3 bg-rose-500 hover:bg-rose-400 text-white font-bold rounded-lg transition-colors"
+              className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-lg transition-colors"
             >
               Enter
             </button>
@@ -376,7 +378,7 @@ export default function VisualSearchTeacherPage() {
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             className="inline-block mb-4"
           >
-            <RefreshCw className="w-8 h-8 text-rose-400" />
+            <RefreshCw className="w-8 h-8 text-purple-400" />
           </motion.div>
           <p className="text-muted">Loading data...</p>
         </div>
@@ -389,48 +391,39 @@ export default function VisualSearchTeacherPage() {
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <GraduationCap className="w-10 h-10 text-rose-400" />
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight">Teacher Dashboard</h1>
-              <p className="text-muted mt-1">
-                Visual Search – Aggregate Results
-                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
-              </p>
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <GraduationCap className="w-7 h-7 text-purple-400" />
+              <h1 className="text-2xl font-bold tracking-tight">Teacher Dashboard — Visual Search</h1>
             </div>
+            <p className="text-purple-400 font-medium">
+              Aggregate Results
+              {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+            </p>
           </div>
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-3 flex-wrap ml-auto">
             <button
               onClick={() => setUseMock(v => !v)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border font-semibold transition-colors ${
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
                 useMock
                   ? 'bg-amber-500/20 border-amber-400 text-amber-400'
-                  : 'bg-card border-border text-gray-300 hover:border-rose-400 hover:text-rose-400'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
               }`}
             >
               {useMock ? 'Mock Data ON' : 'Mock Data'}
             </button>
-            {rawRows.length > 0 && (
-              <button
-                onClick={downloadCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-gray-300
-                           font-semibold rounded-lg hover:border-rose-400 hover:text-rose-400 transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                Download CSV
-              </button>
-            )}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={fetchData}
-              disabled={useMock}
-              className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white
-                         font-semibold rounded-lg hover:bg-rose-400 transition-colors disabled:opacity-40"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh Data
-            </motion.button>
+            <button onClick={fetchData} disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 disabled:opacity-40">
+              <RefreshCw className="w-4 h-4" /> Refresh
+            </button>
+            <button onClick={downloadCSV}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Download className="w-4 h-4" /> Download CSV
+            </button>
+            <button onClick={() => router.push('/')}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Home className="w-4 h-4" /> Home
+            </button>
           </div>
         </div>
 
@@ -441,7 +434,7 @@ export default function VisualSearchTeacherPage() {
               <button
                 onClick={() => setMode('raw')}
                 className={`px-5 py-2 text-sm font-medium transition-colors ${
-                  mode === 'raw' ? 'bg-rose-500 text-white' : 'text-muted hover:text-foreground'
+                  mode === 'raw' ? 'bg-purple-500 text-white' : 'text-muted hover:text-foreground'
                 }`}
               >
                 Raw Data
@@ -449,7 +442,7 @@ export default function VisualSearchTeacherPage() {
               <button
                 onClick={() => setMode('sdclean')}
                 className={`px-5 py-2 text-sm font-medium transition-colors ${
-                  mode === 'sdclean' ? 'bg-rose-500 text-white' : 'text-muted hover:text-foreground'
+                  mode === 'sdclean' ? 'bg-purple-500 text-white' : 'text-muted hover:text-foreground'
                 }`}
               >
                 SD-Clean (±2.5)
@@ -468,7 +461,7 @@ export default function VisualSearchTeacherPage() {
         {error && (
           <div className="bg-card border border-yellow-500/50 rounded-xl p-8 mb-8 text-center">
             <p className="text-yellow-400 mb-4">{error}</p>
-            <button onClick={fetchData} className="px-4 py-2 bg-rose-500 text-white font-semibold rounded-lg hover:bg-rose-400">
+            <button onClick={fetchData} className="px-4 py-2 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-400">
               Retry
             </button>
           </div>
@@ -488,7 +481,7 @@ export default function VisualSearchTeacherPage() {
               </div>
               <div className="bg-card border border-border rounded-xl p-6">
                 <p className="text-sm text-muted mb-1">Overall Accuracy</p>
-                <p className="text-3xl font-bold text-rose-400">{aggStats.overallAccuracy}%</p>
+                <p className="text-3xl font-bold text-purple-400">{aggStats.overallAccuracy}%</p>
               </div>
             </div>
 
