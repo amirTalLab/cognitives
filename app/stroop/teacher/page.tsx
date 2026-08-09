@@ -10,6 +10,7 @@ import { LanguageGroupBarChart } from '@/components/stroop/charts/language-group
 import { IndividualScatterChart } from '@/components/stroop/charts/individual-scatter-chart';
 import { TeacherSpeedAccuracyChart } from '@/components/stroop/charts/teacher-speed-accuracy-chart';
 import { verifyPassword } from '@/lib/auth';
+import { generateMockData } from '@/lib/stroop/mock-data';
 
 interface AggregateData {
   languageGroup: LanguageGroup;
@@ -38,6 +39,7 @@ export default function TeacherDashboard() {
   const [subjectData, setSubjectData] = useState<SubjectData[]>([]);
   const [totalSessions, setTotalSessions] = useState(0);
   const [totalTrials, setTotalTrials] = useState(0);
+  const [useMock, setUseMock] = useState(false);
 
   // ── Password gate ──────────────────────────────────────────────────────────
   const [authed, setAuthed]   = useState(false);
@@ -85,7 +87,7 @@ export default function TeacherDashboard() {
     setError(null);
 
     try {
-      const data = await fetchAllRows();
+      const data = useMock ? generateMockData() : await fetchAllRows();
 
       if (!data || data.length === 0) {
         setError('No data available yet. Waiting for participants to complete the experiment.');
@@ -193,7 +195,8 @@ export default function TeacherDashboard() {
 
   useEffect(() => {
     if (authed) fetchData();
-  }, [authed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, useMock]);
 
   if (!authed) {
     return (
@@ -250,19 +253,36 @@ export default function TeacherDashboard() {
             <GraduationCap className="w-10 h-10 text-emerald-400" />
             <div>
               <h1 className="text-4xl font-bold tracking-tight">Teacher Dashboard</h1>
-              <p className="text-muted mt-1">Aggregate Stroop Effect Results</p>
+              <p className="text-muted mt-1">
+                Aggregate Stroop Effect Results
+                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+              </p>
             </div>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={fetchData}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-400 text-zinc-900
-                       font-semibold rounded-lg hover:bg-emerald-300 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh Data
-          </motion.button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setUseMock(v => !v)}
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'bg-zinc-800 border-border text-muted hover:bg-zinc-700'
+              }`}
+            >
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={fetchData}
+              disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-400 text-zinc-900
+                         font-semibold rounded-lg hover:bg-emerald-300 transition-colors
+                         disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh Data
+            </motion.button>
+          </div>
         </div>
 
         {/* Stats Cards */}

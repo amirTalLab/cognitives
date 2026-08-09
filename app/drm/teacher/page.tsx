@@ -10,6 +10,7 @@ import {
 import { GraduationCap, RefreshCw, Download } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { DRMResult, DRMRecallResult } from '@/types/drm';
+import { generateMockData } from '@/lib/drm/mock-data';
 import { verifyPassword } from '@/lib/auth';
 
 const TICK = { fill: '#9ca3af', fontSize: 11 };
@@ -111,6 +112,7 @@ export default function DRMTeacherDashboard() {
 
   const [sdClean, setSdClean] = useState(false);
   const [excludeSubs, setExcludeSubs] = useState(false);
+  const [useMock, setUseMock] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
@@ -177,7 +179,19 @@ export default function DRMTeacherDashboard() {
     }
   }, []);
 
-  useEffect(() => { if (authed) fetchData(); }, [authed, fetchData]);
+  const loadMockData = useCallback(() => {
+    const { recognition, recall } = generateMockData();
+    setRecognitionData(recognition);
+    setRecallData(recall);
+    setError(null);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!authed) return;
+    if (useMock) loadMockData();
+    else fetchData();
+  }, [authed, useMock, fetchData, loadMockData]);
 
   const trialCleanedRows = sdClean ? sdCleanRows(recognitionData) : recognitionData;
   const trialExcludedCount = recognitionData.length - trialCleanedRows.length;
@@ -398,11 +412,22 @@ export default function DRMTeacherDashboard() {
             <GraduationCap className="w-10 h-10 text-emerald-400" />
             <h1 className="text-3xl font-bold tracking-tight">DRM Teacher Dashboard</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {useMock && <span className="text-xs text-amber-400 mr-1">(mock data)</span>}
+            <button
+              onClick={() => setUseMock(v => !v)}
+              className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400'
+              }`}
+            >
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
             <button onClick={downloadCSV} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors">
               <Download className="w-4 h-4" />
             </button>
-            <button onClick={fetchData} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors">
+            <button onClick={fetchData} disabled={useMock} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors disabled:opacity-40">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
