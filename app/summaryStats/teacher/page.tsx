@@ -186,7 +186,7 @@ export default function TeacherPage() {
               </p>
             )}
           </div>
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-3 flex-wrap ml-auto">
             <button onClick={() => setUseMock(v => !v)}
               className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
                 useMock

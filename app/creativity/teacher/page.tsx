@@ -221,7 +221,7 @@ function ChartCard({ title, subtitle, revealed, onReveal, children }: {
         </div>
         {!revealed && (
           <button onClick={onReveal}
-            className="flex-shrink-0 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold rounded-lg transition-colors">
+            className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
             Reveal
           </button>
         )}
@@ -241,7 +241,7 @@ function OriginalityTooltip({ active, payload }: { active?: boolean; payload?: {
       <p className="text-gray-300">Originality: <span className="text-white font-semibold">{d.y}</span></p>
       {d.originalResponses.length > 0 && (
         <div className="mt-2 pt-2 border-t border-gray-600">
-          <p className="text-emerald-400 font-bold mb-1">Unique responses:</p>
+          <p className="text-purple-400 font-bold mb-1">Unique responses:</p>
           {d.originalResponses.slice(0, 8).map((r, i) => (
             <p key={i} className="text-gray-200 leading-snug">&bull; {r}</p>
           ))}
@@ -275,7 +275,7 @@ function OrigDistTooltip({ active, payload }: {
       <div className="mt-1 max-h-[240px] overflow-y-auto">
         {objects.map(([obj, labels], oi) => (
           <div key={oi} className={oi > 0 ? 'mt-1.5' : ''}>
-            <p className="text-emerald-400 font-semibold">{obj}</p>
+            <p className="text-purple-400 font-semibold">{obj}</p>
             {labels.slice(0, 8).map((l, i) => (
               <p key={i} className="text-gray-200 leading-snug pl-2">&bull; {l}</p>
             ))}
@@ -313,7 +313,7 @@ function DrawingCarousel({ items }: {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={item.drawingData} alt={item.label} className="w-full h-full object-contain" />
             </div>
-            <span className={`text-xs font-medium text-center leading-tight ${item.freq === 1 ? 'text-emerald-400' : 'text-gray-400'}`}>
+            <span className={`text-xs font-medium text-center leading-tight ${item.freq === 1 ? 'text-purple-400' : 'text-gray-400'}`}>
               {item.label}
             </span>
             <span className="text-[10px] text-gray-500">{item.participant} {item.freq === 1 ? '(unique)' : `(×${item.freq})`}</span>
@@ -434,16 +434,16 @@ export default function TeacherPage() {
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           className="bg-gray-900 border border-gray-700 rounded-2xl p-10 w-full max-w-sm flex flex-col items-center gap-6">
-          <Eye className="w-10 h-10 text-emerald-400" />
+          <Eye className="w-10 h-10 text-purple-400" />
           <h1 className="text-xl font-bold text-white">Teacher Dashboard</h1>
           <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
             <input type="password" value={pwInput} autoFocus
               onChange={e => { setPwInput(e.target.value); setPwError(false); }}
               placeholder="Password"
-              className={`w-full px-4 py-3 rounded-xl border text-white bg-gray-800 outline-none transition-colors ${pwError ? 'border-red-500' : 'border-gray-600 focus:border-emerald-400'}`}
+              className={`w-full px-4 py-3 rounded-xl border text-white bg-gray-800 outline-none transition-colors ${pwError ? 'border-red-500' : 'border-gray-600 focus:border-purple-400'}`}
             />
             {pwError && <p className="text-red-400 text-sm text-center">Incorrect password</p>}
-            <button type="submit" className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl">Enter</button>
+            <button type="submit" className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl">Enter</button>
           </form>
         </motion.div>
       </div>
@@ -465,11 +465,11 @@ export default function TeacherPage() {
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <Eye className="w-7 h-7 text-emerald-400" />
+              <Eye className="w-7 h-7 text-purple-400" />
               <h1 className="text-2xl font-bold">Teacher Dashboard — Creativity Battery</h1>
             </div>
             {!loading && hasData && (
-              <p className="text-emerald-400 font-medium">
+              <p className="text-purple-400 font-medium">
                 {nParticipants} participant{nParticipants !== 1 ? 's' : ''}
                 {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
               </p>
@@ -519,7 +519,7 @@ export default function TeacherPage() {
           <div className="flex flex-col gap-6">
 
             {/* ═══════════════════ AUT Section ═══════════════════ */}
-            <h2 className="text-lg font-bold text-emerald-400 border-b border-gray-700 pb-2 mt-4">
+            <h2 className="text-lg font-bold text-purple-400 border-b border-gray-700 pb-2 mt-4">
               Part 1 — Alternative Uses (AUT)
             </h2>
 
@@ -547,7 +547,7 @@ export default function TeacherPage() {
                     );
                   }} />
                   {revealed[1] && (
-                    <Bar dataKey="count" name="Participants" fill="#34d399" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" name="Participants" fill="#a78bfa" radius={[4, 4, 0, 0]} />
                   )}
                 </BarChart>
               </ResponsiveContainer>
@@ -568,7 +568,7 @@ export default function TeacherPage() {
                     <Tooltip content={<OrigDistTooltip />} />
                     <Bar dataKey="count" name="Responses" radius={[4, 4, 0, 0]}>
                       {autCharts.origDist.map((entry, i) => (
-                        <Cell key={i} fill={entry.freq === 1 ? '#34d399' : '#6b7280'} />
+                        <Cell key={i} fill={entry.freq === 1 ? '#a78bfa' : '#6b7280'} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -585,7 +585,7 @@ export default function TeacherPage() {
               ) : (
                 <div className="flex flex-col gap-3">
                   <p className="text-xs text-gray-400 leading-relaxed bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700">
-                    <span className="text-emerald-400 font-semibold">Originality scoring: </span>
+                    <span className="text-purple-400 font-semibold">Originality scoring: </span>
                     For each response, originality = 1 / (number of participants who gave that same response).
                     A participant&apos;s originality score is the mean originality across all their responses.
                     Ranges from near 0 (all common) to 1.0 (all unique).
@@ -600,9 +600,9 @@ export default function TeacherPage() {
                     <ZAxis range={[80, 80]} />
                     <Tooltip content={<OriginalityTooltip />} />
                     {revealed[3] && (
-                      <Scatter name="Participants" data={autCharts.origScatter} fill="#34d399">
+                      <Scatter name="Participants" data={autCharts.origScatter} fill="#a78bfa">
                         {autCharts.origScatter.map((_, i) => (
-                          <Cell key={i} fill="#34d399" stroke="#fff" strokeWidth={1.5} r={6} opacity={0.85} />
+                          <Cell key={i} fill="#a78bfa" stroke="#fff" strokeWidth={1.5} r={6} opacity={0.85} />
                         ))}
                       </Scatter>
                     )}
@@ -786,9 +786,9 @@ export default function TeacherPage() {
                     />
                     <Legend verticalAlign="top" />
                     {revealed[10] && (
-                      <Scatter name="Participants" data={scatterData} fill="#34d399">
+                      <Scatter name="Participants" data={scatterData} fill="#a78bfa">
                         {scatterData.map((_, i) => (
-                          <Cell key={i} fill="#34d399" stroke="#fff" strokeWidth={1.5} r={6} opacity={0.85} />
+                          <Cell key={i} fill="#a78bfa" stroke="#fff" strokeWidth={1.5} r={6} opacity={0.85} />
                         ))}
                       </Scatter>
                     )}
