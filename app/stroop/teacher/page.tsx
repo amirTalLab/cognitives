@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { GraduationCap, RefreshCw, BarChart3 } from 'lucide-react';
+import { GraduationCap, RefreshCw, Download, Home } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { TrialResult } from '@/types/stroop';
 import { getLanguageGroup, LANGUAGE_GROUPS, type LanguageGroup } from '@/lib/stroop/language-groups';
@@ -32,6 +33,7 @@ interface SubjectData {
 }
 
 export default function TeacherDashboard() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allResults, setAllResults] = useState<TrialResult[]>([]);
@@ -193,6 +195,17 @@ export default function TeacherDashboard() {
     }
   };
 
+  const downloadCsv = () => {
+    if (allResults.length === 0) return;
+    const headers = Object.keys(allResults[0]).join(',');
+    const csv = [headers, ...allResults.map(r => Object.values(r as unknown as Record<string, unknown>).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'stroop-data.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     if (authed) fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,7 +217,7 @@ export default function TeacherDashboard() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           className="bg-card border border-border rounded-xl p-10 w-full max-w-sm flex flex-col items-center gap-6"
         >
-          <GraduationCap className="w-10 h-10 text-emerald-400" />
+          <GraduationCap className="w-10 h-10 text-purple-400" />
           <h1 className="text-xl font-bold">Teacher Dashboard</h1>
           <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
             <input
@@ -214,11 +227,11 @@ export default function TeacherDashboard() {
               placeholder="Password"
               autoFocus
               className={`w-full px-4 py-3 rounded-lg border bg-zinc-800 text-white outline-none transition-colors
-                ${pwError ? 'border-red-500' : 'border-border focus:border-emerald-400'}`}
+                ${pwError ? 'border-red-500' : 'border-border focus:border-purple-400'}`}
             />
             {pwError && <p className="text-red-400 text-sm text-center">Incorrect password</p>}
             <button type="submit"
-              className="w-full py-3 bg-emerald-400 hover:bg-emerald-300 text-zinc-900 font-bold rounded-lg transition-colors">
+              className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-lg transition-colors">
               Enter
             </button>
           </form>
@@ -236,7 +249,7 @@ export default function TeacherDashboard() {
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             className="inline-block mb-4"
           >
-            <RefreshCw className="w-8 h-8 text-emerald-400" />
+            <RefreshCw className="w-8 h-8 text-purple-400" />
           </motion.div>
           <p className="text-muted">Loading data...</p>
         </div>
@@ -248,69 +261,44 @@ export default function TeacherDashboard() {
     <main className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <GraduationCap className="w-10 h-10 text-emerald-400" />
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight">Teacher Dashboard</h1>
-              <p className="text-muted mt-1">
-                Aggregate Stroop Effect Results
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <GraduationCap className="w-7 h-7 text-purple-400" />
+              <h1 className="text-2xl font-bold">Teacher Dashboard — Stroop</h1>
+            </div>
+            {!error && (
+              <p className="text-purple-400 font-medium">
+                {totalSessions} participant{totalSessions !== 1 ? 's' : ''} · {totalTrials} trials
                 {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
               </p>
-            </div>
+            )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3 flex-wrap">
             <button
               onClick={() => setUseMock(v => !v)}
               className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
                 useMock
                   ? 'bg-amber-500/20 border-amber-400 text-amber-400'
-                  : 'bg-zinc-800 border-border text-muted hover:bg-zinc-700'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
               }`}
             >
               {useMock ? 'Mock Data ON' : 'Mock Data'}
             </button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={fetchData}
-              disabled={useMock}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-400 text-zinc-900
-                         font-semibold rounded-lg hover:bg-emerald-300 transition-colors
-                         disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh Data
-            </motion.button>
+            <button onClick={fetchData} disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 disabled:opacity-40">
+              <RefreshCw className="w-4 h-4" /> Refresh
+            </button>
+            <button onClick={downloadCsv}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Download className="w-4 h-4" /> Download CSV
+            </button>
+            <button onClick={() => router.push('/')}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Home className="w-4 h-4" /> Home
+            </button>
           </div>
         </div>
-
-        {/* Stats Cards */}
-        {!error && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="bg-card border border-border rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <BarChart3 className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-sm font-medium text-muted">Total Participants</h3>
-              </div>
-              <p className="text-3xl font-bold">{totalSessions}</p>
-            </div>
-            <div className="bg-card border border-border rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <BarChart3 className="w-5 h-5 text-blue-400" />
-                <h3 className="text-sm font-medium text-muted">Total Trials</h3>
-              </div>
-              <p className="text-3xl font-bold">{totalTrials}</p>
-            </div>
-            <div className="bg-card border border-border rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <BarChart3 className="w-5 h-5 text-purple-400" />
-                <h3 className="text-sm font-medium text-muted">Data Points</h3>
-              </div>
-              <p className="text-3xl font-bold">{allResults.length}</p>
-            </div>
-          </div>
-        )}
 
         {/* Error State */}
         {error && (
@@ -320,8 +308,8 @@ export default function TeacherDashboard() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={fetchData}
-              className="px-4 py-2 bg-emerald-400 text-zinc-900 font-semibold rounded-lg
-                         hover:bg-emerald-300 transition-colors"
+              className="px-4 py-2 bg-purple-500 text-white font-semibold rounded-lg
+                         hover:bg-purple-400 transition-colors"
             >
               Retry
             </motion.button>
