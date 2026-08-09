@@ -11,6 +11,7 @@ import { Eye, Download, Home, RefreshCw } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { computeTeacherData, TeacherData, BarPoint, ScatterPoint } from '@/lib/composite-face/analysis';
 import { TrialResult } from '@/types/composite-face';
+import { generateMockData } from '@/lib/composite-face/mock-data';
 import { verifyPassword } from '@/lib/auth';
 
 const BG   = { background: '#111827', border: '1px solid #374151', borderRadius: 6 };
@@ -160,6 +161,7 @@ export default function TeacherPage() {
   const [pwInput, setPwInput]       = useState('');
   const [pwError, setPwError]       = useState(false);
   const [revealed, setRevealed]     = useState<Record<number, boolean>>({});
+  const [useMock, setUseMock]       = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem('cf_teacher_authed') === '1') setAuthed(true);
@@ -212,7 +214,18 @@ export default function TeacherPage() {
     }
   }, [fetchAllRows]);
 
-  useEffect(() => { if (authed) fetchData(); }, [authed, fetchData]);
+  const loadMockData = useCallback(() => {
+    setError(null);
+    setData(computeTeacherData(generateMockData()));
+    setLoading(false);
+    setRefreshing(false);
+  }, []);
+
+  useEffect(() => {
+    if (!authed) return;
+    if (useMock) loadMockData();
+    else fetchData();
+  }, [authed, useMock, fetchData, loadMockData]);
 
   const handleDownloadCSV = async () => {
     try {
@@ -271,12 +284,21 @@ export default function TeacherPage() {
             {!loading && data && (
               <p className="text-orange-400 font-medium">
                 {data.nParticipants} participant{data.nParticipants !== 1 ? 's' : ''}
+                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
               </p>
             )}
           </div>
           <div className="flex gap-3 flex-wrap">
-            <button onClick={fetchData} disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+            <button onClick={() => setUseMock(v => !v)}
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
+              }`}>
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
+            <button onClick={fetchData} disabled={refreshing || useMock}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 disabled:opacity-40">
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>

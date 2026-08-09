@@ -190,7 +190,6 @@ export default function SrtTeacher() {
     if (!authed) return;
     if (useMock) loadMockData();
     else fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, useMock]);
 
   async function fetchData() {

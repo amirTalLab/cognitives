@@ -152,7 +152,6 @@ export default function SerialOrderTeacher() {
     if (!authed) return;
     if (useMock) loadMockData();
     else fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, useMock]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────

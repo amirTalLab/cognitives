@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import { GraduationCap, RefreshCw, Search, Download } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
+import { generateMockData } from '@/lib/visual-search/mock-data';
 import { verifyPassword } from '@/lib/auth';
 
 const SS_LEVELS = [1, 2, 4, 8];
@@ -126,6 +127,7 @@ export default function VisualSearchTeacherPage() {
   const [error, setError] = useState<string | null>(null);
   const [rawRows, setRawRows] = useState<Row[]>([]);
   const [mode, setMode] = useState<'raw' | 'sdclean'>('raw');
+  const [useMock, setUseMock] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
@@ -180,9 +182,17 @@ export default function VisualSearchTeacherPage() {
     }
   }, []);
 
+  const loadMockData = useCallback(() => {
+    setError(null);
+    setRawRows(generateMockData() as unknown as Row[]);
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
-    if (authed) fetchData();
-  }, [authed, fetchData]);
+    if (!authed) return;
+    if (useMock) loadMockData();
+    else fetchData();
+  }, [authed, useMock, fetchData, loadMockData]);
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const activeRows = useMemo(
@@ -383,10 +393,23 @@ export default function VisualSearchTeacherPage() {
             <GraduationCap className="w-10 h-10 text-rose-400" />
             <div>
               <h1 className="text-4xl font-bold tracking-tight">Teacher Dashboard</h1>
-              <p className="text-muted mt-1">Visual Search – Aggregate Results</p>
+              <p className="text-muted mt-1">
+                Visual Search – Aggregate Results
+                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+              </p>
             </div>
           </div>
           <div className="flex gap-3 flex-wrap">
+            <button
+              onClick={() => setUseMock(v => !v)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border font-semibold transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'bg-card border-border text-gray-300 hover:border-rose-400 hover:text-rose-400'
+              }`}
+            >
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
             {rawRows.length > 0 && (
               <button
                 onClick={downloadCSV}
@@ -401,8 +424,9 @@ export default function VisualSearchTeacherPage() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={fetchData}
+              disabled={useMock}
               className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white
-                         font-semibold rounded-lg hover:bg-rose-400 transition-colors"
+                         font-semibold rounded-lg hover:bg-rose-400 transition-colors disabled:opacity-40"
             >
               <RefreshCw className="w-4 h-4" />
               Refresh Data

@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { GraduationCap, RefreshCw, Download } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
+import { generateMockData } from '@/lib/two-step-task/mock-data';
 import { verifyPassword } from '@/lib/auth';
 
 function mean(vals: number[]): number {
@@ -305,6 +306,7 @@ export default function TwoStepTeacher() {
   const [trialMode, setTrialMode] = useState<'raw' | 'sdclean'>('raw');
   const [excludeEnabled, setExcludeEnabled] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<string>('');
+  const [useMock, setUseMock] = useState(false);
 
   const trialCleaned = useMemo(
     () => trialMode === 'sdclean' ? sdCleanTrials(rawRows) : rawRows,
@@ -322,7 +324,7 @@ export default function TwoStepTeacher() {
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
-    if (await verifyPassword(pw)) { setAuthed(true); fetchData(); }
+    if (await verifyPassword(pw)) setAuthed(true);
     else setPwError(true);
   }
 
@@ -347,6 +349,17 @@ export default function TwoStepTeacher() {
     setRawRows(rows);
     setLoading(false);
   }, []);
+
+  const loadMockData = useCallback(() => {
+    setRawRows(generateMockData() as unknown as Row[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!authed) return;
+    if (useMock) loadMockData();
+    else fetchData();
+  }, [authed, useMock, fetchData, loadMockData]);
 
   // ── Participant list for dropdown ───────────────────────────────────────────
   const participantList = useMemo(() => {
@@ -484,12 +497,23 @@ export default function TwoStepTeacher() {
           <div className="flex items-center gap-2 text-emerald-400">
             <GraduationCap className="w-6 h-6" />
             <h1 className="text-xl font-bold">Two-Step Task — Teacher Dashboard</h1>
+            {useMock && <span className="text-xs text-amber-400 ml-1">(mock data)</span>}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => setUseMock(v => !v)}
+              className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400'
+              }`}
+            >
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
             <button onClick={downloadCsv} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors">
               <Download className="w-4 h-4" />
             </button>
-            <button onClick={fetchData} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors">
+            <button onClick={fetchData} disabled={useMock} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors disabled:opacity-40">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
