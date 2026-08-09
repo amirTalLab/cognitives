@@ -206,12 +206,12 @@ export default function DashboardPage() {
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const [useMock, setUseMock] = useState(false);
 
-  useEffect(() => { if (sessionStorage.getItem('te_dashboard_authed') === '1') setAuthed(true); }, []);
+  useEffect(() => { if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true); }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (await verifyPassword(pwInput)) {
-      sessionStorage.setItem('te_dashboard_authed', '1');
+      sessionStorage.setItem('ss_teacher_authed', '1');
       setAuthed(true);
     } else { setPwError(true); setPwInput(''); }
   };

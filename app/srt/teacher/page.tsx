@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useMemo, useEffect, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ErrorBar, ScatterChart, Scatter, Cell,
   ReferenceLine, PieChart, Pie,
 } from 'recharts';
-import { GraduationCap, RefreshCw, Download } from 'lucide-react';
+import { GraduationCap, RefreshCw, Download, Home } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { SEQUENCE_A, SEQUENCE_B } from '@/lib/srt/stimuli';
 import { generateMockData } from '@/lib/srt/mock-data';
@@ -108,7 +109,7 @@ function ChartCard({ title, children }: { title: string; children: (revealed: bo
         <h3 className="font-semibold text-gray-200">{title}</h3>
         <button
           onClick={() => setRevealed(r => !r)}
-          className="text-xs px-3 py-1 rounded-full border border-gray-600 text-gray-400 hover:border-emerald-400 hover:text-emerald-400 transition-colors"
+          className="text-xs px-3 py-1 rounded-full border border-gray-600 text-gray-400 hover:border-purple-400 hover:text-purple-400 transition-colors"
         >
           {revealed ? 'Hide' : 'Reveal'}
         </button>
@@ -129,6 +130,7 @@ function rtDomain(values: (number | null)[], sems: number[]): [number, number] {
 }
 
 export default function SrtTeacher() {
+  const router = useRouter();
   const [authed, setAuthed] = useState(false);
   const [pw, setPw] = useState('');
   const [pwError, setPwError] = useState(false);
@@ -138,6 +140,10 @@ export default function SrtTeacher() {
   const [mode, setMode] = useState<'raw' | 'sdclean'>('raw');
   const [excludeParticipantsEnabled, setExcludeParticipantsEnabled] = useState(false);
   const [useMock, setUseMock] = useState(false);
+
+  useEffect(() => {
+    if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
+  }, []);
 
   const trialCleanedRows = useMemo(
     () => mode === 'sdclean' ? sdCleanRows(rawRows) : rawRows,
@@ -175,7 +181,7 @@ export default function SrtTeacher() {
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
     const ok = await verifyPassword(pw);
-    if (ok) setAuthed(true);
+    if (ok) { sessionStorage.setItem('ss_teacher_authed', '1'); setAuthed(true); }
     else setPwError(true);
   }
 
@@ -383,7 +389,7 @@ export default function SrtTeacher() {
     return (
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center px-4">
         <form onSubmit={handleLogin} className="bg-gray-900 border border-gray-700 rounded-2xl p-8 w-full max-w-sm flex flex-col gap-4">
-          <div className="flex items-center gap-2 text-emerald-400 mb-2">
+          <div className="flex items-center gap-2 text-purple-400 mb-2">
             <GraduationCap className="w-6 h-6" />
             <h1 className="text-lg font-bold">SRT — Teacher Dashboard</h1>
           </div>
@@ -392,10 +398,10 @@ export default function SrtTeacher() {
             value={pw}
             onChange={e => { setPw(e.target.value); setPwError(false); }}
             placeholder="Password"
-            className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400"
+            className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-500 focus:outline-none focus:border-purple-400"
           />
           {pwError && <p className="text-red-400 text-xs">Incorrect password</p>}
-          <button type="submit" className="py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition-colors">
+          <button type="submit" className="py-2 rounded-lg bg-purple-500 hover:bg-purple-600 text-white font-semibold transition-colors">
             Enter
           </button>
         </form>
@@ -411,48 +417,51 @@ export default function SrtTeacher() {
     <div className="min-h-screen bg-[#0f172a] px-4 py-8">
       <div className="max-w-5xl mx-auto flex flex-col gap-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-emerald-400">
-            <GraduationCap className="w-6 h-6" />
-            <h1 className="text-xl font-bold">SRT — Teacher Dashboard</h1>
-            {useMock && <span className="text-xs text-amber-400 ml-1">(mock data)</span>}
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <GraduationCap className="w-7 h-7 text-purple-400" />
+              <h1 className="text-2xl font-bold">SRT — Teacher Dashboard</h1>
+            </div>
+            <p className="text-purple-400 font-medium">
+              {nParticipants} participant{nParticipants !== 1 ? 's' : ''} · {activeRows.length} trials · Seq A {nParticipantsA} / B {nParticipantsB}
+              {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+            </p>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-3 flex-wrap ml-auto">
             <button
               onClick={() => setUseMock(v => !v)}
-              className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
                 useMock
                   ? 'bg-amber-500/20 border-amber-400 text-amber-400'
-                  : 'border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
               }`}
             >
               {useMock ? 'Mock Data ON' : 'Mock Data'}
             </button>
-            <button onClick={downloadCsv} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors">
-              <Download className="w-4 h-4" />
+            <button onClick={fetchData} disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 disabled:opacity-40">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
             </button>
-            <button onClick={fetchData} disabled={useMock} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors disabled:opacity-40">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <button onClick={downloadCsv}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Download className="w-4 h-4" /> Download CSV
+            </button>
+            <button onClick={() => router.push('/')}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Home className="w-4 h-4" /> Home
             </button>
           </div>
-        </div>
-
-        {/* Stats */}
-        <div className="flex gap-4 flex-wrap">
-          <StatBox label="Participants" value={nParticipants} />
-          <StatBox label="Seq A main" value={nParticipantsA} />
-          <StatBox label="Seq B main" value={nParticipantsB} />
-          <StatBox label="Total Trials" value={activeRows.length} />
         </div>
 
         {/* Toggles */}
         {rawRows.length > 0 && (
           <div className="flex flex-col items-center gap-3">
             <div className="flex rounded-xl border border-border bg-card overflow-hidden">
-              <button onClick={() => setMode('raw')} className={`px-5 py-2 text-sm font-medium transition-colors ${mode === 'raw' ? 'bg-rose-500 text-white' : 'text-muted hover:text-foreground'}`}>
+              <button onClick={() => setMode('raw')} className={`px-5 py-2 text-sm font-medium transition-colors ${mode === 'raw' ? 'bg-purple-500 text-white' : 'text-muted hover:text-foreground'}`}>
                 Raw Data
               </button>
-              <button onClick={() => setMode('sdclean')} className={`px-5 py-2 text-sm font-medium transition-colors ${mode === 'sdclean' ? 'bg-rose-500 text-white' : 'text-muted hover:text-foreground'}`}>
+              <button onClick={() => setMode('sdclean')} className={`px-5 py-2 text-sm font-medium transition-colors ${mode === 'sdclean' ? 'bg-purple-500 text-white' : 'text-muted hover:text-foreground'}`}>
                 SD-Clean (±2.5)
               </button>
             </div>
@@ -464,10 +473,10 @@ export default function SrtTeacher() {
                 : `${rawRows.length} trials`}
             </p>
             <div className="flex rounded-xl border border-border bg-card overflow-hidden">
-              <button onClick={() => setExcludeParticipantsEnabled(false)} className={`px-5 py-2 text-sm font-medium transition-colors ${!excludeParticipantsEnabled ? 'bg-rose-500 text-white' : 'text-muted hover:text-foreground'}`}>
+              <button onClick={() => setExcludeParticipantsEnabled(false)} className={`px-5 py-2 text-sm font-medium transition-colors ${!excludeParticipantsEnabled ? 'bg-purple-500 text-white' : 'text-muted hover:text-foreground'}`}>
                 All Participants
               </button>
-              <button onClick={() => setExcludeParticipantsEnabled(true)} className={`px-5 py-2 text-sm font-medium transition-colors ${excludeParticipantsEnabled ? 'bg-rose-500 text-white' : 'text-muted hover:text-foreground'}`}>
+              <button onClick={() => setExcludeParticipantsEnabled(true)} className={`px-5 py-2 text-sm font-medium transition-colors ${excludeParticipantsEnabled ? 'bg-purple-500 text-white' : 'text-muted hover:text-foreground'}`}>
                 Exclude Outliers (±2.5 SD)
               </button>
             </div>
@@ -665,15 +674,6 @@ export default function SrtTeacher() {
           )}
         </ChartCard>
       </div>
-    </div>
-  );
-}
-
-function StatBox({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="bg-card border border-border rounded-xl px-5 py-3">
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-xl font-bold text-white">{value}</p>
     </div>
   );
 }
