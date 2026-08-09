@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { GraduationCap, RefreshCw } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { RecallResponse, DistractorResult } from '@/types/serial-order';
+import { generateMockData } from '@/lib/serial-order/mock-data';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, BarChart, Bar, ScatterChart, Scatter, ZAxis,
@@ -44,6 +45,23 @@ const COLORS = [
   '#38bdf8', '#c084fc', '#4ade80', '#fb7185', '#facc15',
 ];
 
+function groupIntoParticipants(allRecalls: RecallResponse[], allDistractor: DistractorResult[]): ParticipantData[] {
+  const bySession = new Map<string, ParticipantData>();
+  allRecalls.forEach(r => {
+    if (!bySession.has(r.session_id)) {
+      bySession.set(r.session_id, { sessionId: r.session_id, name: r.participant_name, recallsS1: [], recallsS2: [], distractor: [] });
+    }
+    const p = bySession.get(r.session_id)!;
+    if (r.session_number === 2) p.recallsS2.push(r);
+    else p.recallsS1.push(r);
+  });
+  allDistractor.forEach(d => {
+    const p = bySession.get(d.session_id);
+    if (p) p.distractor.push(d);
+  });
+  return Array.from(bySession.values());
+}
+
 export default function SerialOrderTeacher() {
   const [authed, setAuthed] = useState(false);
   const [pwInput, setPwInput] = useState('');
@@ -51,6 +69,7 @@ export default function SerialOrderTeacher() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [participants, setParticipants] = useState<ParticipantData[]>([]);
+  const [useMock, setUseMock] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
@@ -113,22 +132,7 @@ export default function SerialOrderTeacher() {
         return;
       }
 
-      // Group by session
-      const bySession = new Map<string, ParticipantData>();
-      allRecalls.forEach(r => {
-        if (!bySession.has(r.session_id)) {
-          bySession.set(r.session_id, { sessionId: r.session_id, name: r.participant_name, recallsS1: [], recallsS2: [], distractor: [] });
-        }
-        const p = bySession.get(r.session_id)!;
-        if (r.session_number === 2) p.recallsS2.push(r);
-        else p.recallsS1.push(r);
-      });
-      allDistractor.forEach(d => {
-        const p = bySession.get(d.session_id);
-        if (p) p.distractor.push(d);
-      });
-
-      setParticipants(Array.from(bySession.values()));
+      setParticipants(groupIntoParticipants(allRecalls, allDistractor));
     } catch (err) {
       console.error(err);
       setError('Failed to load data.');
@@ -137,9 +141,19 @@ export default function SerialOrderTeacher() {
     }
   };
 
+  const loadMockData = () => {
+    const { recalls, distractor } = generateMockData();
+    setError(null);
+    setParticipants(groupIntoParticipants(recalls, distractor));
+    setLoading(false);
+  };
+
   useEffect(() => {
-    if (authed) fetchData();
-  }, [authed]);
+    if (!authed) return;
+    if (useMock) loadMockData();
+    else fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, useMock]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   function getRecalledPositions(recalls: RecallResponse[]): Set<number> {
@@ -436,15 +450,31 @@ export default function SerialOrderTeacher() {
             <GraduationCap className="w-10 h-10 text-emerald-400" />
             <div>
               <h1 className="text-4xl font-bold tracking-tight">Teacher Dashboard</h1>
-              <p className="text-muted mt-1">Serial Position & Temporal Contiguity</p>
+              <p className="text-muted mt-1">
+                Serial Position & Temporal Contiguity
+                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+              </p>
             </div>
           </div>
-          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-            onClick={fetchData}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-400 text-zinc-900 font-semibold rounded-lg hover:bg-emerald-300 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </motion.button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setUseMock(v => !v)}
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'border-border text-muted hover:text-emerald-400 hover:border-emerald-400'
+              }`}
+            >
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              onClick={fetchData}
+              disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-400 text-zinc-900 font-semibold rounded-lg hover:bg-emerald-300 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw className="w-4 h-4" /> Refresh
+            </motion.button>
+          </div>
         </div>
 
         {error && (

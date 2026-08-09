@@ -8,6 +8,8 @@ import {
 } from 'recharts';
 import { GraduationCap, RefreshCw, Target } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
+import { PosnerResult } from '@/types/posner-cueing';
+import { generateMockData } from '@/lib/posner-cueing/mock-data';
 import { verifyPassword } from '@/lib/auth';
 
 interface AggStats {
@@ -41,6 +43,7 @@ export default function PosnerTeacherPage() {
   const [aggStats, setAggStats] = useState<AggStats | null>(null);
   const [sessionStats, setSessionStats] = useState<SessionStat[]>([]);
   const [exoTimeData, setExoTimeData] = useState<TimePoint[]>([]);
+  const [useMock, setUseMock] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
@@ -57,6 +60,72 @@ export default function PosnerTeacherPage() {
       setPwInput('');
     }
   };
+
+  const processRows = useCallback((data: PosnerResult[]) => {
+    // Group by session
+    const bySession: Record<string, PosnerResult[]> = {};
+    data.forEach((r) => {
+      if (!bySession[r.session_id]) bySession[r.session_id] = [];
+      bySession[r.session_id].push(r);
+    });
+
+    const mean = (arr: PosnerResult[]) =>
+      arr.length > 0 ? arr.reduce((s, r) => s + (r.rt_ms ?? 0), 0) / arr.length : 0;
+
+    const sessions: SessionStat[] = [];
+    Object.entries(bySession).forEach(([sid, rows]) => {
+      const validHits = rows.filter(r => r.validity === 'valid' && r.response === 'hit' && r.rt_ms != null);
+      const invalidHits = rows.filter(r => r.validity === 'invalid' && r.response === 'hit' && r.rt_ms != null);
+      const exoHits = rows.filter(r => r.validity === 'exo_invalid' && r.response === 'hit' && r.rt_ms != null);
+
+      const vRT = Math.round(mean(validHits));
+      const iRT = Math.round(mean(invalidHits));
+      const eRT = Math.round(mean(exoHits));
+
+      sessions.push({
+        session_id: sid,
+        participant_name: rows[0].participant_name ?? sid.slice(0, 8),
+        validRT: vRT,
+        invalidRT: iRT,
+        exoRT: eRT,
+        validityEffect: iRT - vRT,
+      });
+    });
+
+    setSessionStats(sessions);
+
+    // Aggregate stats
+    const avg = (arr: number[]) =>
+      arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+
+    setAggStats({
+      totalParticipants: sessions.length,
+      avgValidRT: avg(sessions.map(s => s.validRT).filter(v => v > 0)),
+      avgInvalidRT: avg(sessions.map(s => s.invalidRT).filter(v => v > 0)),
+      avgExoRT: avg(sessions.map(s => s.exoRT).filter(v => v > 0)),
+      avgValidityEffect: avg(sessions.map(s => s.validityEffect)),
+    });
+
+    // Exo_invalid RT over time (4 bins of 5 trials each)
+    const timePoints: TimePoint[] = [1, 2, 3, 4].map((tp) => {
+      const allRTs: number[] = [];
+      Object.values(bySession).forEach((rows) => {
+        const exoHits = rows
+          .filter(r => r.validity === 'exo_invalid' && r.response === 'hit' && r.rt_ms != null)
+          .sort((a, b) => a.trial_number - b.trial_number);
+        const start = (tp - 1) * 5;
+        const end = tp * 5;
+        exoHits.slice(start, end).forEach(r => allRTs.push(r.rt_ms!));
+      });
+      return {
+        timePoint: tp,
+        rt: allRTs.length > 0
+          ? Math.round(allRTs.reduce((s, v) => s + v, 0) / allRTs.length)
+          : null,
+      };
+    });
+    setExoTimeData(timePoints);
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -80,90 +149,32 @@ export default function PosnerTeacherPage() {
         if (page.length < 1000) break;
         from += 1000;
       }
-      type Row = { session_id: string; validity: string; response: string; rt_ms: number | null; trial_number: number; participant_name?: string };
-      const data = allData as Row[];
+      const data = allData as PosnerResult[];
       if (data.length === 0) {
         setError('No data available yet.');
         setLoading(false);
         return;
       }
-
-      // Group by session
-      const bySession: Record<string, Row[]> = {};
-      data.forEach((r) => {
-        if (!bySession[r.session_id]) bySession[r.session_id] = [];
-        bySession[r.session_id].push(r);
-      });
-
-      const mean = (arr: Row[]) =>
-        arr.length > 0 ? arr.reduce((s, r) => s + (r.rt_ms ?? 0), 0) / arr.length : 0;
-
-      const sessions: SessionStat[] = [];
-      Object.entries(bySession).forEach(([sid, rows]) => {
-        const validHits = (rows as Row[]).filter(r => r.validity === 'valid' && r.response === 'hit' && r.rt_ms != null);
-        const invalidHits = (rows as Row[]).filter(r => r.validity === 'invalid' && r.response === 'hit' && r.rt_ms != null);
-        const exoHits = (rows as Row[]).filter(r => r.validity === 'exo_invalid' && r.response === 'hit' && r.rt_ms != null);
-
-        const vRT = Math.round(mean(validHits));
-        const iRT = Math.round(mean(invalidHits));
-        const eRT = Math.round(mean(exoHits));
-
-        sessions.push({
-          session_id: sid,
-          participant_name: (rows[0] as Row & { participant_name?: string }).participant_name ?? sid.slice(0, 8),
-          validRT: vRT,
-          invalidRT: iRT,
-          exoRT: eRT,
-          validityEffect: iRT - vRT,
-        });
-      });
-
-      setSessionStats(sessions);
-
-      // Aggregate stats
-      const avg = (arr: number[]) =>
-        arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
-
-      setAggStats({
-        totalParticipants: sessions.length,
-        avgValidRT: avg(sessions.map(s => s.validRT).filter(v => v > 0)),
-        avgInvalidRT: avg(sessions.map(s => s.invalidRT).filter(v => v > 0)),
-        avgExoRT: avg(sessions.map(s => s.exoRT).filter(v => v > 0)),
-        avgValidityEffect: avg(sessions.map(s => s.validityEffect)),
-      });
-
-      // Exo_invalid RT over time (4 bins of 5 trials each)
-      type HitRow = Row;
-      const timePoints: TimePoint[] = [1, 2, 3, 4].map((tp) => {
-        const allRTs: number[] = [];
-        Object.values(bySession).forEach((rows) => {
-          const exoHits = (rows as HitRow[])
-            .filter(r => r.validity === 'exo_invalid' && r.response === 'hit' && r.rt_ms != null)
-            .sort((a, b) => a.trial_number - b.trial_number);
-          const start = (tp - 1) * 5;
-          const end = tp * 5;
-          exoHits.slice(start, end).forEach(r => allRTs.push(r.rt_ms!));
-        });
-        return {
-          timePoint: tp,
-          rt: allRTs.length > 0
-            ? Math.round(allRTs.reduce((s, v) => s + v, 0) / allRTs.length)
-            : null,
-        };
-      });
-      setExoTimeData(timePoints);
-
+      processRows(data);
     } catch (err) {
       console.error(err);
       setError('Failed to load data.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [processRows]);
+
+  const loadMockData = useCallback(() => {
+    setError(null);
+    processRows(generateMockData());
+    setLoading(false);
+  }, [processRows]);
 
   useEffect(() => {
-    if (authed) fetchData();
-  }, [authed, fetchData]);
+    if (!authed) return;
+    if (useMock) loadMockData();
+    else fetchData();
+  }, [authed, useMock, fetchData, loadMockData]);
 
   // ── Auth screen ──────────────────────────────────────────────────────────
   if (!authed) {
@@ -239,19 +250,35 @@ export default function PosnerTeacherPage() {
             <GraduationCap className="w-10 h-10 text-amber-400" />
             <div>
               <h1 className="text-4xl font-bold tracking-tight">Teacher Dashboard</h1>
-              <p className="text-muted mt-1">Posner Spatial Cueing – Aggregate Results</p>
+              <p className="text-muted mt-1">
+                Posner Spatial Cueing – Aggregate Results
+                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+              </p>
             </div>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={fetchData}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-400 text-zinc-900
-                       font-semibold rounded-lg hover:bg-amber-300 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh Data
-          </motion.button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setUseMock(v => !v)}
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'border-border text-muted hover:text-amber-400 hover:border-amber-400'
+              }`}
+            >
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={fetchData}
+              disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-400 text-zinc-900
+                         font-semibold rounded-lg hover:bg-amber-300 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh Data
+            </motion.button>
+          </div>
         </div>
 
         {error && (

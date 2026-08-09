@@ -18,6 +18,7 @@ import { ScanningTrialResult, RotationTrialResult } from '@/types/mental-rep';
 import { calculateCorrelation as calcScanningCorr, groupByDistanceBins } from '@/lib/mental-rep/scanning';
 import { calculateCorrelation as calcRotationCorr, groupByAngle } from '@/lib/mental-rep/rotation';
 import { getSupabase } from '@/lib/supabase';
+import { generateMockData } from '@/lib/mental-rep/mock-data';
 import { verifyPassword } from '@/lib/auth';
 
 interface ParticipantSummary {
@@ -40,6 +41,7 @@ export default function MentalRepTeacher() {
   const [aggregateScanningData, setAggregateScanningData] = useState<{ distance: number; meanRT: number }[]>([]);
   const [aggregateRotationData, setAggregateRotationData] = useState<{ angle: number; meanRT: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [useMock, setUseMock] = useState(false);
 
   // ── Password gate ──────────────────────────────────────────────────────────
   const [authed, setAuthed]   = useState(false);
@@ -53,8 +55,19 @@ export default function MentalRepTeacher() {
   }, []);
 
   useEffect(() => {
-    if (authed) loadAllResults();
-  }, [authed]);
+    if (!authed) return;
+    if (useMock) loadMockData();
+    else loadAllResults();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, useMock]);
+
+  const loadMockData = () => {
+    const rows = generateMockData();
+    setAllResults(rows);
+    processParticipants(rows);
+    processAggregateData(rows);
+    setLoading(false);
+  };
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -315,7 +328,17 @@ export default function MentalRepTeacher() {
         <div className="container mx-auto px-4 py-8 text-center">
           <BrainCog className="w-16 h-16 text-cyan-600 mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{t.title}</h1>
-          <p className="text-gray-600">{t.noData}</p>
+          <p className="text-gray-600 mb-6">{t.noData}</p>
+          <button
+            onClick={() => setUseMock((v) => !v)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+              useMock
+                ? 'bg-amber-100 border-amber-400 text-amber-700'
+                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {useMock ? 'Mock Data ON' : 'Show Mock Data'}
+          </button>
         </div>
       </div>
     );
@@ -339,11 +362,24 @@ export default function MentalRepTeacher() {
             <BrainCog className="w-12 h-12 text-cyan-600" />
             <h1 className="text-4xl font-bold text-gray-900">{t.title}</h1>
           </div>
-          <p className="text-lg text-cyan-600 font-medium">{t.subtitle}</p>
+          <p className="text-lg text-cyan-600 font-medium">
+            {t.subtitle}
+            {useMock && <span className="text-amber-600 ml-2">(mock data)</span>}
+          </p>
         </motion.div>
 
-        {/* Language Toggle */}
-        <div className="flex justify-end mb-6">
+        {/* Toggles */}
+        <div className="flex justify-between items-center mb-6">
+          <button
+            onClick={() => setUseMock((v) => !v)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+              useMock
+                ? 'bg-amber-100 border-amber-400 text-amber-700'
+                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {useMock ? 'Mock Data ON' : 'Mock Data'}
+          </button>
           <button
             onClick={() => setLanguage(language === 'en' ? 'he' : 'en')}
             className="px-4 py-2 text-sm font-medium text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded-lg transition-colors"
