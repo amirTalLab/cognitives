@@ -4,7 +4,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { motion } from 'framer-motion';
-import { Shapes, Download, Users, ChevronLeft } from 'lucide-react';
+import { Shapes, Download, Home, RefreshCw } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -186,14 +186,14 @@ export default function BoubaKikiTeacher() {
 
   if (!authed) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl shadow-xl p-10 w-full max-w-sm flex flex-col items-center gap-6"
+          className="bg-gray-900 border border-gray-700 rounded-2xl p-10 w-full max-w-sm flex flex-col items-center gap-6"
         >
-          <Shapes className="w-10 h-10 text-indigo-600" />
+          <Shapes className="w-10 h-10 text-purple-400" />
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Teacher Dashboard</h1>
-            <p className="text-gray-500 text-sm mt-1">Bouba-Kiki Effect</p>
+            <h1 className="text-2xl font-bold text-white">Teacher Dashboard</h1>
+            <p className="text-gray-400 text-sm mt-1">Bouba-Kiki Effect</p>
           </div>
           <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
             <input
@@ -202,12 +202,12 @@ export default function BoubaKikiTeacher() {
               onChange={e => { setPwInput(e.target.value); setPwError(false); }}
               placeholder="Password"
               autoFocus
-              className={`w-full px-4 py-3 rounded-lg border text-gray-900 outline-none transition-colors
-                ${pwError ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-indigo-500'}`}
+              className={`w-full px-4 py-3 rounded-xl border text-white bg-gray-800 outline-none transition-colors
+                ${pwError ? 'border-red-500' : 'border-gray-600 focus:border-purple-400'}`}
             />
-            {pwError && <p className="text-red-500 text-sm text-center">Incorrect password</p>}
+            {pwError && <p className="text-red-400 text-sm text-center">Incorrect password</p>}
             <button type="submit"
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors">
+              className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl transition-colors">
               Enter
             </button>
           </form>
@@ -218,8 +218,8 @@ export default function BoubaKikiTeacher() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-xl text-gray-600">Loading class data...</div>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="text-xl text-gray-400">Loading class data...</div>
       </div>
     );
   }
@@ -257,18 +257,18 @@ export default function BoubaKikiTeacher() {
 
   if (participants.length === 0) {
     return (
-      <div className={`min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 ${language === 'he' ? 'rtl' : 'ltr'}`}>
+      <div className={`min-h-screen bg-[#0f172a] text-white ${language === 'he' ? 'rtl' : 'ltr'}`}>
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
-            <Shapes className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t.title}</h1>
-            <p className="text-gray-600 mb-6">{t.noData}</p>
+            <Shapes className="w-16 h-16 text-purple-400 mx-auto mb-4" />
+            <h1 className="text-3xl font-bold text-white mb-2">{t.title}</h1>
+            <p className="text-gray-400 mb-6">{t.noData}</p>
             <button
               onClick={() => setUseMock((v) => !v)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
                 useMock
-                  ? 'bg-amber-100 border-amber-400 text-amber-700'
-                  : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
               }`}
             >
               {useMock ? 'Mock Data ON' : 'Show Mock Data'}
@@ -282,8 +282,6 @@ export default function BoubaKikiTeacher() {
   // Calculate aggregate stats
   const totalParticipants = participants.length;
   const totalTrials = allResults.length;
-  const avgAccuracy =
-    participants.reduce((sum, p) => sum + p.accuracy, 0) / participants.length;
   const avgBoubaAccuracy =
     participants.reduce((sum, p) => sum + p.boubaAccuracy, 0) / participants.length;
   const avgKikiAccuracy =
@@ -305,86 +303,62 @@ export default function BoubaKikiTeacher() {
   }));
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 ${language === 'he' ? 'rtl' : 'ltr'}`}>
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className={`min-h-screen bg-[#0f172a] text-white ${language === 'he' ? 'rtl' : 'ltr'}`}>
+      <div className="container mx-auto px-4 py-8 max-w-5xl">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Shapes className="w-12 h-12 text-indigo-600" />
-            <h1 className="text-4xl font-bold text-gray-900">{t.title}</h1>
-          </div>
-          <p className="text-lg text-indigo-600 font-medium">
-            {t.subtitle}
-            {useMock && <span className="text-amber-600 ml-2">(mock data)</span>}
-          </p>
-        </motion.div>
-
-        {/* Toggles */}
-        <div className="flex justify-between items-center mb-6">
-          <button
-            onClick={() => setUseMock((v) => !v)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-              useMock
-                ? 'bg-amber-100 border-amber-400 text-amber-700'
-                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            {useMock ? 'Mock Data ON' : 'Mock Data'}
-          </button>
-          <button
-            onClick={() => setLanguage(language === 'en' ? 'he' : 'en')}
-            className="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
-          >
-            {t.languageToggle}
-          </button>
-        </div>
-
-        {/* Summary Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"
-        >
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Users className="w-5 h-5 text-indigo-600" />
-              <div className="text-sm text-gray-600">{t.participants}</div>
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <Shapes className="w-7 h-7 text-purple-400" />
+              <h1 className="text-2xl font-bold">{t.title} — Bouba-Kiki</h1>
             </div>
-            <div className="text-3xl font-bold text-indigo-600">{totalParticipants}</div>
+            <p className="text-purple-400 font-medium">
+              {totalParticipants} {t.participants.toLowerCase()} · {totalTrials} {t.trials.toLowerCase()}
+              {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+            </p>
           </div>
-
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="text-sm text-gray-600 mb-2">{t.trials}</div>
-            <div className="text-3xl font-bold text-gray-700">{totalTrials}</div>
+          <div className="flex gap-3 flex-wrap">
+            <button
+              onClick={() => setUseMock((v) => !v)}
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
+            <button onClick={loadAllResults} disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 disabled:opacity-40">
+              <RefreshCw className="w-4 h-4" /> Refresh
+            </button>
+            <button onClick={downloadAllData}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Download className="w-4 h-4" /> Download CSV
+            </button>
+            <button onClick={() => router.push('/')}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Home className="w-4 h-4" /> Home
+            </button>
           </div>
-
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="text-sm text-gray-600 mb-2">{t.avgAccuracy}</div>
-            <div className="text-3xl font-bold text-purple-600">{avgAccuracy.toFixed(1)}%</div>
-          </div>
-        </motion.div>
+        </div>
 
         {/* Chart 1: Average Accuracy by Word Type */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl shadow-lg p-6 mb-8"
+          className="bg-gray-900 border border-gray-700 rounded-2xl p-6 mb-8"
         >
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">{t.chartTitle1}</h2>
+          <h2 className="text-xl font-semibold text-white mb-4">{t.chartTitle1}</h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={avgChartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis domain={[0, 100]} />
-              <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
-              <Legend />
-              <Bar dataKey="accuracy" fill="#6366f1" name="Accuracy (%)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+              <YAxis domain={[0, 100]} tick={{ fill: '#9ca3af', fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={(value) => `${Number(value).toFixed(1)}%`} />
+              <Legend wrapperStyle={{ color: '#9ca3af' }} />
+              <Bar dataKey="accuracy" fill="#a78bfa" name="Accuracy (%)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </motion.div>
@@ -394,18 +368,18 @@ export default function BoubaKikiTeacher() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-white rounded-xl shadow-lg p-6 mb-8"
+          className="bg-gray-900 border border-gray-700 rounded-2xl p-6 mb-8"
         >
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">{t.chartTitle2}</h2>
+          <h2 className="text-xl font-semibold text-white mb-4">{t.chartTitle2}</h2>
           <ResponsiveContainer width="100%" height={300}>
             <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" dataKey="participant" name="Participant" />
-              <YAxis type="number" domain={[0, 100]} name="Accuracy (%)" />
-              <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-              <Legend />
-              <Scatter name="Bouba Accuracy" data={scatterData} fill="#6366f1" dataKey="boubaAccuracy" />
-              <Scatter name="Kiki Accuracy" data={scatterData} fill="#a855f7" dataKey="kikiAccuracy" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis type="number" dataKey="participant" name="Participant" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+              <YAxis type="number" domain={[0, 100]} name="Accuracy (%)" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+              <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} />
+              <Legend wrapperStyle={{ color: '#9ca3af' }} />
+              <Scatter name="Bouba Accuracy" data={scatterData} fill="#a78bfa" dataKey="boubaAccuracy" />
+              <Scatter name="Kiki Accuracy" data={scatterData} fill="#34d399" dataKey="kikiAccuracy" />
             </ScatterChart>
           </ResponsiveContainer>
         </motion.div>
@@ -415,12 +389,12 @@ export default function BoubaKikiTeacher() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-white rounded-xl shadow-lg p-6 mb-8 overflow-x-auto"
+          className="bg-gray-900 border border-gray-700 rounded-2xl p-6 mb-8 overflow-x-auto"
         >
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Participant Details</h2>
-          <table className="w-full">
+          <h2 className="text-xl font-semibold text-white mb-4">Participant Details</h2>
+          <table className="w-full text-gray-300">
             <thead>
-              <tr className="border-b">
+              <tr className="border-b border-gray-700 text-gray-400">
                 <th className="text-left py-2 px-4">Name</th>
                 <th className="text-left py-2 px-4">Accuracy</th>
                 <th className="text-left py-2 px-4">Bouba</th>
@@ -431,7 +405,7 @@ export default function BoubaKikiTeacher() {
             </thead>
             <tbody>
               {participants.map((p) => (
-                <tr key={p.sessionId} className="border-b hover:bg-gray-50">
+                <tr key={p.sessionId} className="border-b border-gray-800 hover:bg-gray-800/50">
                   <td className="py-2 px-4">{p.participantName}</td>
                   <td className="py-2 px-4">{p.accuracy.toFixed(1)}%</td>
                   <td className="py-2 px-4">{p.boubaAccuracy.toFixed(1)}%</td>
@@ -444,29 +418,6 @@ export default function BoubaKikiTeacher() {
           </table>
         </motion.div>
 
-        {/* Action Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="flex flex-wrap gap-4 justify-center"
-        >
-          <button
-            onClick={downloadAllData}
-            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-lg"
-          >
-            <Download className="w-5 h-5" />
-            {t.downloadButton}
-          </button>
-
-          <button
-            onClick={() => router.push('/bouba-kiki/results')}
-            className="flex items-center gap-2 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-lg"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            {t.backButton}
-          </button>
-        </motion.div>
       </div>
     </div>
   );

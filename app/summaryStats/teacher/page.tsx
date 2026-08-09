@@ -33,7 +33,7 @@ const ScatterTooltip = ({ active, payload }: { active?: boolean; payload?: { pay
 
 const Dot = (props: { cx?: number; cy?: number }) => {
   const { cx = 0, cy = 0 } = props;
-  return <circle cx={cx} cy={cy} r={6} fill="#f97316" stroke="#fff" strokeWidth={1.5} opacity={0.85} />;
+  return <circle cx={cx} cy={cy} r={6} fill="#a78bfa" stroke="#fff" strokeWidth={1.5} opacity={0.85} />;
 };
 
 // Recharts tooltip formatter — use 'as any' to satisfy strict Formatter type
@@ -148,17 +148,17 @@ export default function TeacherPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           className="bg-gray-900 border border-gray-700 rounded-2xl p-10 w-full max-w-sm flex flex-col items-center gap-6"
         >
-          <Eye className="w-10 h-10 text-orange-400" />
+          <Eye className="w-10 h-10 text-purple-400" />
           <h1 className="text-xl font-bold text-white">Teacher Dashboard</h1>
           <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
             <input type="password" value={pwInput} autoFocus
               onChange={e => { setPwInput(e.target.value); setPwError(false); }}
               placeholder="Password"
               className={`w-full px-4 py-3 rounded-xl border text-white bg-gray-800 outline-none transition-colors
-                ${pwError ? 'border-red-500' : 'border-gray-600 focus:border-orange-400'}`}
+                ${pwError ? 'border-red-500' : 'border-gray-600 focus:border-purple-400'}`}
             />
             {pwError && <p className="text-red-400 text-sm text-center">Incorrect password</p>}
-            <button type="submit" className="w-full py-3 bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-xl transition-colors">
+            <button type="submit" className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl transition-colors">
               Enter
             </button>
           </form>
@@ -176,11 +176,11 @@ export default function TeacherPage() {
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <Eye className="w-7 h-7 text-orange-400" />
+              <Eye className="w-7 h-7 text-purple-400" />
               <h1 className="text-2xl font-bold">Teacher Dashboard — Ensemble Perception</h1>
             </div>
             {!loading && data && (
-              <p className="text-orange-400 font-medium">
+              <p className="text-purple-400 font-medium">
                 {data.nParticipants} participant{data.nParticipants !== 1 ? 's' : ''}
                 {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
               </p>
