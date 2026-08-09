@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, FormEvent } from 'react';
+import { useState, useMemo, useEffect, FormEvent } from 'react';
 import {
   ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ErrorBar, ScatterChart, Scatter, Cell,
@@ -9,6 +9,7 @@ import {
 import { GraduationCap, RefreshCw, Download } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { SEQUENCE_A, SEQUENCE_B } from '@/lib/srt/stimuli';
+import { generateMockData } from '@/lib/srt/mock-data';
 import { verifyPassword } from '@/lib/auth';
 
 const SEQUENCE_REPS_PER_BLOCK = 9;
@@ -136,6 +137,7 @@ export default function SrtTeacher() {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'raw' | 'sdclean'>('raw');
   const [excludeParticipantsEnabled, setExcludeParticipantsEnabled] = useState(false);
+  const [useMock, setUseMock] = useState(false);
 
   const trialCleanedRows = useMemo(
     () => mode === 'sdclean' ? sdCleanRows(rawRows) : rawRows,
@@ -173,9 +175,23 @@ export default function SrtTeacher() {
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
     const ok = await verifyPassword(pw);
-    if (ok) { setAuthed(true); fetchData(); }
+    if (ok) setAuthed(true);
     else setPwError(true);
   }
+
+  function loadMockData() {
+    const mock = generateMockData();
+    setRawRows(mock.rows as unknown as Row[]);
+    setGenRows(mock.gen as unknown as GenRow[]);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    if (!authed) return;
+    if (useMock) loadMockData();
+    else fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, useMock]);
 
   async function fetchData() {
     setLoading(true);
@@ -400,12 +416,23 @@ export default function SrtTeacher() {
           <div className="flex items-center gap-2 text-emerald-400">
             <GraduationCap className="w-6 h-6" />
             <h1 className="text-xl font-bold">SRT — Teacher Dashboard</h1>
+            {useMock && <span className="text-xs text-amber-400 ml-1">(mock data)</span>}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => setUseMock(v => !v)}
+              className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400'
+              }`}
+            >
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
             <button onClick={downloadCsv} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors">
               <Download className="w-4 h-4" />
             </button>
-            <button onClick={fetchData} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors">
+            <button onClick={fetchData} disabled={useMock} className="p-2 rounded-lg border border-gray-600 text-gray-400 hover:text-emerald-400 hover:border-emerald-400 transition-colors disabled:opacity-40">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
