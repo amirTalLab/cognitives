@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState, FormEvent, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, ReferenceLine, LineChart, Line, Cell,
 } from 'recharts';
-import { GraduationCap, RefreshCw, Target } from 'lucide-react';
+import { GraduationCap, RefreshCw, Target, Download, Home } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { PosnerResult } from '@/types/posner-cueing';
 import { generateMockData } from '@/lib/posner-cueing/mock-data';
@@ -35,6 +36,7 @@ interface TimePoint {
 }
 
 export default function PosnerTeacherPage() {
+  const router = useRouter();
   const [authed, setAuthed] = useState(false);
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
@@ -44,6 +46,7 @@ export default function PosnerTeacherPage() {
   const [sessionStats, setSessionStats] = useState<SessionStat[]>([]);
   const [exoTimeData, setExoTimeData] = useState<TimePoint[]>([]);
   const [useMock, setUseMock] = useState(false);
+  const [rawRows, setRawRows] = useState<PosnerResult[]>([]);
 
   useEffect(() => {
     if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
@@ -155,6 +158,7 @@ export default function PosnerTeacherPage() {
         setLoading(false);
         return;
       }
+      setRawRows(data);
       processRows(data);
     } catch (err) {
       console.error(err);
@@ -166,9 +170,22 @@ export default function PosnerTeacherPage() {
 
   const loadMockData = useCallback(() => {
     setError(null);
-    processRows(generateMockData());
+    const mock = generateMockData();
+    setRawRows(mock);
+    processRows(mock);
     setLoading(false);
   }, [processRows]);
+
+  const downloadCsv = () => {
+    if (rawRows.length === 0) return;
+    const headers = Object.keys(rawRows[0]).join(',');
+    const csv = [headers, ...rawRows.map(r => Object.values(r as unknown as Record<string, unknown>).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'posner-data.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     if (!authed) return;
@@ -185,7 +202,7 @@ export default function PosnerTeacherPage() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-card border border-border rounded-xl p-10 w-full max-w-sm flex flex-col items-center gap-6"
         >
-          <Target className="w-10 h-10 text-amber-400" />
+          <Target className="w-10 h-10 text-purple-400" />
           <h1 className="text-xl font-bold">Teacher Dashboard</h1>
           <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
             <input
@@ -195,12 +212,12 @@ export default function PosnerTeacherPage() {
               placeholder="Password"
               autoFocus
               className={`w-full px-4 py-3 rounded-lg border bg-zinc-800 text-white outline-none transition-colors
-                ${pwError ? 'border-red-500' : 'border-border focus:border-amber-400'}`}
+                ${pwError ? 'border-red-500' : 'border-border focus:border-purple-400'}`}
             />
             {pwError && <p className="text-red-400 text-sm text-center">Incorrect password</p>}
             <button
               type="submit"
-              className="w-full py-3 bg-amber-400 hover:bg-amber-300 text-zinc-900 font-bold rounded-lg transition-colors"
+              className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-lg transition-colors"
             >
               Enter
             </button>
@@ -219,7 +236,7 @@ export default function PosnerTeacherPage() {
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             className="inline-block mb-4"
           >
-            <RefreshCw className="w-8 h-8 text-amber-400" />
+            <RefreshCw className="w-8 h-8 text-purple-400" />
           </motion.div>
           <p className="text-muted">Loading data...</p>
         </div>
@@ -246,45 +263,46 @@ export default function PosnerTeacherPage() {
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <GraduationCap className="w-10 h-10 text-amber-400" />
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight">Teacher Dashboard</h1>
-              <p className="text-muted mt-1">
-                Posner Spatial Cueing – Aggregate Results
-                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
-              </p>
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <GraduationCap className="w-7 h-7 text-purple-400" />
+              <h1 className="text-2xl font-bold tracking-tight">Teacher Dashboard — Posner</h1>
             </div>
+            <p className="text-purple-400 font-medium">
+              Spatial Cueing — Aggregate Results
+              {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3 flex-wrap ml-auto">
             <button
               onClick={() => setUseMock(v => !v)}
               className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
                 useMock
                   ? 'bg-amber-500/20 border-amber-400 text-amber-400'
-                  : 'border-border text-muted hover:text-amber-400 hover:border-amber-400'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
               }`}
             >
               {useMock ? 'Mock Data ON' : 'Mock Data'}
             </button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={fetchData}
-              disabled={useMock}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-400 text-zinc-900
-                         font-semibold rounded-lg hover:bg-amber-300 transition-colors disabled:opacity-40"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh Data
-            </motion.button>
+            <button onClick={fetchData} disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 disabled:opacity-40">
+              <RefreshCw className="w-4 h-4" /> Refresh
+            </button>
+            <button onClick={downloadCsv}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Download className="w-4 h-4" /> Download CSV
+            </button>
+            <button onClick={() => router.push('/')}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Home className="w-4 h-4" /> Home
+            </button>
           </div>
         </div>
 
         {error && (
           <div className="bg-card border border-yellow-500/50 rounded-xl p-8 mb-8 text-center">
             <p className="text-yellow-400 mb-4">{error}</p>
-            <button onClick={fetchData} className="px-4 py-2 bg-amber-400 text-zinc-900 font-semibold rounded-lg hover:bg-amber-300">
+            <button onClick={fetchData} className="px-4 py-2 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-400">
               Retry
             </button>
           </div>
