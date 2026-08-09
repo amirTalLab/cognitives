@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { GraduationCap, RefreshCw } from 'lucide-react';
+import { GraduationCap, RefreshCw, Download, Home } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { RecallResponse, DistractorResult } from '@/types/serial-order';
 import { generateMockData } from '@/lib/serial-order/mock-data';
@@ -21,7 +22,7 @@ function ChartCard({ title, children }: { title: string; children: (revealed: bo
         <h3 className="font-semibold text-gray-200">{title}</h3>
         <button
           onClick={() => setRevealed(r => !r)}
-          className="text-xs px-3 py-1 rounded-full border border-gray-600 text-gray-400 hover:border-emerald-400 hover:text-emerald-400 transition-colors"
+          className="text-xs px-3 py-1 rounded-full border border-gray-600 text-gray-400 hover:border-purple-400 hover:text-purple-400 transition-colors"
         >
           {revealed ? 'Hide' : 'Reveal'}
         </button>
@@ -63,6 +64,7 @@ function groupIntoParticipants(allRecalls: RecallResponse[], allDistractor: Dist
 }
 
 export default function SerialOrderTeacher() {
+  const router = useRouter();
   const [authed, setAuthed] = useState(false);
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
@@ -146,6 +148,22 @@ export default function SerialOrderTeacher() {
     setError(null);
     setParticipants(groupIntoParticipants(recalls, distractor));
     setLoading(false);
+  };
+
+  const downloadCsv = () => {
+    if (participants.length === 0) return;
+    const header = ['participant', 'session', 'output_position', 'serial_position', 'word', 'correct'];
+    const lines = participants.flatMap(p =>
+      [...p.recallsS1, ...p.recallsS2].map(r =>
+        [p.name ?? p.sessionId.slice(0, 6), r.session_number, r.output_position, r.matched_serial_position ?? '', r.matched_word ?? '', r.is_correct_recall].join(',')
+      )
+    );
+    const csv = [header.join(','), ...lines].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'serial-order-data.csv'; a.click();
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -369,7 +387,7 @@ export default function SerialOrderTeacher() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           className="bg-card border border-border rounded-xl p-10 w-full max-w-sm flex flex-col items-center gap-6"
         >
-          <GraduationCap className="w-10 h-10 text-emerald-400" />
+          <GraduationCap className="w-10 h-10 text-purple-400" />
           <h1 className="text-xl font-bold">Teacher Dashboard</h1>
           <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
             <input
@@ -379,11 +397,11 @@ export default function SerialOrderTeacher() {
               placeholder="Password"
               autoFocus
               className={`w-full px-4 py-3 rounded-lg border bg-zinc-800 text-white outline-none transition-colors
-                ${pwError ? 'border-red-500' : 'border-border focus:border-emerald-400'}`}
+                ${pwError ? 'border-red-500' : 'border-border focus:border-purple-400'}`}
             />
             {pwError && <p className="text-red-400 text-sm text-center">Incorrect password</p>}
             <button type="submit"
-              className="w-full py-3 bg-emerald-400 hover:bg-emerald-300 text-zinc-900 font-bold rounded-lg transition-colors">
+              className="w-full py-3 bg-purple-400 hover:bg-purple-300 text-zinc-900 font-bold rounded-lg transition-colors">
               Enter
             </button>
           </form>
@@ -397,7 +415,7 @@ export default function SerialOrderTeacher() {
       <main className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} className="inline-block mb-4">
-            <RefreshCw className="w-8 h-8 text-emerald-400" />
+            <RefreshCw className="w-8 h-8 text-purple-400" />
           </motion.div>
           <p className="text-muted">Loading data...</p>
         </div>
@@ -444,35 +462,40 @@ export default function SerialOrderTeacher() {
     <main className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <GraduationCap className="w-10 h-10 text-emerald-400" />
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight">Teacher Dashboard</h1>
-              <p className="text-muted mt-1">
-                Serial Position & Temporal Contiguity
-                {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
-              </p>
+        <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <GraduationCap className="w-7 h-7 text-purple-400" />
+              <h1 className="text-2xl font-bold tracking-tight">Teacher Dashboard — Serial Order</h1>
             </div>
+            <p className="text-purple-400 font-medium">
+              Serial Position &amp; Temporal Contiguity
+              {useMock && <span className="text-amber-400 ml-2">(mock data)</span>}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3 flex-wrap ml-auto">
             <button
               onClick={() => setUseMock(v => !v)}
               className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
                 useMock
                   ? 'bg-amber-500/20 border-amber-400 text-amber-400'
-                  : 'border-border text-muted hover:text-emerald-400 hover:border-emerald-400'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
               }`}
             >
               {useMock ? 'Mock Data ON' : 'Mock Data'}
             </button>
-            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-              onClick={fetchData}
-              disabled={useMock}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-400 text-zinc-900 font-semibold rounded-lg hover:bg-emerald-300 transition-colors disabled:opacity-40"
-            >
+            <button onClick={fetchData} disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 disabled:opacity-40">
               <RefreshCw className="w-4 h-4" /> Refresh
-            </motion.button>
+            </button>
+            <button onClick={downloadCsv}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Download className="w-4 h-4" /> Download CSV
+            </button>
+            <button onClick={() => router.push('/')}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
+              <Home className="w-4 h-4" /> Home
+            </button>
           </div>
         </div>
 
@@ -488,7 +511,7 @@ export default function SerialOrderTeacher() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
               <div className="bg-card border border-border rounded-xl p-4 text-center">
                 <p className="text-xs text-gray-400">Participants</p>
-                <p className="text-2xl font-bold text-emerald-400">{summaryStats.nParticipants}</p>
+                <p className="text-2xl font-bold text-purple-400">{summaryStats.nParticipants}</p>
               </div>
               <div className="bg-card border border-border rounded-xl p-4 text-center">
                 <p className="text-xs text-gray-400">Primacy (1-4)</p>
