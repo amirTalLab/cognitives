@@ -4,7 +4,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { motion } from 'framer-motion';
-import { BrainCog, Download, Users, ChevronLeft } from 'lucide-react';
+import { BrainCog, Download, Users, RefreshCw, Home } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -233,14 +233,14 @@ export default function MentalRepTeacher() {
 
   if (!authed) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl shadow-xl p-10 w-full max-w-sm flex flex-col items-center gap-6"
+          className="bg-gray-900 border border-gray-700 rounded-2xl p-10 w-full max-w-sm flex flex-col items-center gap-6"
         >
-          <BrainCog className="w-10 h-10 text-cyan-600" />
+          <BrainCog className="w-10 h-10 text-purple-600" />
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Teacher Dashboard</h1>
-            <p className="text-gray-500 text-sm mt-1">Mental Representation</p>
+            <h1 className="text-2xl font-bold text-white">Teacher Dashboard</h1>
+            <p className="text-gray-400 text-sm mt-1">Mental Representation</p>
           </div>
           <form onSubmit={handleLogin} className="w-full flex flex-col gap-3">
             <input
@@ -249,12 +249,12 @@ export default function MentalRepTeacher() {
               onChange={e => { setPwInput(e.target.value); setPwError(false); }}
               placeholder="Password"
               autoFocus
-              className={`w-full px-4 py-3 rounded-lg border text-gray-900 outline-none transition-colors
-                ${pwError ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-cyan-500'}`}
+              className={`w-full px-4 py-3 rounded-lg border bg-gray-800 text-white outline-none transition-colors
+                ${pwError ? 'border-red-400 bg-red-50' : 'border-gray-600 focus:border-purple-500'}`}
             />
             {pwError && <p className="text-red-500 text-sm text-center">Incorrect password</p>}
             <button type="submit"
-              className="w-full py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg transition-colors">
+              className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors">
               Enter
             </button>
           </form>
@@ -265,8 +265,8 @@ export default function MentalRepTeacher() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 flex items-center justify-center">
-        <div className="text-xl text-gray-600">Loading class data...</div>
+      <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">
+        <div className="text-xl text-gray-400">Loading class data...</div>
       </div>
     );
   }
@@ -324,17 +324,17 @@ export default function MentalRepTeacher() {
 
   if (participants.length === 0) {
     return (
-      <div className={`min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 ${language === 'he' ? 'rtl' : 'ltr'}`}>
+      <div className={`min-h-screen bg-[#0f172a] text-white ${language === 'he' ? 'rtl' : 'ltr'}`}>
         <div className="container mx-auto px-4 py-8 text-center">
-          <BrainCog className="w-16 h-16 text-cyan-600 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t.title}</h1>
-          <p className="text-gray-600 mb-6">{t.noData}</p>
+          <BrainCog className="w-16 h-16 text-purple-600 mx-auto mb-4" />
+          <h1 className="text-3xl font-bold text-white mb-2">{t.title}</h1>
+          <p className="text-gray-400 mb-6">{t.noData}</p>
           <button
             onClick={() => setUseMock((v) => !v)}
             className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
               useMock
-                ? 'bg-amber-100 border-amber-400 text-amber-700'
-                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
             }`}
           >
             {useMock ? 'Mock Data ON' : 'Show Mock Data'}
@@ -350,42 +350,42 @@ export default function MentalRepTeacher() {
   const avgRotationAcc = participants.reduce((sum, p) => sum + p.rotationAccuracy, 0) / participants.length;
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 ${language === 'he' ? 'rtl' : 'ltr'}`}>
+    <div className={`min-h-screen bg-[#0f172a] text-white ${language === 'he' ? 'rtl' : 'ltr'}`}>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <BrainCog className="w-12 h-12 text-cyan-600" />
-            <h1 className="text-4xl font-bold text-gray-900">{t.title}</h1>
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <BrainCog className="w-7 h-7 text-purple-600" />
+              <h1 className="text-2xl font-bold text-white">{t.title} — Mental Representation</h1>
+            </div>
+            <p className="text-purple-600 font-medium">
+              {participants.length} {t.participants.toLowerCase()}
+              {useMock && <span className="text-amber-600 ml-2">(mock data)</span>}
+            </p>
           </div>
-          <p className="text-lg text-cyan-600 font-medium">
-            {t.subtitle}
-            {useMock && <span className="text-amber-600 ml-2">(mock data)</span>}
-          </p>
-        </motion.div>
-
-        {/* Toggles */}
-        <div className="flex justify-between items-center mb-6">
-          <button
-            onClick={() => setUseMock((v) => !v)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-              useMock
-                ? 'bg-amber-100 border-amber-400 text-amber-700'
-                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            {useMock ? 'Mock Data ON' : 'Mock Data'}
-          </button>
-          <button
-            onClick={() => setLanguage(language === 'en' ? 'he' : 'en')}
-            className="px-4 py-2 text-sm font-medium text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded-lg transition-colors"
-          >
-            {t.languageToggle}
-          </button>
+          <div className="flex gap-3 flex-wrap ml-auto">
+            <button onClick={() => setUseMock((v) => !v)}
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                useMock
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'
+              }`}>
+              {useMock ? 'Mock Data ON' : 'Mock Data'}
+            </button>
+            <button onClick={loadAllResults} disabled={useMock}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 border border-gray-600 text-gray-300 hover:bg-gray-700 rounded-lg disabled:opacity-40">
+              <RefreshCw className="w-4 h-4" /> Refresh
+            </button>
+            <button onClick={downloadAllData}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 border border-gray-600 text-gray-300 hover:bg-gray-700 rounded-lg">
+              <Download className="w-4 h-4" /> Download CSV
+            </button>
+            <button onClick={() => router.push('/')}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 border border-gray-600 text-gray-300 hover:bg-gray-700 rounded-lg">
+              <Home className="w-4 h-4" /> Home
+            </button>
+          </div>
         </div>
 
         {/* Summary Stats */}
@@ -395,27 +395,27 @@ export default function MentalRepTeacher() {
           transition={{ delay: 0.1 }}
           className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8"
         >
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-2">
-              <Users className="w-5 h-5 text-cyan-600" />
-              <div className="text-sm text-gray-600">{t.participants}</div>
+              <Users className="w-5 h-5 text-purple-600" />
+              <div className="text-sm text-gray-400">{t.participants}</div>
             </div>
-            <div className="text-3xl font-bold text-cyan-600">{participants.length}</div>
+            <div className="text-3xl font-bold text-purple-600">{participants.length}</div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="text-sm text-gray-600 mb-2">Avg Scanning r</div>
-            <div className="text-3xl font-bold text-cyan-600">{avgScanningCorr.toFixed(3)}</div>
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
+            <div className="text-sm text-gray-400 mb-2">Avg Scanning r</div>
+            <div className="text-3xl font-bold text-purple-600">{avgScanningCorr.toFixed(3)}</div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="text-sm text-gray-600 mb-2">Avg Rotation Accuracy</div>
-            <div className="text-3xl font-bold text-blue-600">{avgRotationAcc.toFixed(1)}%</div>
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
+            <div className="text-sm text-gray-400 mb-2">Avg Rotation Accuracy</div>
+            <div className="text-3xl font-bold text-purple-600">{avgRotationAcc.toFixed(1)}%</div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="text-sm text-gray-600 mb-2">Avg Rotation r</div>
-            <div className="text-3xl font-bold text-blue-600">{avgRotationCorr.toFixed(3)}</div>
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
+            <div className="text-sm text-gray-400 mb-2">Avg Rotation r</div>
+            <div className="text-3xl font-bold text-purple-600">{avgRotationCorr.toFixed(3)}</div>
           </div>
         </motion.div>
 
@@ -426,16 +426,16 @@ export default function MentalRepTeacher() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-white rounded-xl shadow-lg p-6"
+            className="bg-gray-900 border border-gray-700 rounded-2xl p-6"
           >
-            <h2 className="text-xl font-semibold text-cyan-700 mb-4">{t.rtByDistance}</h2>
+            <h2 className="text-xl font-semibold text-purple-700 mb-4">{t.rtByDistance}</h2>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={aggregateScanningData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="distance" label={{ value: 'Distance', position: 'bottom', offset: -5 }} />
                 <YAxis label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft' }} />
                 <Tooltip formatter={(value) => `${Number(value).toFixed(0)}ms`} />
-                <Line type="monotone" dataKey="meanRT" stroke="#0891b2" strokeWidth={2} dot={{ fill: '#0891b2' }} />
+                <Line type="monotone" dataKey="meanRT" stroke="#a78bfa" strokeWidth={2} dot={{ fill: '#a78bfa' }} />
               </LineChart>
             </ResponsiveContainer>
           </motion.div>
@@ -445,16 +445,16 @@ export default function MentalRepTeacher() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-white rounded-xl shadow-lg p-6"
+            className="bg-gray-900 border border-gray-700 rounded-2xl p-6"
           >
-            <h2 className="text-xl font-semibold text-blue-700 mb-4">{t.rtByAngle}</h2>
+            <h2 className="text-xl font-semibold text-purple-700 mb-4">{t.rtByAngle}</h2>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={aggregateRotationData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="angle" label={{ value: 'Rotation (°)', position: 'bottom', offset: -5 }} />
                 <YAxis label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft' }} />
                 <Tooltip formatter={(value) => `${Number(value).toFixed(0)}ms`} />
-                <Line type="monotone" dataKey="meanRT" stroke="#2563eb" strokeWidth={2} dot={{ fill: '#2563eb' }} />
+                <Line type="monotone" dataKey="meanRT" stroke="#a78bfa" strokeWidth={2} dot={{ fill: '#a78bfa' }} />
               </LineChart>
             </ResponsiveContainer>
           </motion.div>
@@ -465,9 +465,9 @@ export default function MentalRepTeacher() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-white rounded-xl shadow-lg p-6 mb-8 overflow-x-auto"
+          className="bg-gray-900 border border-gray-700 rounded-2xl p-6 mb-8 overflow-x-auto"
         >
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Participant Details</h2>
+          <h2 className="text-xl font-semibold text-white mb-4">Participant Details</h2>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b">
@@ -483,7 +483,7 @@ export default function MentalRepTeacher() {
             </thead>
             <tbody>
               {participants.map((p) => (
-                <tr key={p.sessionId} className="border-b hover:bg-gray-50">
+                <tr key={p.sessionId} className="border-b hover:bg-gray-800">
                   <td className="py-2 px-3">{p.participantName}</td>
                   <td className="py-2 px-3">{p.scanningTrials}</td>
                   <td className="py-2 px-3">{p.scanningMeanRT.toFixed(0)}ms</td>
@@ -496,30 +496,6 @@ export default function MentalRepTeacher() {
               ))}
             </tbody>
           </table>
-        </motion.div>
-
-        {/* Action Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="flex flex-wrap gap-4 justify-center"
-        >
-          <button
-            onClick={downloadAllData}
-            className="flex items-center gap-2 px-6 py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors shadow-lg"
-          >
-            <Download className="w-5 h-5" />
-            {t.downloadButton}
-          </button>
-
-          <button
-            onClick={() => router.push('/mentalRep/results')}
-            className="flex items-center gap-2 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-lg"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            {t.backButton}
-          </button>
         </motion.div>
       </div>
     </div>
