@@ -40,6 +40,7 @@ export default function BoubaKikiTeacher() {
   const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [useMock, setUseMock] = useState(false);
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
 
   // ── Password gate ──────────────────────────────────────────────────────────
   const [authed, setAuthed]   = useState(false);
@@ -350,7 +351,15 @@ export default function BoubaKikiTeacher() {
           transition={{ delay: 0.2 }}
           className="bg-gray-900 border border-gray-700 rounded-2xl p-6 mb-8"
         >
-          <h2 className="text-xl font-semibold text-white mb-4">{t.chartTitle1}</h2>
+          <div className="flex items-start justify-between mb-4 gap-4">
+            <h2 className="text-xl font-semibold text-white">{t.chartTitle1}</h2>
+            {!revealed[1] && (
+              <button onClick={() => setRevealed((p) => ({ ...p, 1: true }))}
+                className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                Reveal
+              </button>
+            )}
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={avgChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -358,7 +367,7 @@ export default function BoubaKikiTeacher() {
               <YAxis domain={[0, 100]} tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={(value) => `${Number(value).toFixed(1)}%`} />
               <Legend wrapperStyle={{ color: '#9ca3af' }} />
-              <Bar dataKey="accuracy" fill="#a78bfa" name="Accuracy (%)" radius={[4, 4, 0, 0]} />
+              {revealed[1] && <Bar dataKey="accuracy" fill="#a78bfa" name="Accuracy (%)" radius={[4, 4, 0, 0]} />}
             </BarChart>
           </ResponsiveContainer>
         </motion.div>
@@ -370,7 +379,15 @@ export default function BoubaKikiTeacher() {
           transition={{ delay: 0.3 }}
           className="bg-gray-900 border border-gray-700 rounded-2xl p-6 mb-8"
         >
-          <h2 className="text-xl font-semibold text-white mb-4">{t.chartTitle2}</h2>
+          <div className="flex items-start justify-between mb-4 gap-4">
+            <h2 className="text-xl font-semibold text-white">{t.chartTitle2}</h2>
+            {!revealed[2] && (
+              <button onClick={() => setRevealed((p) => ({ ...p, 2: true }))}
+                className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                Reveal
+              </button>
+            )}
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <ScatterChart>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -378,8 +395,12 @@ export default function BoubaKikiTeacher() {
               <YAxis type="number" domain={[0, 100]} name="Accuracy (%)" tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} />
               <Legend wrapperStyle={{ color: '#9ca3af' }} />
-              <Scatter name="Bouba Accuracy" data={scatterData} fill="#a78bfa" dataKey="boubaAccuracy" />
-              <Scatter name="Kiki Accuracy" data={scatterData} fill="#34d399" dataKey="kikiAccuracy" />
+              {revealed[2] && (
+                <>
+                  <Scatter name="Bouba Accuracy" data={scatterData} fill="#a78bfa" dataKey="boubaAccuracy" />
+                  <Scatter name="Kiki Accuracy" data={scatterData} fill="#34d399" dataKey="kikiAccuracy" />
+                </>
+              )}
             </ScatterChart>
           </ResponsiveContainer>
         </motion.div>

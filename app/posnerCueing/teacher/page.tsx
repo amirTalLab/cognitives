@@ -47,6 +47,7 @@ export default function PosnerTeacherPage() {
   const [exoTimeData, setExoTimeData] = useState<TimePoint[]>([]);
   const [useMock, setUseMock] = useState(false);
   const [rawRows, setRawRows] = useState<PosnerResult[]>([]);
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
@@ -332,7 +333,15 @@ export default function PosnerTeacherPage() {
 
             {/* Chart 1: RT by validity (Valid / Invalid / Exogenous) */}
             <div className="bg-card border border-border rounded-xl p-6 mb-6">
-              <h2 className="text-xl font-bold mb-1">Average RT by Cue Type</h2>
+              <div className="flex items-start justify-between gap-4 mb-1">
+                <h2 className="text-xl font-bold">Average RT by Cue Type</h2>
+                {!revealed[1] && (
+                  <button onClick={() => setRevealed((p) => ({ ...p, 1: true }))}
+                    className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                    Reveal
+                  </button>
+                )}
+              </div>
               <p className="text-sm text-muted mb-4">
                 Exogenous = misleading peripheral rectangle (always wrong side)
               </p>
@@ -348,11 +357,13 @@ export default function PosnerTeacherPage() {
                     contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }}
                     formatter={(v) => [`${v}ms`, 'Avg RT']}
                   />
-                  <Bar dataKey="rt" radius={[4, 4, 0, 0]}>
-                    {rtBarData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
+                  {revealed[1] && (
+                    <Bar dataKey="rt" radius={[4, 4, 0, 0]}>
+                      {rtBarData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -360,7 +371,15 @@ export default function PosnerTeacherPage() {
             {/* Chart 2: Validity effect scatter (individual dots + y=0 line) */}
             {sessionStats.length > 0 && (
               <div className="bg-card border border-border rounded-xl p-6 mb-6">
-                <h2 className="text-xl font-bold mb-1">Validity Effect Distribution</h2>
+                <div className="flex items-start justify-between gap-4 mb-1">
+                  <h2 className="text-xl font-bold">Validity Effect Distribution</h2>
+                  {!revealed[2] && (
+                    <button onClick={() => setRevealed((p) => ({ ...p, 2: true }))}
+                      className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                      Reveal
+                    </button>
+                  )}
+                </div>
                 <p className="text-sm text-muted mb-4">
                   Each dot = one participant (Invalid RT − Valid RT). Dashed line = zero effect.
                 </p>
@@ -387,7 +406,7 @@ export default function PosnerTeacherPage() {
                       formatter={(v, name) => [name === 'x' ? undefined : `${v}ms`, name === 'x' ? '' : 'Effect']}
                       cursor={false}
                     />
-                    <Scatter data={dotData} fill="#fbbf24" opacity={0.85} r={6} />
+                    {revealed[2] && <Scatter data={dotData} fill="#fbbf24" opacity={0.85} r={6} />}
                   </ScatterChart>
                 </ResponsiveContainer>
               </div>
@@ -396,7 +415,15 @@ export default function PosnerTeacherPage() {
             {/* Chart 3: Exo RT across 4 time points */}
             {exoTimeData.some(d => d.rt != null) && (
               <div className="bg-card border border-border rounded-xl p-6">
-                <h2 className="text-xl font-bold mb-1">Exogenous Cue RT Over Time</h2>
+                <div className="flex items-start justify-between gap-4 mb-1">
+                  <h2 className="text-xl font-bold">Exogenous Cue RT Over Time</h2>
+                  {!revealed[3] && (
+                    <button onClick={() => setRevealed((p) => ({ ...p, 3: true }))}
+                      className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                      Reveal
+                    </button>
+                  )}
+                </div>
                 <p className="text-sm text-muted mb-4">
                   Mean RT for misleading-rectangle trials in 4 bins of 5 trials each. Decreasing RT = adaptation to invalid cue.
                 </p>
@@ -416,14 +443,16 @@ export default function PosnerTeacherPage() {
                       contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8 }}
                       formatter={(v) => (v != null ? [`${v}ms`, 'Exo RT'] : ['N/A', 'Exo RT'])}
                     />
-                    <Line
-                      type="monotone"
-                      dataKey="rt"
-                      stroke="#f97316"
-                      strokeWidth={2.5}
-                      dot={{ r: 6, fill: '#f97316' }}
-                      connectNulls
-                    />
+                    {revealed[3] && (
+                      <Line
+                        type="monotone"
+                        dataKey="rt"
+                        stroke="#f97316"
+                        strokeWidth={2.5}
+                        dot={{ r: 6, fill: '#f97316' }}
+                        connectNulls
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>

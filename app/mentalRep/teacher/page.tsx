@@ -42,6 +42,7 @@ export default function MentalRepTeacher() {
   const [aggregateRotationData, setAggregateRotationData] = useState<{ angle: number; meanRT: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [useMock, setUseMock] = useState(false);
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
 
   // ── Password gate ──────────────────────────────────────────────────────────
   const [authed, setAuthed]   = useState(false);
@@ -428,14 +429,22 @@ export default function MentalRepTeacher() {
             transition={{ delay: 0.2 }}
             className="bg-gray-900 border border-gray-700 rounded-2xl p-6"
           >
-            <h2 className="text-xl font-semibold text-purple-700 mb-4">{t.rtByDistance}</h2>
+            <div className="flex items-start justify-between mb-4 gap-4">
+              <h2 className="text-xl font-semibold text-white">{t.rtByDistance}</h2>
+              {!revealed[1] && (
+                <button onClick={() => setRevealed((p) => ({ ...p, 1: true }))}
+                  className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                  Reveal
+                </button>
+              )}
+            </div>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={aggregateScanningData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="distance" label={{ value: 'Distance', position: 'bottom', offset: -5 }} />
-                <YAxis label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft' }} />
-                <Tooltip formatter={(value) => `${Number(value).toFixed(0)}ms`} />
-                <Line type="monotone" dataKey="meanRT" stroke="#a78bfa" strokeWidth={2} dot={{ fill: '#a78bfa' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="distance" tick={{ fill: '#9ca3af', fontSize: 11 }} label={{ value: 'Distance', position: 'bottom', offset: -5, fill: '#9ca3af' }} />
+                <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft', fill: '#9ca3af' }} />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={(value) => `${Number(value).toFixed(0)}ms`} />
+                {revealed[1] && <Line type="monotone" dataKey="meanRT" stroke="#a78bfa" strokeWidth={2} dot={{ fill: '#a78bfa' }} />}
               </LineChart>
             </ResponsiveContainer>
           </motion.div>
@@ -447,14 +456,22 @@ export default function MentalRepTeacher() {
             transition={{ delay: 0.3 }}
             className="bg-gray-900 border border-gray-700 rounded-2xl p-6"
           >
-            <h2 className="text-xl font-semibold text-purple-700 mb-4">{t.rtByAngle}</h2>
+            <div className="flex items-start justify-between mb-4 gap-4">
+              <h2 className="text-xl font-semibold text-white">{t.rtByAngle}</h2>
+              {!revealed[2] && (
+                <button onClick={() => setRevealed((p) => ({ ...p, 2: true }))}
+                  className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                  Reveal
+                </button>
+              )}
+            </div>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={aggregateRotationData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="angle" label={{ value: 'Rotation (°)', position: 'bottom', offset: -5 }} />
-                <YAxis label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft' }} />
-                <Tooltip formatter={(value) => `${Number(value).toFixed(0)}ms`} />
-                <Line type="monotone" dataKey="meanRT" stroke="#a78bfa" strokeWidth={2} dot={{ fill: '#a78bfa' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="angle" tick={{ fill: '#9ca3af', fontSize: 11 }} label={{ value: 'Rotation (°)', position: 'bottom', offset: -5, fill: '#9ca3af' }} />
+                <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} label={{ value: 'RT (ms)', angle: -90, position: 'insideLeft', fill: '#9ca3af' }} />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6 }} formatter={(value) => `${Number(value).toFixed(0)}ms`} />
+                {revealed[2] && <Line type="monotone" dataKey="meanRT" stroke="#a78bfa" strokeWidth={2} dot={{ fill: '#a78bfa' }} />}
               </LineChart>
             </ResponsiveContainer>
           </motion.div>

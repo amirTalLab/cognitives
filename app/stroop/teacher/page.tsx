@@ -42,6 +42,7 @@ export default function TeacherDashboard() {
   const [totalSessions, setTotalSessions] = useState(0);
   const [totalTrials, setTotalTrials] = useState(0);
   const [useMock, setUseMock] = useState(false);
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
 
   // ── Password gate ──────────────────────────────────────────────────────────
   const [authed, setAuthed]   = useState(false);
@@ -321,32 +322,68 @@ export default function TeacherDashboard() {
           <div className="space-y-8">
             {/* Bar Chart with SEM */}
             <div className="bg-card border border-border rounded-xl p-6">
-              <h2 className="text-2xl font-bold mb-2">Reaction Time by Language Group</h2>
+              <div className="flex items-start justify-between mb-2 gap-4">
+                <h2 className="text-2xl font-bold">Reaction Time by Language Group</h2>
+                {!revealed[1] && (
+                  <button onClick={() => setRevealed((p) => ({ ...p, 1: true }))}
+                    className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                    Reveal
+                  </button>
+                )}
+              </div>
               <p className="text-muted mb-6">
                 Mean reaction times with Standard Error of Mean (SEM) error bars.
                 Compares congruent vs incongruent trials across language groups.
               </p>
-              <LanguageGroupBarChart data={aggregateData} />
+              {revealed[1] ? (
+                <LanguageGroupBarChart data={aggregateData} />
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-gray-500 text-sm">Click Reveal to show the chart</div>
+              )}
             </div>
 
             {/* Individual Scatter Plot */}
             <div className="bg-card border border-border rounded-xl p-6">
-              <h2 className="text-2xl font-bold mb-2">Individual Subject Averages</h2>
+              <div className="flex items-start justify-between mb-2 gap-4">
+                <h2 className="text-2xl font-bold">Individual Subject Averages</h2>
+                {!revealed[2] && (
+                  <button onClick={() => setRevealed((p) => ({ ...p, 2: true }))}
+                    className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                    Reveal
+                  </button>
+                )}
+              </div>
               <p className="text-muted mb-6">
                 Each point represents one participant&apos;s average reaction time for congruent vs incongruent trials
                 within each language group.
               </p>
-              <IndividualScatterChart data={subjectData} />
+              {revealed[2] ? (
+                <IndividualScatterChart data={subjectData} />
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-gray-500 text-sm">Click Reveal to show the chart</div>
+              )}
             </div>
 
             {/* Speed-Accuracy Tradeoff */}
             <div className="bg-card border border-border rounded-xl p-6">
-              <h2 className="text-2xl font-bold mb-2">Speed-Accuracy Tradeoff</h2>
+              <div className="flex items-start justify-between mb-2 gap-4">
+                <h2 className="text-2xl font-bold">Speed-Accuracy Tradeoff</h2>
+                {!revealed[3] && (
+                  <button onClick={() => setRevealed((p) => ({ ...p, 3: true }))}
+                    className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                    Reveal
+                  </button>
+                )}
+              </div>
               <p className="text-muted mb-6">
                 Relationship between reaction time and accuracy for each participant across language groups.
                 Points higher and to the left indicate faster and more accurate performance.
               </p>
-              <TeacherSpeedAccuracyChart data={subjectData} />
+              {revealed[3] ? (
+                <TeacherSpeedAccuracyChart data={subjectData} />
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-gray-500 text-sm">Click Reveal to show the chart</div>
+              )}
             </div>
           </div>
         )}

@@ -52,6 +52,7 @@ export default function TeacherPage() {
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
   const [useMock, setUseMock] = useState(false);
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
@@ -230,7 +231,15 @@ export default function TeacherPage() {
 
             {/* ── Chart 1: Recognition & ensemble accuracy by stimulus type ── */}
             <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
-              <h2 className="text-base font-bold mb-1">Overall Accuracy by Stimulus Type</h2>
+              <div className="flex items-start justify-between gap-4 mb-1">
+                <h2 className="text-base font-bold">Overall Accuracy by Stimulus Type</h2>
+                {!revealed[1] && (
+                  <button onClick={() => setRevealed((p) => ({ ...p, 1: true }))}
+                    className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                    Reveal
+                  </button>
+                )}
+              </div>
               <p className="text-xs text-gray-400 mb-4">
                 Both tasks binary, 50% = chance. Mean assessment hit = error ≤ range/4 (circles ≤15 px, lines ≤40 px). Error bars = SEM.
               </p>
@@ -244,12 +253,16 @@ export default function TeacherPage() {
                   <ReferenceLine y={50} stroke="#6b7280" strokeDasharray="6 3"
                     label={{ value: 'Chance (50%)', position: 'right', style: { fontSize: 10, fill: '#6b7280' } }} />
                   <Legend wrapperStyle={{ color: '#9ca3af', fontSize: 12 }} />
-                  <Bar dataKey="recognition" name="Recognition" fill="#f97316" radius={[4, 4, 0, 0]}>
-                    <ErrorBar dataKey="recognitionSEM" width={4} strokeWidth={2} stroke="#c2410c" direction="y" />
-                  </Bar>
-                  <Bar dataKey="ensemble" name="Mean Assessment" fill="#34d399" radius={[4, 4, 0, 0]}>
-                    <ErrorBar dataKey="ensembleSEM" width={4} strokeWidth={2} stroke="#059669" direction="y" />
-                  </Bar>
+                  {revealed[1] && (
+                    <>
+                      <Bar dataKey="recognition" name="Recognition" fill="#f97316" radius={[4, 4, 0, 0]}>
+                        <ErrorBar dataKey="recognitionSEM" width={4} strokeWidth={2} stroke="#c2410c" direction="y" />
+                      </Bar>
+                      <Bar dataKey="ensemble" name="Mean Assessment" fill="#34d399" radius={[4, 4, 0, 0]}>
+                        <ErrorBar dataKey="ensembleSEM" width={4} strokeWidth={2} stroke="#059669" direction="y" />
+                      </Bar>
+                    </>
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -259,7 +272,15 @@ export default function TeacherPage() {
 
               {/* Chart 2: Recognition × set size */}
               <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
-                <h2 className="text-base font-bold mb-4">Recognition Accuracy × Set Size</h2>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <h2 className="text-base font-bold">Recognition Accuracy × Set Size</h2>
+                  {!revealed[2] && (
+                    <button onClick={() => setRevealed((p) => ({ ...p, 2: true }))}
+                      className="flex-shrink-0 px-3 py-1 bg-purple-500 hover:bg-purple-400 text-white text-xs font-semibold rounded-lg transition-colors">
+                      Reveal
+                    </button>
+                  )}
+                </div>
                 <ResponsiveContainer width="100%" height={230}>
                   <LineChart data={data.chart2} margin={{ left: 10, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -270,17 +291,29 @@ export default function TeacherPage() {
                     <Tooltip contentStyle={BG} formatter={pctFmt} />
                     <ReferenceLine y={50} stroke="#6b7280" strokeDasharray="4 3" />
                     <Legend verticalAlign="top" wrapperStyle={{ color: '#9ca3af', fontSize: 11, paddingBottom: 6 }} />
-                    <Line type="monotone" dataKey="circles" name="Circles" stroke="#f97316" strokeWidth={2.5}
-                      dot={{ r: 5, fill: '#f97316' }} connectNulls />
-                    <Line type="monotone" dataKey="lines" name="Lines" stroke="#a78bfa" strokeWidth={2.5}
-                      dot={{ r: 5, fill: '#a78bfa' }} connectNulls />
+                    {revealed[2] && (
+                      <>
+                        <Line type="monotone" dataKey="circles" name="Circles" stroke="#f97316" strokeWidth={2.5}
+                          dot={{ r: 5, fill: '#f97316' }} connectNulls />
+                        <Line type="monotone" dataKey="lines" name="Lines" stroke="#a78bfa" strokeWidth={2.5}
+                          dot={{ r: 5, fill: '#a78bfa' }} connectNulls />
+                      </>
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
 
               {/* Chart 3: Ensemble × set size */}
               <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
-                <h2 className="text-base font-bold mb-4">Mean Assessment Accuracy × Set Size</h2>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <h2 className="text-base font-bold">Mean Assessment Accuracy × Set Size</h2>
+                  {!revealed[3] && (
+                    <button onClick={() => setRevealed((p) => ({ ...p, 3: true }))}
+                      className="flex-shrink-0 px-3 py-1 bg-purple-500 hover:bg-purple-400 text-white text-xs font-semibold rounded-lg transition-colors">
+                      Reveal
+                    </button>
+                  )}
+                </div>
                 <ResponsiveContainer width="100%" height={230}>
                   <LineChart data={data.chart3} margin={{ left: 10, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -290,10 +323,14 @@ export default function TeacherPage() {
                       label={{ value: 'Accuracy (%)', angle: -90, position: 'insideLeft', style: LBL }} />
                     <Tooltip contentStyle={BG} formatter={pctFmt} />
                     <Legend verticalAlign="top" wrapperStyle={{ color: '#9ca3af', fontSize: 11, paddingBottom: 6 }} />
-                    <Line type="monotone" dataKey="circles" name="Circles" stroke="#34d399" strokeWidth={2.5}
-                      dot={{ r: 5, fill: '#34d399' }} connectNulls />
-                    <Line type="monotone" dataKey="lines" name="Lines" stroke="#60a5fa" strokeWidth={2.5}
-                      dot={{ r: 5, fill: '#60a5fa' }} connectNulls />
+                    {revealed[3] && (
+                      <>
+                        <Line type="monotone" dataKey="circles" name="Circles" stroke="#34d399" strokeWidth={2.5}
+                          dot={{ r: 5, fill: '#34d399' }} connectNulls />
+                        <Line type="monotone" dataKey="lines" name="Lines" stroke="#60a5fa" strokeWidth={2.5}
+                          dot={{ r: 5, fill: '#60a5fa' }} connectNulls />
+                      </>
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -301,7 +338,15 @@ export default function TeacherPage() {
 
             {/* ── Chart 4: Recognition × probe type ── */}
             <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
-              <h2 className="text-base font-bold mb-1">Recognition Accuracy × Probe Type</h2>
+              <div className="flex items-start justify-between gap-4 mb-1">
+                <h2 className="text-base font-bold">Recognition Accuracy × Probe Type</h2>
+                {!revealed[4] && (
+                  <button onClick={() => setRevealed((p) => ({ ...p, 4: true }))}
+                    className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                    Reveal
+                  </button>
+                )}
+              </div>
               <p className="text-xs text-gray-400 mb-4">
                 Target = shown item; Foil-mean = exact set mean (not shown); Foil-non-mean = other non-member. 50% = chance.
               </p>
@@ -315,22 +360,34 @@ export default function TeacherPage() {
                   <ReferenceLine y={50} stroke="#6b7280" strokeDasharray="6 3"
                     label={{ value: 'Chance (50%)', position: 'right', style: { fontSize: 10, fill: '#6b7280' } }} />
                   <Legend wrapperStyle={{ color: '#9ca3af', fontSize: 11 }} />
-                  <Bar dataKey="target" name="Target" fill="#34d399" radius={[4, 4, 0, 0]}>
-                    <ErrorBar dataKey="targetSEM" width={4} strokeWidth={2} stroke="#059669" direction="y" />
-                  </Bar>
-                  <Bar dataKey="foil_mean" name="Foil (mean)" fill="#fb923c" radius={[4, 4, 0, 0]}>
-                    <ErrorBar dataKey="foil_meanSEM" width={4} strokeWidth={2} stroke="#c2410c" direction="y" />
-                  </Bar>
-                  <Bar dataKey="foil_nm" name="Foil (non-mean)" fill="#e879f9" radius={[4, 4, 0, 0]}>
-                    <ErrorBar dataKey="foil_nmSEM" width={4} strokeWidth={2} stroke="#a21caf" direction="y" />
-                  </Bar>
+                  {revealed[4] && (
+                    <>
+                      <Bar dataKey="target" name="Target" fill="#34d399" radius={[4, 4, 0, 0]}>
+                        <ErrorBar dataKey="targetSEM" width={4} strokeWidth={2} stroke="#059669" direction="y" />
+                      </Bar>
+                      <Bar dataKey="foil_mean" name="Foil (mean)" fill="#fb923c" radius={[4, 4, 0, 0]}>
+                        <ErrorBar dataKey="foil_meanSEM" width={4} strokeWidth={2} stroke="#c2410c" direction="y" />
+                      </Bar>
+                      <Bar dataKey="foil_nm" name="Foil (non-mean)" fill="#e879f9" radius={[4, 4, 0, 0]}>
+                        <ErrorBar dataKey="foil_nmSEM" width={4} strokeWidth={2} stroke="#a21caf" direction="y" />
+                      </Bar>
+                    </>
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
             {/* ── Chart 5: Scatter per participant ── */}
             <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
-              <h2 className="text-base font-bold mb-1">Participant Scatter: Mean Assessment vs Recognition Accuracy</h2>
+              <div className="flex items-start justify-between gap-4 mb-1">
+                <h2 className="text-base font-bold">Participant Scatter: Mean Assessment vs Recognition Accuracy</h2>
+                {!revealed[5] && (
+                  <button onClick={() => setRevealed((p) => ({ ...p, 5: true }))}
+                    className="flex-shrink-0 px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-semibold rounded-lg transition-colors">
+                    Reveal
+                  </button>
+                )}
+              </div>
               <p className="text-xs text-gray-400 mb-4">
                 Each dot = one participant. Diagonal = equal performance on both tasks.
               </p>
@@ -361,9 +418,11 @@ export default function TeacherPage() {
                       legendType="none"
                       isAnimationActive={false}
                     />
-                    <Scatter data={data.chart5} shape={<Dot />}>
-                      {data.chart5.map((_, i) => <Cell key={i} fill="#f97316" />)}
-                    </Scatter>
+                    {revealed[5] && (
+                      <Scatter data={data.chart5} shape={<Dot />}>
+                        {data.chart5.map((_, i) => <Cell key={i} fill="#f97316" />)}
+                      </Scatter>
+                    )}
                   </ScatterChart>
                 </ResponsiveContainer>
               )}
