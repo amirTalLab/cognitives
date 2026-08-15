@@ -3,11 +3,14 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Beaker, Brain, BrainCog, BarChart2, FlaskConical, Shapes, Target, Search, Users, Type, Lock, LockOpen, Timer, GitFork, List, BookOpen, Lightbulb, Sparkles, Eye } from 'lucide-react';
+import { Beaker, Brain, BrainCog, BarChart2, FlaskConical, Shapes, Target, Search, Users, Type, Lock, LockOpen, Timer, GitFork, List, BookOpen, Lightbulb, Sparkles, Eye, FilePlus2, ArrowRight } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { verifyPassword } from '@/lib/auth';
 
-type Exp = { id: string; title: string; titleHe: string; icon: React.ElementType; color: string };
+// `href` is set for experiments built as definitions, which all live under /run/{slug}
+// rather than having a route of their own. Without it a generated experiment gets a card
+// that 404s.
+type Exp = { id: string; title: string; titleHe: string; icon: React.ElementType; color: string; href?: string };
 
 const EXPERIMENTS: Exp[] = [
   { id: 'summaryStats',    title: 'Ensemble Perception',     titleHe: 'תפיסת מכלול',        icon: BarChart2, color: 'text-orange-400'  },
@@ -26,12 +29,14 @@ const EXPERIMENTS: Exp[] = [
   { id: 'logics',          title: 'Reasoning Biases',       titleHe: 'הטיות בחשיבה',         icon: Lightbulb, color: 'text-yellow-400'  },
   { id: 'creativity',      title: 'Creativity Battery',     titleHe: 'סוללת יצירתיות',       icon: Sparkles,  color: 'text-emerald-400' },
   { id: 'bRMS',             title: 'bRMS Emotion',           titleHe: 'bRMS רגש',              icon: Eye,       color: 'text-purple-400'  },
+  { id: 'boubaKikiDemo', title: 'Bouba / Kiki shape–sound mapping', titleHe: 'אפקט בובה-קיקי', icon: Shapes, color: 'text-purple-400' },
+  { id: 'flankerLetterTask', title: 'Flanker Letter Identification: Effects of Noise Letters', titleHe: 'משימת זיהוי אות מוקפת ברעש (אפקט הפלנקר)', icon: Shapes, color: 'text-purple-400', href: '/run/flankerLetterTask' },
 ];
 
 const CATEGORIES = [
   { name: 'PERCEPTION',        nameHe: 'תפיסה',         ids: ['summaryStats', 'CompositeFace', 'wordSuperiority'] },
-  { name: 'ATTENTION',         nameHe: 'קשב',           ids: ['visualSearch', 'posnerCueing'] },
-  { name: 'LANGUAGE',          nameHe: 'שפה',           ids: ['bouba-kiki'] },
+  { name: 'ATTENTION',         nameHe: 'קשב',           ids: ['visualSearch', 'posnerCueing', 'flankerLetterTask'] },
+  { name: 'LANGUAGE',          nameHe: 'שפה',           ids: ['bouba-kiki', 'boubaKikiDemo'] },
   { name: 'EXECUTIVE CONTROL', nameHe: 'בקרה ניהולית', ids: ['stroop'] },
   { name: 'IMAGINATION',       nameHe: 'דמיון',         ids: ['mentalRep'] },
   { name: 'MEMORY',            nameHe: 'זיכרון',        ids: ['drm', 'serialOrder', 'testingEffect'] },
@@ -195,7 +200,7 @@ export default function HomePage() {
 
                       {/* Navigate to experiment */}
                       <button
-                        onClick={() => router.push(`/${id}`)}
+                        onClick={() => router.push(exp.href ?? `/${id}`)}
                         className="flex flex-col items-center gap-2 w-full"
                       >
                         <exp.icon className={`w-8 h-8 ${exp.color}`} />
@@ -216,6 +221,24 @@ export default function HomePage() {
             </div>
           ))}
         </div>
+
+        {/* Create New Project — the paper → experiment pipeline */}
+        <motion.button
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          onClick={() => router.push('/create')}
+          className="mt-10 w-full flex items-center gap-4 text-left bg-card border border-border hover:border-purple-400/50 rounded-xl px-5 py-5 transition-colors"
+        >
+          <FilePlus2 className="w-8 h-8 text-purple-400 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold">Create New Project</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Upload a paper → pick an experiment from it → edit the spec → generate the code
+            </p>
+            <p className="text-xs text-gray-600 mt-0.5" dir="rtl">יצירת ניסוי חדש ממאמר</p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-gray-600 flex-shrink-0" />
+        </motion.button>
       </motion.div>
     </main>
   );
