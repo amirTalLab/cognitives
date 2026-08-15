@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "slug": "simonTask",
+  "title": "Simon Effect",
+  "titleHe": "אפקט סיימון",
+  "category": "EXECUTIVE CONTROL",
+  "instructions": {
+    "he": "לחצו שמאל עבור עיגול כחול ולחצו ימין עבור עיגול אדום. התעלמו מהצד שבו העיגול מופיע.",
+    "en": "Press left for a blue circle and right for a red circle. Ignore which side it appears on."
+  },
+  "factors": [
+    { "name": "colour", "levels": ["blue", "red"] },
+    { "name": "stimulusSide", "levels": ["left", "right"] },
+    {
+      "name": "congruency",
+      "derivedFrom": ["colour", "stimulusSide"],
+      "mapping": {
+        "blue|left": "congruent",
+        "blue|right": "incongruent",
+        "red|left": "incongruent",
+        "red|right": "congruent"
+      }
+    }
+  ],
+  "repetitions": 10,
+  "practice": { "count": 8, "feedback": true },
+  "trial": {
+    "phases": [
+      { "name": "fixation", "display": { "kind": "fixation" }, "durationMs": 500 },
+      {
+        "name": "stimulus",
+        "awaitsResponse": true,
+        "startsClock": true,
+        "display": {
+          "kind": "positioned",
+          "position": "{stimulusSide}",
+          "item": { "kind": "shape", "shape": "circle", "color": "{colour}", "size": 80 }
+        }
+      }
+    ],
+    "response": {
+      "kind": "choice",
+      "layout": "row",
+      "options": [
+        { "value": "left", "label": "Left", "labelHe": "שמאל" },
+        { "value": "right", "label": "Right", "labelHe": "ימין" }
+      ]
+    },
+    "correct": { "kind": "mapping", "factor": "colour", "expect": { "blue": "left", "red": "right" } },
+    "itiMs": 400
+  },
+  "store": ["colour", "stimulusSide", "congruency"],
+  "dashboard": {
+    "charts": [
+      { "title": "RT by congruency", "kind": "bar", "groupBy": "congruency", "measure": "meanRt", "yLabel": "RT (ms)", "errorBars": true },
+      { "title": "Accuracy by congruency", "kind": "bar", "groupBy": "congruency", "measure": "accuracy", "yLabel": "Accuracy (%)" }
+    ]
+  },
+  "mock": {
+    "participants": 24,
+    "baseRtMs": 420,
+    "baseAccuracy": 0.96,
+    "effects": [
+      { "factor": "congruency", "level": "incongruent", "rtDeltaMs": 35, "accuracyDelta": -0.04 }
+    ]
+  }
+}

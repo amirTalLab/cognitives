@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "slug": "faceInversionTest",
+  "title": "Face Inversion",
+  "titleHe": "אפקט היפוך הפנים",
+  "category": "PERCEPTION",
+  "instructions": { "he": "האם שתי הפנים זהות?", "en": "Are the two faces the same person?" },
+  "assets": { "base": "/faces/", "files": ["c2_1_1.jpg", "c2_1_10.jpg", "c2_1_11.jpg"] },
+  "pools": {
+    "faces": [
+      { "file": "c2_1_1.jpg" },
+      { "file": "c2_1_10.jpg" },
+      { "file": "c2_1_11.jpg" }
+    ]
+  },
+  "factors": [
+    { "name": "face", "from": "faces" },
+    { "name": "orientation", "levels": ["upright", "inverted"] },
+    { "name": "rotation", "derivedFrom": ["orientation"], "mapping": { "upright": 0, "inverted": 180 } }
+  ],
+  "repetitions": 2,
+  "trial": {
+    "phases": [
+      { "name": "fixation", "display": { "kind": "fixation" }, "durationMs": 400 },
+      { "name": "stimulus", "awaitsResponse": true, "startsClock": true,
+        "display": { "kind": "image", "src": "{face.file}", "size": 200, "rotation": "{rotation}" } }
+    ],
+    "response": { "kind": "choice", "layout": "row", "options": [
+      { "value": "same", "label": "Same", "labelHe": "זהה" },
+      { "value": "diff", "label": "Different", "labelHe": "שונה" }
+    ] },
+    "correct": { "kind": "none" }
+  },
+  "store": ["face.file", "orientation"],
+  "dashboard": { "charts": [
+    { "title": "RT by orientation", "kind": "bar", "groupBy": "orientation", "measure": "meanRt", "yLabel": "RT (ms)" }
+  ] }
+}

@@ -60,13 +60,56 @@ so this filter is what makes the output trustworthy.
 - ✅ **Recreatable** — a browser task runnable on the **general student population**:
   forced-choice, RT, accuracy, ratings/estimates, with stimuli we can render (text,
   shapes, images, audio).
-- ⚠️ **Recreatable with caveats** — needs **assets we must source/generate** (specific
-  images, audio, faces) or is unusually long/complex. Note what's needed.
+- ⚠️ **Recreatable with caveats** — needs **image files the user must supply** (specific
+  photographs, figures, faces), or is unusually long/complex. Name exactly which files.
+  This is a caveat, not a blocker: images can be uploaded and the experiment then works
+  normally. Audio is a different matter — nothing can play it yet, so that is a ❌.
 - ❌ **Not recreatable** — requires a **special population** (synaesthetes, clinical
   patients, experts), **apparatus** (fMRI, EEG, eye-tracker, physical rig), physical
   materials, or is a theoretical claim with **no task**. State the blocker.
 
 Always give the one-line reason for the verdict.
+
+---
+
+## Step 3b — Simplify before refusing
+
+Most papers do something the platform cannot do exactly. Almost none of them need it done
+exactly for a classroom demonstration to work. **A ❌ is correct only when no honest
+simplification survives** — so run through this table before assigning one.
+
+| The paper does | Build instead | Keeps the effect? |
+|---|---|---|
+| Adaptive staircase / QUEST | 3–5 fixed difficulty levels spanning the same range | Yes for the psychometric shape. **No** if the paper's claim is about threshold precision |
+| Span that grows until failure | Fixed set of lengths, several trials at each | Yes for the capacity curve. **No** if the DV *is* "the span" |
+| 300+ trials | 40–80, every cell still balanced | Yes, nearly always |
+| Multi-session with a delay | One session with a filled interval | Direction usually survives. **No** for consolidation or sleep claims |
+| Free recall scored against a list | Recognition (old/new) over the same items | Yes for false-memory and depth-of-processing direction. Changes the DV — say so |
+| A specific unavailable photo set | Faces already on this site, or shapes | Yes for inversion and composite effects. **No** when the identity of the images *is* the manipulation |
+| An auditory cue with no other role | The same cue presented visually | Sometimes. **No** for anything about auditory processing |
+| Continuous mouse trajectory | Discrete choice plus RT | Loses the process measure, usually keeps the effect |
+| Eye-tracking DV | — | Normally a genuine ❌ |
+
+### When NOT to simplify
+
+If the simplification removes the thing the paper is *about*, refuse instead. A mental
+rotation task with circles is not a mental rotation task; a Stroop task without colour
+words is not Stroop. The test is: **would the paper's own result still be a prediction?**
+If not, that is a ❌ with a clear reason, and inventing a lookalike is worse than refusing.
+
+### Record every one
+
+Anything simplified goes into the spec's `simplifications` as `what` + `why`, and is shown
+to the lecturer before generation. A psychologist can judge whether three fixed levels
+still demonstrate the effect. The system cannot — which is exactly why it must never make
+that call silently.
+
+### Currently no honest simplification
+
+Do not stretch to cover these; a between-subjects manipulation run within-subject on a
+one-shot deception (framing, anchoring, false-memory suggestion) simply does not work,
+because the participant has seen the trick by trial two. Also genuinely out of reach:
+audio processing, motion, and anything needing a special population or apparatus.
 
 ---
 
@@ -105,11 +148,26 @@ get a confirmation before generating.
 
 ---
 
-## Step 6 — Hand off to code generation
+## Step 6 — Hand off to the build
 
-Once the spec is confirmed, invoke the **`new-cognitive-experiment`** skill with it.
-For the first pass, generate the **experiment `page.tsx`** (the core trial loop) to
-validate the flow end-to-end, then expand to landing / practice / thanks / teacher.
+Once the spec is confirmed, hand it to one of two skills. **Default to the first.**
+
+**`experiment-definition`** — writes the experiment as validated JSON run by the shared
+runtime. No pages, no build, no deploy: it previews the moment it is published, and the
+lecturer can edit it afterwards. Almost every classic paradigm fits, and the eleven worked
+examples in `lib/experiment-runtime/` show which.
+
+**`new-cognitive-experiment`** — generates real Next.js pages. Reaches anything, but is
+slower, needs review and a deploy, and is fixed once written. Use it only when the design
+needs something the definition schema cannot express: trial history (the next trial
+depending on preceding ones), adaptive difficulty, a withheld response (go/no-go), block
+structure, audio, or a sequence within a trial (RSVP). The authoritative list is the
+"Not yet expressible" section at the bottom of `lib/experiment-runtime/schema.ts`.
+
+When the design is close to the boundary, check whether a stated simplification saves it —
+three fixed difficulty levels instead of a staircase usually still demonstrates the effect.
+Put the departure in the spec so the user can judge it, rather than silently taking the
+slower path.
 
 ---
 

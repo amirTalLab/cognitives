@@ -1,0 +1,6 @@
+# Drop source PDFs here.
+#
+# They are inputs to the pipeline, not part of the site, and they are usually copyrighted —
+# so the folder is tracked and its contents are not.
+*
+!.gitignore
