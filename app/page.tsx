@@ -183,6 +183,19 @@ export default function HomePage() {
                       className={`relative flex flex-col items-center gap-2 bg-card border rounded-xl px-4 py-4 w-36 transition-all
                         ${locked ? 'border-gray-700/60 opacity-60' : 'border-border hover:border-emerald-400/40'}`}
                     >
+                      {/* Teacher dashboard — top-left, mirroring the lock on the right.
+                          The dashboard for an experiment always sits directly under it,
+                          so this is the card's link with /teacher appended. Not blocked
+                          when the experiment is locked: locking stops students, and the
+                          lecturer still needs to read the results. */}
+                      <button
+                        onClick={() => router.push(`${exp.href ?? `/${id}`}/teacher`)}
+                        title={`Teacher dashboard — ${exp.title}`}
+                        className="absolute top-1.5 left-1.5 p-1 rounded hover:bg-gray-700/60 transition-colors"
+                      >
+                        <BarChart2 className="w-3 h-3 text-gray-600 hover:text-purple-400" />
+                      </button>
+
                       {/* Lock toggle — top-right corner */}
                       <button
                         onClick={() => toggleLock(id)}

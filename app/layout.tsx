@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
+import { TeacherQr } from '@/components/TeacherQr';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -28,6 +29,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background text-foreground`}
       >
         {children}
+        {/* Renders only on /…/teacher routes, so every dashboard gets it — including ones
+            that do not exist yet — without seventeen near-identical edits. */}
+        <TeacherQr />
       </body>
     </html>
   );
