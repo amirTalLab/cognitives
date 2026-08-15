@@ -6,6 +6,8 @@ const EXPERIMENT_SLUGS = new Set([
   'srt', 'twoStepTask', 'serialOrder', 'testingEffect', 'logics',
   'creativity',
   'bRMS',
+  'boubaKikiDemo',
+  'flankerLetterTask',
 ]);
 
 // Lock state changes at most a few times per semester, but without caching we
@@ -19,13 +21,19 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const segments = pathname.split('/').filter(Boolean);
 
+  // Definition-based experiments serve from /run/{slug}, so the slug is the second
+  // segment there. Without this, locking silently does nothing for every generated
+  // experiment — the lock toggle would appear to work and change nothing.
+  const isRun = segments[0] === 'run';
+  const rest = isRun ? segments.slice(1) : segments;
+
   // Must start with a known experiment slug
-  if (segments.length === 0 || !EXPERIMENT_SLUGS.has(segments[0])) {
+  if (rest.length === 0 || !EXPERIMENT_SLUGS.has(rest[0])) {
     return NextResponse.next();
   }
 
   // Teacher pages are never blocked — teacher should always have access
-  if (segments[segments.length - 1] === 'teacher') {
+  if (rest[rest.length - 1] === 'teacher') {
     return NextResponse.next();
   }
 
@@ -38,7 +46,7 @@ export async function middleware(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseKey) return NextResponse.next();
 
-  const slug = segments[0];
+  const slug = rest[0];
 
   try {
     const cached = lockCache.get(slug);
@@ -82,5 +90,7 @@ export const config = {
     '/logics/:path*',
     '/creativity/:path*',
     '/bRMS/:path*',
+    '/boubaKikiDemo/:path*',
+    '/flankerLetterTask/:path*',
   ],
 };
