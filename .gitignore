@@ -44,3 +44,6 @@ next-env.d.ts
 # playwright output
 /test-results/
 /playwright-report/
+
+# Data exports — contain participant names, so they stay off GitHub.
+/exports/
