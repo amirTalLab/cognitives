@@ -7,7 +7,7 @@
 // is what makes that swap a single-file change instead of an 18-file change.
 
 // SHA-256 hash of the shared access password (the plaintext is never stored in source).
-const PW_HASH = '5f63c8759a4968d6e814db98e85f7658554882b44213d85f3a3b15480f47e69f';
+const PW_HASH = 'b98872f6e170a5aa3faba5e6d154a16629c20092ae36f3f59e4da043e0a8f061';
 
 async function sha256(str: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
