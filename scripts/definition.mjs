@@ -351,33 +351,53 @@ async function unpublish(slug) {
  * tables, and only the new pipeline quietly has nowhere to write. Worse, the files abort
  * on the first "already exists", so a half-run leaves some tables and not others.
  */
+/** Every table the site writes to. Absent means that experiment silently collects nothing. */
+const EXPECTED_TABLES = [
+  'experiment_locks',
+  'stroop_results', 'drm_results', 'drm_recall_results', 'bouba_kiki_results',
+  'bouba_kiki_demo_results', 'mental_rep_results', 'summary_stats_results',
+  'posner_results', 'visual_search_results', 'composite_face_results',
+  'word_superiority_results', 'srt_results', 'srt_generation', 'two_step_results',
+  'serial_order_study', 'serial_order_recall', 'serial_order_distractor',
+  'testing_effect_results', 'logics_results',
+  'creativity_aut_results', 'creativity_circles_results', 'creativity_rat_results',
+  'brms_emotion_results',
+  'experiment_definitions', 'experiment_results',
+];
+
 async function doctor() {
   const { url, key } = supabase();
-  const headers = { apikey: key, Authorization: `Bearer ${key}` };
-  const results = [];
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, Prefer: 'count=exact', Range: '0-0' };
 
-  const checkTable = async (table, sql) => {
+  say(`\n  ${c.dim(url)}\n`);
+
+  const missing = [];
+  let rows = 0;
+
+  for (const table of EXPECTED_TABLES) {
     const res = await fetch(`${url}/rest/v1/${table}?select=*&limit=1`, { headers });
-    results.push({ what: table, ok: res.ok, sql });
-  };
-
-  await checkTable('experiment_definitions', 'experiment-definitions.sql');
-  await checkTable('experiment_results', 'experiment-results.sql');
-
-  const bucket = await fetch(`${url}/storage/v1/bucket/${BUCKET}`, { headers });
-  results.push({ what: `storage bucket "${BUCKET}"`, ok: bucket.ok, sql: 'experiment-assets.sql' });
-
-  say('');
-  for (const r of results) {
-    say(`  ${r.ok ? c.green('✓') : c.red('✗')} ${r.what.padEnd(28)} ${r.ok ? '' : c.dim(`run supabase/schemas/${r.sql}`)}`);
+    if (!res.ok) { missing.push(table); continue; }
+    const n = Number((res.headers.get('content-range') ?? '/0').split('/')[1]) || 0;
+    rows += n;
+    say(`  ${c.green('✓')} ${table.padEnd(30)} ${c.dim(`${n} rows`)}`);
   }
 
-  const missing = results.filter(r => !r.ok);
-  say(missing.length
-    ? `\n  ${c.red(`${missing.length} missing.`)} Paste each file above into the Supabase SQL editor and run it.\n  They are safe to re-run.\n`
-    : `\n  ${c.green('Everything is set up.')}\n`);
+  const bucket = await fetch(`${url}/storage/v1/bucket/${BUCKET}`, { headers });
+  if (bucket.ok) say(`  ${c.green('✓')} ${`storage: ${BUCKET}`.padEnd(30)}`);
+  else missing.push(`storage bucket "${BUCKET}"`);
 
-  if (missing.length) process.exitCode = 1;
+  for (const m of missing) say(`  ${c.red('✗')} ${m}`);
+
+  if (missing.length === 0) {
+    say(`\n  ${c.green('Everything is set up.')} ${c.dim(`${rows} rows across ${EXPECTED_TABLES.length} tables.`)}\n`);
+    return;
+  }
+
+  // One file rather than a list of them: on a project missing most of the schema, running
+  // twenty-four files in the right order by hand is where mistakes come from.
+  say(`\n  ${c.red(`${missing.length} missing.`)} Run ${c.bold('supabase/schemas/00-fresh-project.sql')} in the`);
+  say('  Supabase SQL editor — it creates everything, and is safe to run again.\n');
+  process.exitCode = 1;
 }
 
 // ── list ─────────────────────────────────────────────────────────────────────
