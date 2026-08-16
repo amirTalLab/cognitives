@@ -382,8 +382,14 @@ async function doctor() {
     say(`  ${c.green('✓')} ${table.padEnd(30)} ${c.dim(`${n} rows`)}`);
   }
 
-  const bucket = await fetch(`${url}/storage/v1/bucket/${BUCKET}`, { headers });
-  if (bucket.ok) say(`  ${c.green('✓')} ${`storage: ${BUCKET}`.padEnd(30)}`);
+  // Probing for an OBJECT, not for the bucket. Reading bucket metadata is an admin
+  // operation, so /storage/v1/bucket/<id> answers "Bucket not found" to the anon key
+  // whether or not the bucket is there — which is a check that can only ever fail.
+  // Asking for a file that does not exist distinguishes the two: NoSuchKey means the
+  // bucket was found and the file was not.
+  const probe = await fetch(`${url}/storage/v1/object/public/${BUCKET}/__doctor_probe__`);
+  const exists = probe.ok || !/NoSuchBucket/.test(await probe.text());
+  if (exists) say(`  ${c.green('✓')} ${`storage: ${BUCKET}`.padEnd(30)}`);
   else missing.push(`storage bucket "${BUCKET}"`);
 
   for (const m of missing) say(`  ${c.red('✗')} ${m}`);
