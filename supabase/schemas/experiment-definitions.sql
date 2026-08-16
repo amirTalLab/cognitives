@@ -25,6 +25,9 @@ ALTER TABLE experiment_definitions ENABLE ROW LEVEL SECURITY;
 -- Read by anyone (the runtime needs it to run an experiment), written through the same
 -- anon key as the rest of the site. When accounts arrive, the write policy narrows to the
 -- owning lecturer and an owner_id column joins this table.
+DROP POLICY IF EXISTS "allow select" ON experiment_definitions;
 CREATE POLICY "allow select" ON experiment_definitions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "allow insert" ON experiment_definitions;
 CREATE POLICY "allow insert" ON experiment_definitions FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "allow update" ON experiment_definitions;
 CREATE POLICY "allow update" ON experiment_definitions FOR UPDATE USING (true);

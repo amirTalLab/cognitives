@@ -20,7 +20,8 @@
     "exp:assets": "npm run exp --silent -- assets",
     "exp:publish": "npm run exp --silent -- publish",
     "exp:unpublish": "npm run exp --silent -- unpublish",
-    "exp:list": "npm run exp --silent -- list"
+    "exp:list": "npm run exp --silent -- list",
+    "exp:doctor": "npm run exp --silent -- doctor"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

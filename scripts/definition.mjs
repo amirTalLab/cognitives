@@ -20,6 +20,7 @@
 //   npm run exp:check   -- experiments/<slug>.json
 //   npm run exp:publish -- experiments/<slug>.json
 //   npm run exp:list
+//   npm run exp:doctor
 //   npm run exp:unpublish -- <slug>
 
 import { registerHooks } from 'node:module';
@@ -340,6 +341,45 @@ async function unpublish(slug) {
   say(`\n${c.green('✓')} /run/${slug} no longer resolves. The definition is kept — publish again to restore it.\n`);
 }
 
+// ── doctor ───────────────────────────────────────────────────────────────────
+
+/**
+ * Whether the database is set up.
+ *
+ * Three SQL files have to be run once by hand, and there is no signal that they have not
+ * been: the site keeps working, because the sixteen original experiments have their own
+ * tables, and only the new pipeline quietly has nowhere to write. Worse, the files abort
+ * on the first "already exists", so a half-run leaves some tables and not others.
+ */
+async function doctor() {
+  const { url, key } = supabase();
+  const headers = { apikey: key, Authorization: `Bearer ${key}` };
+  const results = [];
+
+  const checkTable = async (table, sql) => {
+    const res = await fetch(`${url}/rest/v1/${table}?select=*&limit=1`, { headers });
+    results.push({ what: table, ok: res.ok, sql });
+  };
+
+  await checkTable('experiment_definitions', 'experiment-definitions.sql');
+  await checkTable('experiment_results', 'experiment-results.sql');
+
+  const bucket = await fetch(`${url}/storage/v1/bucket/${BUCKET}`, { headers });
+  results.push({ what: `storage bucket "${BUCKET}"`, ok: bucket.ok, sql: 'experiment-assets.sql' });
+
+  say('');
+  for (const r of results) {
+    say(`  ${r.ok ? c.green('✓') : c.red('✗')} ${r.what.padEnd(28)} ${r.ok ? '' : c.dim(`run supabase/schemas/${r.sql}`)}`);
+  }
+
+  const missing = results.filter(r => !r.ok);
+  say(missing.length
+    ? `\n  ${c.red(`${missing.length} missing.`)} Paste each file above into the Supabase SQL editor and run it.\n  They are safe to re-run.\n`
+    : `\n  ${c.green('Everything is set up.')}\n`);
+
+  if (missing.length) process.exitCode = 1;
+}
+
 // ── list ─────────────────────────────────────────────────────────────────────
 
 async function list() {
@@ -372,6 +412,7 @@ const USAGE = `
     npm run exp:assets    -- experiments/<slug>.json ./imgs  upload stimulus images, record them
     npm run exp:publish   -- experiments/<slug>.json         check, then make it live at /run/<slug>
     npm run exp:list                                         what is published
+    npm run exp:doctor                                       is the database set up?
     npm run exp:unpublish -- <slug>                          take one down
 `;
 
@@ -382,6 +423,7 @@ try {
     case 'publish':   await publish(arg); break;
     case 'unpublish': await unpublish(arg); break;
     case 'list':      await list(); break;
+    case 'doctor':    await doctor(); break;
     default:
       say(USAGE);
       // An unrecognised command is a mistake worth failing on; no command at all is

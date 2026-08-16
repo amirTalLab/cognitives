@@ -36,5 +36,7 @@ ALTER TABLE experiment_results ENABLE ROW LEVEL SECURITY;
 -- Matches the rest of the site: participants insert, teachers read. Both go through the
 -- public anon key, so this is a UI-level boundary rather than a security one — the same
 -- interim position as every other table here, to be replaced by real auth alongside them.
+DROP POLICY IF EXISTS "allow insert" ON experiment_results;
 CREATE POLICY "allow insert" ON experiment_results FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "allow select" ON experiment_results;
 CREATE POLICY "allow select" ON experiment_results FOR SELECT USING (true);

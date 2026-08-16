@@ -16,11 +16,14 @@ ON CONFLICT (id) DO NOTHING;
 -- Written through the same anon key as everything else. When accounts arrive, the write
 -- policies narrow to the folder named after an experiment the lecturer owns — the paths
 -- are already laid out as <slug>/<filename> for exactly that.
+DROP POLICY IF EXISTS "read experiment assets" ON storage.objects;
 CREATE POLICY "read experiment assets" ON storage.objects
   FOR SELECT USING (bucket_id = 'experiment-assets');
 
+DROP POLICY IF EXISTS "upload experiment assets" ON storage.objects;
 CREATE POLICY "upload experiment assets" ON storage.objects
   FOR INSERT WITH CHECK (bucket_id = 'experiment-assets');
 
+DROP POLICY IF EXISTS "replace experiment assets" ON storage.objects;
 CREATE POLICY "replace experiment assets" ON storage.objects
   FOR UPDATE USING (bucket_id = 'experiment-assets');
