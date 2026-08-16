@@ -9,7 +9,10 @@ import { MOCK_DEFINITION, mockDelay, isMockMode } from '@/lib/create-project/fix
 import { errorResponse } from '../_shared';
 
 export const runtime = 'nodejs';
-export const maxDuration = 600;
+// 300s is the ceiling on Vercel's lower plans; a higher value fails the deploy. The
+// definition path finishes in 60-90s even with one repair round, so this is ample — the
+// number was never a real budget, and a build error is a worse failure than a rare timeout.
+export const maxDuration = 300;
 
 const SCHEMA_PATH = 'lib/experiment-runtime/schema.ts';
 /** One retry. A second failure usually means the design does not fit, not a slip. */

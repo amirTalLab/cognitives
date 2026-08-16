@@ -8,7 +8,7 @@ import { MOCK_GENERATION, mockDelay, isMockMode } from '@/lib/create-project/fix
 import { errorResponse } from '../_shared';
 
 export const runtime = 'nodejs';
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 /** Renders the confirmed spec as the prompt text for code generation. */
 function specToPrompt(spec: Spec): string {

@@ -8,7 +8,7 @@ import { mockChatReply, mockDelay, isMockMode } from '@/lib/create-project/fixtu
 import { errorResponse } from '../_shared';
 
 export const runtime = 'nodejs';
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 /**
  * Stage 4: back-and-forth revision of the generated experiment.
