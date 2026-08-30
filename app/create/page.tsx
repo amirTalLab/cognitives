@@ -156,7 +156,11 @@ export default function CreateProjectPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (sessionStorage.getItem('ss_home_authed') === '1') {
+    // Both keys are required, not just the session flag: the metered endpoints are gated on
+    // the server, and the password itself is what authorises them. A session that was
+    // unlocked elsewhere (the homepage, or before this gate existed) has the flag but not
+    // the password, and would hit 401 on every call with no way to recover — so ask again.
+    if (sessionStorage.getItem('ss_home_authed') === '1' && sessionStorage.getItem('ss_create_key')) {
       setAuthed(true);
       grantTeacherAccess();
     }

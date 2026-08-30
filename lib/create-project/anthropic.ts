@@ -101,6 +101,12 @@ export async function callClaude(opts: {
         'content-type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': API_VERSION,
+        // An identity-linked ("personal") key belongs to a user rather than a workspace, so
+        // the API cannot tell which workspace to bill and rejects the call without this.
+        // Workspace-scoped keys carry it implicitly and need nothing here.
+        ...(process.env.ANTHROPIC_WORKSPACE_ID
+          ? { 'anthropic-workspace-id': process.env.ANTHROPIC_WORKSPACE_ID }
+          : {}),
       },
       body,
     });
