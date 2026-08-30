@@ -52,6 +52,8 @@ export function Runner({ definition, language, practice = false, onComplete, onS
   const [trialIdx, setTrialIdx] = useState(0);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [feedback, setFeedback] = useState<null | { correct: boolean | null }>(null);
+  // True during the inter-trial gap: the screen is blank and the phase machine is idle.
+  const [iti, setIti] = useState(false);
 
   const rows = useRef<TrialRow[]>([]);
   const clock = useRef(0);
@@ -74,9 +76,16 @@ export function Runner({ definition, language, practice = false, onComplete, onS
       onComplete(rows.current);
       return;
     }
-    setPhaseIdx(0);
-    // The inter-trial interval is a gap, not a phase — nothing is on screen during it.
-    setTimeout(() => setTrialIdx(i => i + 1), definition.trial.itiMs ?? 300);
+    // The inter-trial interval is a gap, not a phase — nothing is on screen during it. Blank
+    // the screen and idle the phase machine for the whole ITI, THEN move to the next trial at
+    // phase 0. Resetting the phase here without blanking replays the old trial's phases during
+    // the gap, flashing its stimulus back before the next trial loads — a real bug once.
+    setIti(true);
+    setTimeout(() => {
+      setTrialIdx(i => i + 1);
+      setPhaseIdx(0);
+      setIti(false);
+    }, definition.trial.itiMs ?? 300);
   }, [trialIdx, trials.length, onComplete, definition.trial.itiMs]);
 
   const finishTrial = useCallback(() => {
@@ -128,9 +137,10 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     advance();
   }, [definition, trial, practice, steps, advance, onSaveFailure]);
 
-  // Timed phases advance themselves; response phases wait for input.
+  // Timed phases advance themselves; response phases wait for input. Idle during the ITI so
+  // the old trial's phases do not keep running while the screen is blank.
   useEffect(() => {
-    if (!phase || feedback) return;
+    if (!phase || feedback || iti) return;
     if (phase.awaitsResponse) {
       if (phase.startsClock) clock.current = performance.now();
       return;
@@ -138,7 +148,7 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     const ms = Number(resolve(phase.durationMs, trial?.values ?? {}) ?? 0);
     const timer = setTimeout(() => setPhaseIdx(i => i + 1), ms);
     return () => clearTimeout(timer);
-  }, [phaseIdx, trialIdx, phase, feedback, trial]);
+  }, [phaseIdx, trialIdx, phase, feedback, iti, trial]);
 
   function answer(value: string) {
     if (!phase?.awaitsResponse) return;
@@ -165,7 +175,7 @@ export function Runner({ definition, language, practice = false, onComplete, onS
   if (!trial || !phase) return null;
 
   const step = steps.find(s => s.phase === phase.name);
-  const showResponse = phase.awaitsResponse && !feedback;
+  const showResponse = phase.awaitsResponse && !feedback && !iti;
 
   return (
     <main style={{ height: '100dvh' }} className="bg-[#0f172a] flex flex-col">
@@ -178,7 +188,7 @@ export function Runner({ definition, language, practice = false, onComplete, onS
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center gap-10 px-6">
-        <DisplayView node={phase.display} values={values} />
+        {!iti && <DisplayView node={phase.display} values={values} />}
 
         {showResponse && step && (
           <ResponseView step={step} values={values} rtl={rtl} onAnswer={answer} />
