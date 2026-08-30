@@ -21,7 +21,9 @@
     "exp:publish": "npm run exp --silent -- publish",
     "exp:unpublish": "npm run exp --silent -- unpublish",
     "exp:list": "npm run exp --silent -- list",
-    "exp:doctor": "npm run exp --silent -- doctor"
+    "exp:doctor": "npm run exp --silent -- doctor",
+    "exp:verify": "node --env-file-if-exists=.env.local scripts/verify-schema.mjs",
+    "exp:prompt": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/emit-prompt.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

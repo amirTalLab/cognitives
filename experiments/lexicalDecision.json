@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "slug": "lexicalDecision",
+  "title": "Lexical Decision — Associative Priming",
+  "titleHe": "החלטה לקסיקלית — הקדמה אסוציאטיבית",
+  "category": "LANGUAGE",
+  "instructions": {
+    "en": "On each trial two letter strings appear, one above the other. Press YES if BOTH are real words, and NO if either one is not a real word. Answer as fast as you can while staying accurate.",
+    "he": "בכל ניסיון יופיעו שתי מחרוזות אותיות, אחת מעל השנייה. הקישו כן אם שתיהן מילים אמיתיות, ולא אם לפחות אחת אינה מילה. ענו מהר ככל האפשר תוך שמירה על דיוק."
+  },
+  "pools": {
+    "pairs": [
+      { "top": "BREAD", "bottom": "BUTTER", "kind": "associated", "lexical": "yes" },
+      { "top": "NURSE", "bottom": "DOCTOR", "kind": "associated", "lexical": "yes" },
+      { "top": "CAT", "bottom": "DOG", "kind": "associated", "lexical": "yes" },
+      { "top": "KING", "bottom": "QUEEN", "kind": "associated", "lexical": "yes" },
+      { "top": "SALT", "bottom": "PEPPER", "kind": "associated", "lexical": "yes" },
+      { "top": "BLACK", "bottom": "WHITE", "kind": "associated", "lexical": "yes" },
+      { "top": "BREAD", "bottom": "DOCTOR", "kind": "unassociated", "lexical": "yes" },
+      { "top": "NURSE", "bottom": "BUTTER", "kind": "unassociated", "lexical": "yes" },
+      { "top": "CAT", "bottom": "QUEEN", "kind": "unassociated", "lexical": "yes" },
+      { "top": "KING", "bottom": "DOG", "kind": "unassociated", "lexical": "yes" },
+      { "top": "SALT", "bottom": "WHITE", "kind": "unassociated", "lexical": "yes" },
+      { "top": "BLACK", "bottom": "PEPPER", "kind": "unassociated", "lexical": "yes" },
+      { "top": "TABLE", "bottom": "MARB", "kind": "foil", "lexical": "no" },
+      { "top": "PLIN", "bottom": "CHAIR", "kind": "foil", "lexical": "no" },
+      { "top": "FLORN", "bottom": "DWEET", "kind": "foil", "lexical": "no" },
+      { "top": "RIVER", "bottom": "BLIT", "kind": "foil", "lexical": "no" },
+      { "top": "SPRONK", "bottom": "MUSIC", "kind": "foil", "lexical": "no" },
+      { "top": "CLORE", "bottom": "PREET", "kind": "foil", "lexical": "no" },
+      { "top": "HOUSE", "bottom": "TRELP", "kind": "foil", "lexical": "no" },
+      { "top": "DWORP", "bottom": "LATCH", "kind": "foil", "lexical": "no" },
+      { "top": "FENT", "bottom": "STAGE", "kind": "foil", "lexical": "no" },
+      { "top": "GLORT", "bottom": "SLINE", "kind": "foil", "lexical": "no" },
+      { "top": "PAPER", "bottom": "VREKT", "kind": "foil", "lexical": "no" },
+      { "top": "SNETH", "bottom": "GARDEN", "kind": "foil", "lexical": "no" }
+    ]
+  },
+  "factors": [
+    { "name": "item", "from": "pairs" }
+  ],
+  "repetitions": 1,
+  "practice": { "count": 2, "feedback": true },
+  "trial": {
+    "phases": [
+      { "name": "ready", "display": { "kind": "text", "text": "מוכנים?", "size": 26 }, "durationMs": 600 },
+      { "name": "fixation", "display": { "kind": "fixation" }, "durationMs": 1000 },
+      {
+        "name": "decision",
+        "display": {
+          "kind": "stack",
+          "items": [
+            { "kind": "text", "text": "{item.top}", "font": "mono", "size": 40 },
+            { "kind": "text", "text": "{item.bottom}", "font": "mono", "size": 40 }
+          ]
+        },
+        "awaitsResponse": true,
+        "startsClock": true
+      }
+    ],
+    "response": {
+      "kind": "choice",
+      "layout": "row",
+      "options": [
+        { "value": "yes", "label": "כן", "key": "f" },
+        { "value": "no", "label": "לא", "key": "j" }
+      ]
+    },
+    "correct": { "kind": "matchesFactor", "factor": "item.lexical" },
+    "itiMs": 2000
+  },
+  "store": ["item.top", "item.bottom", "item.kind", "item.lexical"],
+  "dashboard": {
+    "charts": [
+      {
+        "title": "Mean reaction time by pair type",
+        "kind": "bar",
+        "groupBy": "item.kind",
+        "measure": "meanRt",
+        "yLabel": "Mean correct RT (ms)",
+        "errorBars": true
+      },
+      {
+        "title": "Accuracy by pair type",
+        "kind": "bar",
+        "groupBy": "item.kind",
+        "measure": "accuracy",
+        "yLabel": "% correct",
+        "errorBars": true
+      }
+    ]
+  },
+  "mock": {
+    "participants": 24,
+    "baseRtMs": 855,
+    "baseAccuracy": 0.93,
+    "effects": [
+      { "factor": "item.kind", "level": "associated", "rtDeltaMs": -85 },
+      { "factor": "item.kind", "level": "foil", "rtDeltaMs": 95, "accuracyDelta": -0.05 }
+    ]
+  },
+  "simplifications": [
+    { "what": "The paper's five stimulus types are reduced to three (associated, unassociated, nonword foil).", "why": "The associated-vs-unassociated contrast is the headline effect; one foil type keeps the yes/no decision genuine without the nonword-position sub-conditions that address the serial-processing model rather than priming." },
+    { "what": "A fixed 24-pair set shown once each, rather than the paper's counterbalanced six-list rotation across subjects.", "why": "One shuffled balanced set shows the same within-subject RT effect in a classroom session." },
+    { "what": "Per-block monetary incentive and RT feedback dropped; practice-with-feedback kept.", "why": "The incentive tuned absolute speed, not the association effect, which is a within-subject RT difference." }
+  ]
+}

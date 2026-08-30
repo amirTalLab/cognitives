@@ -47,3 +47,9 @@ next-env.d.ts
 
 # Data exports — contain participant names, so they stay off GitHub.
 /exports/
+
+# Emitted prompts and per-run specs/definitions from the pipeline test harness are
+# throwaway working files. The scorecard (prompt-tests/RESULTS.md) is kept; these are not.
+/prompt-tests/emitted/
+
+certificates
