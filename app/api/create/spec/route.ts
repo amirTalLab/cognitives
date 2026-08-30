@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callClaude, parseJson, MODEL_FAST, CACHE, ClaudeError } from '@/lib/create-project/anthropic';
-import { specSystem } from '@/lib/create-project/prompts';
+import { specSystem, specUserText } from '@/lib/create-project/prompts';
 import { loadSkill, SKILL_PAPER } from '@/lib/create-project/skills';
 import { Candidate, Spec } from '@/lib/create-project/types';
 import { MOCK_SPEC, mockDelay, isMockMode } from '@/lib/create-project/fixtures';
-import { errorResponse, validatePdf } from '../_shared';
+import { errorResponse, validatePdf, requireAccess } from '../_shared';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -16,6 +16,9 @@ export const maxDuration = 300;
  */
 export async function POST(req: NextRequest) {
   try {
+    const denied = await requireAccess(req);
+    if (denied) return denied;
+
     const { pdfBase64, candidate } = await req.json() as { pdfBase64: string; candidate: Candidate };
     validatePdf(pdfBase64);
     if (!candidate?.name) {
@@ -36,18 +39,7 @@ export async function POST(req: NextRequest) {
         content: [
           // Same bytes the analyze stage just cached, so this is a cache read.
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 }, ...CACHE },
-          {
-            type: 'text',
-            text: `Extract the design spec for this experiment from the paper:
-
-Name: ${candidate.name}
-Paradigm: ${candidate.paradigm}
-Manipulation: ${candidate.manipulation}
-Measure: ${candidate.measure}
-Expected effect: ${candidate.expectedEffect}
-
-Return the JSON object only.`,
-          },
+          { type: 'text', text: specUserText(candidate) },
         ],
       }],
     });

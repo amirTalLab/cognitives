@@ -11,7 +11,7 @@
 // raw source, and a response cut off mid-file still yields every complete file before the
 // cut — which is what makes partial recovery and batching possible.
 
-import { GeneratedFile } from './types';
+import type { GeneratedFile } from './types';
 
 const FILE_OPEN = /^===FILE:\s*(.+?)\s*===$/;
 const FILE_CLOSE = /^===END===$/;

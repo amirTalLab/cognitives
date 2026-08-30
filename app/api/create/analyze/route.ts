@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callClaude, parseJson, MODEL_FAST, CACHE, ClaudeError } from '@/lib/create-project/anthropic';
-import { analyzeSystem } from '@/lib/create-project/prompts';
+import { analyzeSystem, ANALYZE_USER_TEXT } from '@/lib/create-project/prompts';
 import { loadSkill, SKILL_PAPER } from '@/lib/create-project/skills';
 import { AnalyzeResponse } from '@/lib/create-project/types';
 import { MOCK_ANALYSIS, MOCK_ANALYSIS_EMPTY, mockDelay, isMockMode } from '@/lib/create-project/fixtures';
-import { errorResponse, validatePdf } from '../_shared';
+import { errorResponse, validatePdf, requireAccess } from '../_shared';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -17,6 +17,9 @@ export const maxDuration = 300;
  */
 export async function POST(req: NextRequest) {
   try {
+    const denied = await requireAccess(req);
+    if (denied) return denied;
+
     const { pdfBase64, filename } = await req.json() as { pdfBase64: string; filename?: string };
     validatePdf(pdfBase64);
 
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest) {
           // Cached: the spec stage sends this same PDF again a moment later, and a paper
           // is the largest single input in the pipeline.
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 }, ...CACHE },
-          { type: 'text', text: 'Identify every candidate experiment in this paper and classify its feasibility. Return the JSON object only.' },
+          { type: 'text', text: ANALYZE_USER_TEXT },
         ],
       }],
     });

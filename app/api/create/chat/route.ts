@@ -5,7 +5,7 @@ import { loadSkill, SKILL_CODEGEN } from '@/lib/create-project/skills';
 import { parsePayload } from '@/lib/create-project/file-format';
 import { ChatMessage, GeneratedFile, Spec } from '@/lib/create-project/types';
 import { mockChatReply, mockDelay, isMockMode } from '@/lib/create-project/fixtures';
-import { errorResponse } from '../_shared';
+import { errorResponse, requireAccess } from '../_shared';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -19,6 +19,9 @@ export const maxDuration = 300;
  */
 export async function POST(req: NextRequest) {
   try {
+    const denied = await requireAccess(req);
+    if (denied) return denied;
+
     const { spec, files, messages, repair } = await req.json() as {
       spec: Spec;
       files: GeneratedFile[];

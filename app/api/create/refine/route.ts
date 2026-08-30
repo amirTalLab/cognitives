@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callClaude, parseJson, MODEL_STRONG, CACHE } from '@/lib/create-project/anthropic';
-import { definitionSystem } from '@/lib/create-project/prompts';
+import { definitionSystem, refineUserText } from '@/lib/create-project/prompts';
 import { loadSkill, loadSource, SKILL_CODEGEN } from '@/lib/create-project/skills';
 import { ChatMessage } from '@/lib/create-project/types';
 import { ExperimentDefinition } from '@/lib/experiment-runtime/schema';
 import { validate } from '@/lib/experiment-runtime/validate';
 import { isMockMode, mockDelay } from '@/lib/create-project/fixtures';
-import { errorResponse } from '../_shared';
+import { errorResponse, requireAccess } from '../_shared';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -21,6 +21,9 @@ export const maxDuration = 300;
  */
 export async function POST(req: NextRequest) {
   try {
+    const denied = await requireAccess(req);
+    if (denied) return denied;
+
     const { definition, messages } = await req.json() as {
       definition: ExperimentDefinition;
       messages: ChatMessage[];
@@ -48,21 +51,7 @@ export async function POST(req: NextRequest) {
       loadSource('lib/experiment-runtime/schema.ts'),
     ]);
 
-    const history = messages.slice(0, -1)
-      .map(m => `${m.role === 'user' ? 'Lecturer' : 'You'}: ${m.content}`)
-      .join('\n');
-
-    const prompt = `Here is the current experiment definition:
-
-${JSON.stringify(definition, null, 2)}
-${history ? `\nEarlier in this conversation:\n${history}\n` : ''}
-The lecturer now asks: "${request.content}"
-
-Apply it and return the COMPLETE updated definition — the whole object, not a fragment. Keep the slug "${definition.slug}" unchanged. Change only what was asked; leave everything else exactly as it is.
-
-If the request cannot be expressed in the schema, return the definition unchanged and explain why in "reply".
-
-Return a JSON object of the form { "reply": "one or two sentences on what you changed", "definition": { ... } }.`;
+    const prompt = refineUserText(definition, messages);
 
     const { text, usage } = await callClaude({
       model: MODEL_STRONG,

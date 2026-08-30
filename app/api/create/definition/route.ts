@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callClaude, parseJson, MODEL_STRONG, ClaudeError, Usage, CACHE } from '@/lib/create-project/anthropic';
-import { definitionSystem } from '@/lib/create-project/prompts';
+import { definitionSystem, specToPrompt } from '@/lib/create-project/prompts';
 import { loadSkill, loadSource, SKILL_CODEGEN } from '@/lib/create-project/skills';
 import { Spec } from '@/lib/create-project/types';
 import { AssetManifest, ExperimentDefinition } from '@/lib/experiment-runtime/schema';
 import { validate } from '@/lib/experiment-runtime/validate';
 import { MOCK_DEFINITION, mockDelay, isMockMode } from '@/lib/create-project/fixtures';
-import { errorResponse } from '../_shared';
+import { errorResponse, requireAccess } from '../_shared';
 
 export const runtime = 'nodejs';
 // 300s is the ceiling on Vercel's lower plans; a higher value fails the deploy. The
@@ -17,28 +17,6 @@ export const maxDuration = 300;
 const SCHEMA_PATH = 'lib/experiment-runtime/schema.ts';
 /** One retry. A second failure usually means the design does not fit, not a slip. */
 const MAX_REPAIRS = 1;
-
-function specToPrompt(spec: Spec, assets?: AssetManifest): string {
-  const fields = spec.fields
-    .map(f => `- ${f.label} [${f.source === 'paper' ? 'from paper' : 'inferred, confirmed by the lecturer'}]: ${f.value}`)
-    .join('\n');
-
-  // Named exhaustively rather than described. The model has to write these strings
-  // character for character into image srcs, and a filename it half-remembers renders as a
-  // broken picture in front of a class.
-  const assetBlock = assets?.files.length
-    ? `\n\nThe lecturer uploaded these image files. Use them as image srcs, spelled EXACTLY as listed, and use no other filename. Do not set "assets" yourself — it is filled in for you.\n${assets.files.map(f => `- ${f}`).join('\n')}`
-    : '\n\nNo image files were uploaded, so every stimulus must be drawn from text and inline shapes.';
-
-  return `Build this experiment as a definition. The lecturer has reviewed and confirmed the spec.
-
-URL slug: ${spec.slug}
-English title: ${spec.title}
-Hebrew title: ${spec.titleHe}
-Category: ${spec.category}
-
-${fields}${assetBlock}`;
-}
 
 function sumUsage(parts: Usage[]): Usage {
   return parts.reduce((a, u) => ({
@@ -62,6 +40,9 @@ function sumUsage(parts: Usage[]): Usage {
  */
 export async function POST(req: NextRequest) {
   try {
+    const denied = await requireAccess(req);
+    if (denied) return denied;
+
     const { spec, assets } = await req.json() as { spec: Spec; assets?: AssetManifest };
     if (!spec?.slug) {
       return NextResponse.json({ error: 'No spec was provided.' }, { status: 400 });

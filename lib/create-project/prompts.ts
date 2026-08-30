@@ -11,6 +11,8 @@
 // apply, and the exact output format the route needs back.
 
 import { FILE_FORMAT_SPEC, REPLY_FORMAT_SPEC } from './file-format';
+import type { Spec, Candidate, ChatMessage } from './types';
+import type { AssetManifest, ExperimentDefinition } from '../experiment-runtime/schema';
 
 /** Shared framing: the skill was written for an agent with tools; here there are none. */
 const RUNTIME_PREAMBLE = `You are running inside the "cognitives" web app, not inside Claude Code.
@@ -210,6 +212,82 @@ A single JSON object satisfying ExperimentDefinition. No prose, no markdown fenc
 
 Set "version": 1. Include "mock". Include "simplifications" for anything you changed from the paper to make it fit, and "correctMeans" when the task has no right answer but you score against a factor to measure a preference.`,
   );
+}
+
+// ── User-message builders ──────────────────────────────────────────────────
+//
+// The system prompts above are the standing instructions; these build the per-request
+// user message. They live here, beside the system prompts, for one reason: the terminal
+// test harness (scripts/emit-prompt.mjs) imports them to reproduce the EXACT bytes a
+// production request would send, so a free subscription run tests the same prompt the paid
+// API path runs — not a paraphrase of it. Keep them pure (no request objects, no I/O).
+
+/** Analyze stage — the user turn that accompanies the PDF document block. */
+export const ANALYZE_USER_TEXT =
+  'Identify every candidate experiment in this paper and classify its feasibility. Return the JSON object only.';
+
+/** Spec stage — the user turn naming the chosen candidate, alongside the PDF. */
+export function specUserText(candidate: Candidate): string {
+  return `Extract the design spec for this experiment from the paper:
+
+Name: ${candidate.name}
+Paradigm: ${candidate.paradigm}
+Manipulation: ${candidate.manipulation}
+Measure: ${candidate.measure}
+Expected effect: ${candidate.expectedEffect}
+
+Return the JSON object only.`;
+}
+
+/**
+ * Definition stage — turns a confirmed spec into the build instruction.
+ *
+ * Assets are named exhaustively rather than described: the model has to write these
+ * filenames character for character into image srcs, and a filename it half-remembers
+ * renders as a broken picture in front of a class.
+ */
+export function specToPrompt(spec: Spec, assets?: AssetManifest): string {
+  const fields = spec.fields
+    .map(f => `- ${f.label} [${f.source === 'paper' ? 'from paper' : 'inferred, confirmed by the lecturer'}]: ${f.value}`)
+    .join('\n');
+
+  const assetBlock = assets?.files.length
+    ? `\n\nThe lecturer uploaded these image files. Use them as image srcs, spelled EXACTLY as listed, and use no other filename. Do not set "assets" yourself — it is filled in for you.\n${assets.files.map(f => `- ${f}`).join('\n')}`
+    : '\n\nNo image files were uploaded, so every stimulus must be drawn from text and inline shapes.';
+
+  return `Build this experiment as a definition. The lecturer has reviewed and confirmed the spec.
+
+URL slug: ${spec.slug}
+English title: ${spec.title}
+Hebrew title: ${spec.titleHe}
+Category: ${spec.category}
+
+${fields}${assetBlock}`;
+}
+
+/**
+ * Refine stage — applies one plain-language change to an existing definition.
+ *
+ * `messages` is the running conversation; the last turn (which must be the lecturer's) is
+ * the request, and the rest is the history shown back for context.
+ */
+export function refineUserText(definition: ExperimentDefinition, messages: ChatMessage[]): string {
+  const request = messages[messages.length - 1];
+  const history = messages.slice(0, -1)
+    .map(m => `${m.role === 'user' ? 'Lecturer' : 'You'}: ${m.content}`)
+    .join('\n');
+
+  return `Here is the current experiment definition:
+
+${JSON.stringify(definition, null, 2)}
+${history ? `\nEarlier in this conversation:\n${history}\n` : ''}
+The lecturer now asks: "${request.content}"
+
+Apply it and return the COMPLETE updated definition — the whole object, not a fragment. Keep the slug "${definition.slug}" unchanged. Change only what was asked; leave everything else exactly as it is.
+
+If the request cannot be expressed in the schema, return the definition unchanged and explain why in "reply".
+
+Return a JSON object of the form { "reply": "one or two sentences on what you changed", "definition": { ... } }.`;
 }
 
 /** Stage 4 — revise the generated files from the in-app chat. */

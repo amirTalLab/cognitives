@@ -2,6 +2,30 @@
 
 import { NextResponse } from 'next/server';
 import { ClaudeError } from '@/lib/create-project/anthropic';
+import { verifyPassword } from '@/lib/auth';
+
+/** Header the create page sends the shared password in (plaintext, over HTTPS). */
+const ACCESS_HEADER = 'x-cognitives-access';
+
+/**
+ * Server-side gate for the metered create endpoints.
+ *
+ * The site's password check is otherwise client-only — fine for hiding UI, useless for
+ * protecting an endpoint that spends API credits, since anyone could POST here directly.
+ * This verifies the shared password on the SERVER before any paid Claude call. The client
+ * sends the plaintext the teacher typed at the gate; only the hash is ever in the bundle,
+ * so reading the bundle does not get you in. Pair it with a spend cap on the API key.
+ *
+ * Returns a 401 response to short-circuit with, or null when access is granted.
+ */
+export async function requireAccess(req: Request): Promise<NextResponse | null> {
+  const provided = req.headers.get(ACCESS_HEADER) ?? '';
+  if (provided && (await verifyPassword(provided))) return null;
+  return NextResponse.json(
+    { error: 'Not authorised. Enter the site password on the builder page to use it.' },
+    { status: 401 },
+  );
+}
 
 /** Turns any thrown value into a JSON error response the wizard can display. */
 export function errorResponse(err: unknown): NextResponse {

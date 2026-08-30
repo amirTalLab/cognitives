@@ -5,7 +5,7 @@ import { loadSkill, SKILL_CODEGEN } from '@/lib/create-project/skills';
 import { parsePayload } from '@/lib/create-project/file-format';
 import { GeneratedFile, Spec } from '@/lib/create-project/types';
 import { MOCK_GENERATION, mockDelay, isMockMode } from '@/lib/create-project/fixtures';
-import { errorResponse } from '../_shared';
+import { errorResponse, requireAccess } from '../_shared';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -47,6 +47,9 @@ function sumUsage(parts: Usage[]): Usage {
  */
 export async function POST(req: NextRequest) {
   try {
+    const denied = await requireAccess(req);
+    if (denied) return denied;
+
     const { spec } = await req.json() as { spec: Spec };
     if (!spec?.slug) {
       return NextResponse.json({ error: 'No spec was provided.' }, { status: 400 });

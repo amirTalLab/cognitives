@@ -60,9 +60,11 @@ const BTN_PRIMARY = 'px-4 py-2 text-sm bg-purple-500 hover:bg-purple-400 text-wh
 
 /** POSTs JSON and unwraps the route's `{ error }` shape into a thrown Error. */
 async function postJson<T>(url: string, body: unknown): Promise<T> {
+  // The server gates the metered endpoints on the shared password; send it on every call.
+  const key = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ss_create_key') ?? '' : '';
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-cognitives-access': key },
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
@@ -182,6 +184,9 @@ export default function CreateProjectPage() {
     e.preventDefault();
     if (await verifyPassword(pwInput)) {
       sessionStorage.setItem('ss_home_authed', '1');
+      // The metered create endpoints verify this on the server, so it must be sent with each
+      // call. Kept only in sessionStorage — cleared when the tab closes.
+      sessionStorage.setItem('ss_create_key', pwInput);
       grantTeacherAccess();
       setAuthed(true);
     } else {
