@@ -457,7 +457,20 @@ try {
       process.exitCode = command ? 1 : 0;
   }
 } catch (err) {
-  if (!(err instanceof Fail)) throw err;
-  say(`\n${c.red('✗')} ${err.message}\n`);
+  if (err instanceof Fail) {
+    say(`\n${c.red('✗')} ${err.message}\n`);
+  } else if (err?.cause?.code === 'ENOTFOUND' || err?.code === 'ENOTFOUND') {
+    // The Supabase host not resolving almost always means a paused free-tier project —
+    // its API subdomain stops answering DNS. A raw fetch stack trace here told the user
+    // nothing; this points at the actual cause and fix.
+    const host = err?.cause?.hostname ?? 'the Supabase host';
+    say(`\n${c.red('✗')} Could not reach ${host}.`);
+    say('  The project is probably paused — free-tier Supabase projects pause when idle.');
+    say('  Open the Supabase dashboard and resume it, then try again.\n');
+  } else if (err instanceof TypeError && /fetch failed/i.test(err.message)) {
+    say(`\n${c.red('✗')} Could not reach Supabase (network error). Check your connection and that the project is running.\n`);
+  } else {
+    throw err;
+  }
   process.exitCode = 1;
 }
