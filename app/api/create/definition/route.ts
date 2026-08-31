@@ -62,13 +62,23 @@ export async function POST(req: NextRequest) {
     let issues: ReturnType<typeof validate> = [];
 
     for (let attempt = 0; attempt <= MAX_REPAIRS; attempt++) {
-      const { text, usage } = await callClaude({
+      const { text, usage, stopReason } = await callClaude({
         model: MODEL_STRONG,
         system,
-        maxTokens: 8000,
+        maxTokens: 16000,
         messages: [{ role: 'user', content: [{ type: 'text', text: prompt, ...CACHE }] }],
       });
       usages.push(usage);
+
+      // A definition cut off at the output ceiling is unparseable, and retrying it produces
+      // the same length again — so say what happened rather than spending a second call to
+      // arrive at the same place. Checked here as the other stages already do.
+      if (stopReason === 'max_tokens') {
+        throw new ClaudeError(
+          'The experiment ran out of output room before it was finished. This usually means ' +
+          'the design has a very large stimulus pool or many conditions — try fewer of either.',
+        );
+      }
 
       // A parse failure is retried like a validation failure rather than thrown. The call
       // has already been paid for, and "your JSON did not parse, here is the error" is

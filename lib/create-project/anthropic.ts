@@ -241,6 +241,19 @@ export function parseJson<T>(raw: string): T {
     // Fall through to the repair pass.
   }
 
+  // A reply cut off mid-structure still ends in a brace — the last one that happened to
+  // arrive — so slicing to it yields something that looks like an object but has unclosed
+  // arrays inside. That is a truncated reply, not a malformed one, and the two need
+  // different responses: retry or shrink the design, versus repair the syntax.
+  if (unbalanced(body)) {
+    throw new ClaudeError(
+      `The reply was cut off before the JSON was complete (${raw.length} characters received). ` +
+      'This is usually a transient problem — try building again. If it keeps happening at the ' +
+      'same point, the design is too large to emit in one reply; use fewer conditions or a ' +
+      `smaller stimulus pool.\n\nLast 200 chars: …${raw.slice(-200)}`,
+    );
+  }
+
   // Models producing hand-written JSON slip in ways JSON.parse rejects but which are
   // unambiguous to fix: a trailing comma before a closing brace, or a // comment
   // explaining a value. Repairing beats discarding an otherwise complete definition and
@@ -261,6 +274,32 @@ export function parseJson<T>(raw: string): T {
       `${excerptAround(repaired, detail)}`,
     );
   }
+}
+
+/**
+ * Whether braces and brackets are left open — the signature of a truncated reply.
+ *
+ * Counted outside strings only, so a stimulus word containing a bracket is not mistaken
+ * for structure.
+ */
+function unbalanced(json: string): boolean {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (const ch of json) {
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{' || ch === '[') depth++;
+    else if (ch === '}' || ch === ']') depth--;
+  }
+
+  return depth !== 0 || inString;
 }
 
 /**
