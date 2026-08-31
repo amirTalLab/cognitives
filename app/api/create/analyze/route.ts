@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
 
     const { text, usage, stopReason } = await callClaude({
       model: MODEL_FAST,
+      stage: 'analyze',
       system: analyzeSystem(await loadSkill(SKILL_PAPER)),
       maxTokens: 16000,
       messages: [{

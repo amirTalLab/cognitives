@@ -1,0 +1,3 @@
+# Captured model replies, for replaying a run without paying for it again.
+# Local working files: large, and tied to one machine's runs.
+*.txt

@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
 
     const { text, usage } = await callClaude({
       model: MODEL_STRONG,
+      stage: 'refine',
       system: definitionSystem(skill, schema),
       maxTokens: 8000,
       messages: [{ role: 'user', content: [{ type: 'text', text: prompt, ...CACHE }] }],

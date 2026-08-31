@@ -23,7 +23,8 @@
     "exp:list": "npm run exp --silent -- list",
     "exp:doctor": "npm run exp --silent -- doctor",
     "exp:verify": "node --env-file-if-exists=.env.local scripts/verify-schema.mjs",
-    "exp:prompt": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/emit-prompt.mjs"
+    "exp:prompt": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/emit-prompt.mjs",
+    "test:pipeline": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON prompt-tests/pipeline.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

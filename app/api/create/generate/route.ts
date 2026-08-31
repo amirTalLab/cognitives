@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
 
       const { text, usage, stopReason } = await callClaude({
         model: MODEL_STRONG,
+        stage: 'generate',
         system: generateSystem(skill, wanted),
         maxTokens: batch.maxTokens,
         messages: [{ role: 'user', content: [{ type: 'text', text: specText + context, ...CACHE }] }],

@@ -67,6 +67,7 @@ ${fileDump}`;
     const skill = await loadSkill(SKILL_CODEGEN);
     const { text, usage, stopReason } = await callClaude({
       model: MODEL_STRONG,
+      stage: 'chat',
       system: repair ? repairSystem(skill) : chatSystem(skill),
       maxTokens: 24000,
       messages: history,

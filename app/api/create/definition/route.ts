@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
     for (let attempt = 0; attempt <= MAX_REPAIRS; attempt++) {
       const { text, usage, stopReason } = await callClaude({
         model: MODEL_STRONG,
+        stage: 'definition',
         system,
         maxTokens: 16000,
         messages: [{ role: 'user', content: [{ type: 'text', text: prompt, ...CACHE }] }],

@@ -109,6 +109,31 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   const err = (message: string) => issues.push({ severity: 'error', message });
   const warn = (message: string) => issues.push({ severity: 'warning', message });
 
+  // ── Structure ──────────────────────────────────────────────────────────────
+  //
+  // A definition can arrive half-written: a model can stop anywhere, and a reply that was
+  // cut off still reaches here. Every check below indexes into this shape, so a missing
+  // piece has to be reported now — reading through it would throw a TypeError, which the
+  // route turns into a 500 saying nothing the lecturer could act on.
+  if (!def || typeof def !== 'object') {
+    return [{ severity: 'error', message: 'The definition is empty.' }];
+  }
+
+  const required: [unknown, string][] = [
+    [Array.isArray(def.factors) ? def.factors : undefined, '"factors"'],
+    [def.trial && typeof def.trial === 'object' ? def.trial : undefined, '"trial"'],
+    [Array.isArray(def.trial?.phases) ? def.trial.phases : undefined, '"trial.phases"'],
+    [def.trial?.response, '"trial.response"'],
+    [def.trial?.correct, '"trial.correct"'],
+    [Array.isArray(def.store) ? def.store : undefined, '"store"'],
+    [Array.isArray(def.dashboard?.charts) ? def.dashboard.charts : undefined, '"dashboard.charts"'],
+  ];
+  const missing = required.filter(([value]) => value === undefined).map(([, name]) => name);
+  if (missing.length) {
+    err(`The definition is incomplete — ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing. This usually means the reply was cut off before it finished.`);
+    return issues;
+  }
+
   // ── Factors and pools ──────────────────────────────────────────────────────
   if (def.factors.length === 0) err('The design has no factors, so there is nothing to vary.');
 

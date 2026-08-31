@@ -50,14 +50,70 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /** Thrown for any non-2xx response, so routes can surface a useful message. */
 export class ClaudeError extends Error {
-  constructor(message: string, readonly status = 502) {
+  // Declared and assigned rather than a constructor parameter property: Node's type
+  // stripping rejects those, and the test harness loads this module directly.
+  readonly status: number;
+
+  constructor(message: string, status = 502) {
     super(message);
     this.name = 'ClaudeError';
+    this.status = status;
   }
 }
 
 export function hasApiKey(): boolean {
   return !!process.env.ANTHROPIC_API_KEY;
+}
+
+// ─── Recording and replay ─────────────────────────────────────────────────────
+//
+// Almost everything that has gone wrong in this pipeline went wrong AROUND the model —
+// parsing its reply, reporting a truncation, handling an empty response — and none of it
+// needed a real API call to reproduce. Paying to rediscover such a bug is waste.
+//
+// So: CREATE_RECORD=1 saves each raw reply, turning every paid call into a fixture that
+// can be replayed forever. CREATE_REPLAY=1 then serves those fixtures instead of calling
+// the API, which exercises the whole flow — routes, parsing, validation, preview,
+// publishing, dashboard — for nothing.
+//
+// Development only, deliberately: a deployment must never serve a canned reply as if it
+// were a real one, and Vercel's filesystem is read-only anyway.
+
+const RECORDINGS_DIR = 'prompt-tests/recordings';
+
+function devToolsEnabled(): boolean {
+  return process.env.NODE_ENV === 'development';
+}
+
+/** Newest recording for a stage, or null when there is none. */
+async function loadRecording(stage: string): Promise<ClaudeResult | null> {
+  const { readdir, readFile } = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  try {
+    const dir = join(process.cwd(), RECORDINGS_DIR);
+    const files = (await readdir(dir))
+      .filter(f => f.startsWith(`${stage}.`) && f.endsWith('.txt'))
+      .sort();
+    const newest = files[files.length - 1];
+    if (!newest) return null;
+    const text = await readFile(join(dir, newest), 'utf8');
+    return { text, usage: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 }, stopReason: 'replay' };
+  } catch {
+    return null;
+  }
+}
+
+async function saveRecording(stage: string, text: string): Promise<void> {
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  try {
+    const dir = join(process.cwd(), RECORDINGS_DIR);
+    await mkdir(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    await writeFile(join(dir, `${stage}.${stamp}.txt`), text, 'utf8');
+  } catch {
+    // Recording is a convenience; never fail a real generation because it could not write.
+  }
 }
 
 /**
@@ -72,7 +128,21 @@ export async function callClaude(opts: {
   system: string;
   messages: Turn[];
   maxTokens: number;
+  /** Names the recording slot for this call. Omitted, the call is never recorded. */
+  stage?: string;
 }): Promise<ClaudeResult> {
+  if (opts.stage && devToolsEnabled() && process.env.CREATE_REPLAY === '1') {
+    const recorded = await loadRecording(opts.stage);
+    if (recorded) return recorded;
+    // Falling through to a real call would quietly spend money in what the developer
+    // believes is a free run, so refuse instead.
+    throw new ClaudeError(
+      `CREATE_REPLAY is on but there is no recording for "${opts.stage}" in ${RECORDINGS_DIR}. ` +
+      'Run once with CREATE_RECORD=1 to capture one.',
+      503,
+    );
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new ClaudeError(
@@ -113,6 +183,13 @@ export async function callClaude(opts: {
 
     if (res.ok && res.body) {
       const result = await readTextStream(res.body);
+
+      // Recorded before the checks below, so a reply that FAILED becomes a fixture too —
+      // those are the most valuable ones to replay.
+      if (opts.stage && devToolsEnabled() && process.env.CREATE_RECORD === '1') {
+        await saveRecording(opts.stage, result.text);
+      }
+
       // An empty reply used to surface as "the model did not return JSON at all" with
       // nothing after it, which says nothing about why. The stream already carries the
       // answer — how it stopped, and whether any tokens were produced — so say it.

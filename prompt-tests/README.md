@@ -1,5 +1,55 @@
 # Pipeline test harness
 
+Three layers, only one of which costs money:
+
+| Layer | Tests | Cost |
+|---|---|---|
+| `npm run test:pipeline` | the plumbing — parsing, truncation, stream reading, validation | **free**, no key, seconds |
+| record + replay (below) | the whole app flow against a real recorded reply | **free** after one capture |
+| `npm run exp:prompt` (below) | model judgement, on the Claude Code subscription | **free** |
+| the live `/create` page | the real thing, end to end | paid |
+
+## The plumbing suite
+
+```bash
+npm run test:pipeline
+```
+
+Every production failure so far lived here, not in the model: a missing comma, a reply cut
+off mid-array, an empty reply, a stop reason nobody checked, a validator that threw on a
+half-written definition. None needed an API call to reproduce — each was found by paying
+for one. The suite reproduces them offline so they can only ever be found once. Run it
+before any deploy.
+
+## Record and replay — the whole flow, free
+
+A real run can be captured and then replayed forever, which exercises the routes, parsing,
+validation, preview, publishing and dashboard without touching the API.
+
+**Capture** (once, during a real paid run). In `.env.local`:
+
+```
+CREATE_RECORD=1
+```
+
+Run `npm run dev`, build an experiment as normal. Each reply is saved to
+`prompt-tests/recordings/<stage>.<timestamp>.txt`. Replies that FAILED are saved too —
+those are the valuable ones.
+
+**Replay** (unlimited, free). In `.env.local`:
+
+```
+CREATE_REPLAY=1
+```
+
+Now every stage serves its newest recording instead of calling the API. Rebuild the same
+experiment as many times as you like. If a stage has no recording it refuses rather than
+quietly spending money.
+
+Both are development-only, and ignored in production — a deployment must never serve a
+canned reply as if it were real.
+
+
 Testing the paper → spec → definition → refine pipeline **without spending Anthropic API
 credits**, by running the same prompts on the Claude Code subscription.
 
