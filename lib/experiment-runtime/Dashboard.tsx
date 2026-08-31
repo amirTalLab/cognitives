@@ -40,13 +40,34 @@ function ChartCard({ title, children }: { title: string; children: (revealed: bo
   );
 }
 
+/**
+ * Most bars a chart will draw.
+ *
+ * A chart draws one bar per distinct value of `groupBy`. Grouped by a condition that is
+ * three; grouped by a per-item field — a word, a stimulus id — it is one per item, and a
+ * few hundred bars are both slow to render and impossible to read, which is not a chart
+ * anyone can teach from. Truncating and saying so beats freezing the page.
+ */
+const MAX_GROUPS = 40;
+
 function ChartView({ chart, def, rows, revealed }: {
   chart: ChartSpec; def: ExperimentDefinition; rows: ResultRow[]; revealed: boolean;
 }) {
-  const data = aggregate(chart, rows);
+  const all = aggregate(chart, rows);
+  const data = all.length > MAX_GROUPS ? all.slice(0, MAX_GROUPS) : all;
+  const omitted = all.length - data.length;
   const series = seriesNames(chart, rows);
   const label = measureLabel(chart, def);
   const percentage = chart.measure === 'accuracy' || chart.measure === 'proportion';
+
+  // Named rather than silent: a truncated chart that does not say so is a misread waiting
+  // to happen, and the fix is usually to group by a condition instead of a per-item field.
+  const note = omitted > 0 ? (
+    <p className="text-xs text-amber-400/80 mb-2">
+      Showing the first {MAX_GROUPS} of {all.length} groups — &ldquo;{chart.groupBy}&rdquo; has too many
+      distinct values to plot. Group by a condition for a chart a class can read.
+    </p>
+  ) : null;
 
   const axes = (
     <>
@@ -65,6 +86,8 @@ function ChartView({ chart, def, rows, revealed }: {
 
   if (chart.kind === 'line') {
     return (
+      <>
+      {note}
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data}>
           {axes}
@@ -76,22 +99,28 @@ function ChartView({ chart, def, rows, revealed }: {
             : <Line type="monotone" dataKey="value" name={label} stroke="#a78bfa" strokeWidth={2} dot={{ r: 4 }} />)}
         </LineChart>
       </ResponsiveContainer>
+      </>
     );
   }
 
   if (chart.kind === 'scatter') {
     return (
+      <>
+      {note}
       <ResponsiveContainer width="100%" height={300}>
         <ScatterChart>
           {axes}
           {revealed && <Scatter data={data} dataKey="value" name={label} fill="#a78bfa" />}
         </ScatterChart>
       </ResponsiveContainer>
+      </>
     );
   }
 
   // Bar covers 'bar' and 'histogram'; a histogram here is one bar per participant.
   return (
+    <>
+    {note}
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data}>
         {axes}
@@ -112,6 +141,7 @@ function ChartView({ chart, def, rows, revealed }: {
           ))}
       </BarChart>
     </ResponsiveContainer>
+    </>
   );
 }
 
