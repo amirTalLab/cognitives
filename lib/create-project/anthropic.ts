@@ -231,10 +231,12 @@ export function parseJson<T>(raw: string): T {
   // unambiguous to fix: a trailing comma before a closing brace, or a // comment
   // explaining a value. Repairing beats discarding an otherwise complete definition and
   // paying to generate it again.
-  const repaired = body
-    .replace(/\/\*[\s\S]*?\*\//g, '')          // block comments
-    .replace(/(^|[^:"'\\])\/\/[^\n\r]*/g, '$1') // line comments, but not inside a URL
-    .replace(/,(\s*[}\]])/g, '$1');             // trailing commas
+  const repaired = insertMissingCommas(
+    body
+      .replace(/\/\*[\s\S]*?\*\//g, '')          // block comments
+      .replace(/(^|[^:"'\\])\/\/[^\n\r]*/g, '$1') // line comments, but not inside a URL
+      .replace(/,(\s*[}\]])/g, '$1'),             // trailing commas
+  );
 
   try {
     return JSON.parse(repaired) as T;
@@ -245,6 +247,48 @@ export function parseJson<T>(raw: string): T {
       `${excerptAround(repaired, detail)}`,
     );
   }
+}
+
+/**
+ * Puts back commas a model left out between elements.
+ *
+ * The commonest way hand-written JSON fails: two factors in an array with nothing between
+ * them, or a second key straight after a closing brace. It is unambiguous — a value can
+ * never directly follow another value in JSON — so it is safe to repair, and repairing
+ * beats discarding a complete definition and paying to generate it again.
+ *
+ * Scans rather than regexes, because the same characters inside a string must be left
+ * alone: a stimulus word containing a brace is text, not structure.
+ */
+function insertMissingCommas(json: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  let lastSignificant = '';
+
+  for (const ch of json) {
+    if (inString) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') { inString = false; lastSignificant = '"'; }
+      continue;
+    }
+
+    // A value starting immediately after a value ended: the comma is missing. After ':',
+    // ',', '{' or '[' a value is expected, so those are left alone.
+    if ((ch === '"' || ch === '{' || ch === '[') &&
+        (lastSignificant === '"' || lastSignificant === '}' || lastSignificant === ']' ||
+         /[0-9a-z]/i.test(lastSignificant))) {
+      out += ',';
+    }
+
+    out += ch;
+    if (ch === '"') inString = true;
+    if (!/\s/.test(ch)) lastSignificant = ch;
+  }
+
+  return out;
 }
 
 /**
