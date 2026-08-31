@@ -111,7 +111,21 @@ export async function callClaude(opts: {
       body,
     });
 
-    if (res.ok && res.body) return await readTextStream(res.body);
+    if (res.ok && res.body) {
+      const result = await readTextStream(res.body);
+      // An empty reply used to surface as "the model did not return JSON at all" with
+      // nothing after it, which says nothing about why. The stream already carries the
+      // answer — how it stopped, and whether any tokens were produced — so say it.
+      if (!result.text.trim()) {
+        const why = result.stopReason === 'refusal'
+          ? 'The model declined to answer. Rephrase the spec, or pick a different experiment from the paper.'
+          : result.stopReason === 'max_tokens'
+            ? 'The reply hit the output limit before producing anything, which usually means the design is too large to emit in one go. Try a simpler experiment or fewer conditions.'
+            : `The model produced no output (stop reason: ${result.stopReason ?? 'none'}, output tokens: ${result.usage.output}). This is usually a transient API problem — try again.`;
+        throw new ClaudeError(why, 502);
+      }
+      return result;
+    }
 
     const detail = await res.text().catch(() => '');
     lastError = new ClaudeError(`Anthropic API error (${res.status}): ${detail.slice(0, 500)}`, res.status);
