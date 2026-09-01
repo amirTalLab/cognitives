@@ -31,12 +31,13 @@ const EXPERIMENTS: Exp[] = [
   { id: 'bRMS',             title: 'bRMS Emotion',           titleHe: 'bRMS רגש',              icon: Eye,       color: 'text-purple-400'  },
   { id: 'boubaKikiDemo', title: 'Bouba / Kiki shape–sound mapping', titleHe: 'אפקט בובה-קיקי', icon: Shapes, color: 'text-purple-400' },
   { id: 'flankerLetterTask', title: 'Flanker Letter Identification: Effects of Noise Letters', titleHe: 'משימת זיהוי אות מוקפת ברעש (אפקט הפלנקר)', icon: Shapes, color: 'text-purple-400', href: '/run/flankerLetterTask' },
+  { id: 'lexicalDecisionPairs', title: 'Word Pair Lexical Decision (Yes/No Task)', titleHe: 'משימת החלטה לקסיקלית בזוגות מילים (כן/לא)', icon: Shapes, color: 'text-purple-400', href: '/run/lexicalDecisionPairs' },
 ];
 
 const CATEGORIES = [
   { name: 'PERCEPTION',        nameHe: 'תפיסה',         ids: ['summaryStats', 'CompositeFace', 'wordSuperiority'] },
   { name: 'ATTENTION',         nameHe: 'קשב',           ids: ['visualSearch', 'posnerCueing', 'flankerLetterTask'] },
-  { name: 'LANGUAGE',          nameHe: 'שפה',           ids: ['bouba-kiki', 'boubaKikiDemo'] },
+  { name: 'LANGUAGE',          nameHe: 'שפה',           ids: ['bouba-kiki', 'boubaKikiDemo', 'lexicalDecisionPairs'] },
   { name: 'EXECUTIVE CONTROL', nameHe: 'בקרה ניהולית', ids: ['stroop'] },
   { name: 'IMAGINATION',       nameHe: 'דמיון',         ids: ['mentalRep'] },
   { name: 'MEMORY',            nameHe: 'זיכרון',        ids: ['drm', 'serialOrder', 'testingEffect'] },

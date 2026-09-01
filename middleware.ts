@@ -8,6 +8,7 @@ const EXPERIMENT_SLUGS = new Set([
   'bRMS',
   'boubaKikiDemo',
   'flankerLetterTask',
+  'lexicalDecisionPairs',
 ]);
 
 // Lock state changes at most a few times per semester, but without caching we
@@ -92,5 +93,6 @@ export const config = {
     '/bRMS/:path*',
     '/boubaKikiDemo/:path*',
     '/flankerLetterTask/:path*',
+    '/run/lexicalDecisionPairs/:path*',
   ],
 };
