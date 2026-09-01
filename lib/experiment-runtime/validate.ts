@@ -13,7 +13,7 @@
 // scripts/definition.mjs, which runs the real validator from the terminal under Node's
 // type stripping — that leaves a value import of a types-only module behind and fails.
 import type { ExperimentDefinition, ResponseStep } from './schema';
-import { excluded } from './trials';
+import { excluded, MAX_TRIALS } from './trials';
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -134,6 +134,100 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     return issues;
   }
 
+  // ── Shapes ─────────────────────────────────────────────────────────────────
+  //
+  // Every check past this point reads a field by its shape — `factor.name.replace`,
+  // `levels.map`, `chart.groupBy.replace` — so a field of the wrong TYPE throws a
+  // TypeError instead of producing a message. The definition is written by a model, and
+  // one that emits `"levels": "x"` or `"groupBy": 3` has to be told which field is wrong;
+  // a stack trace reaches the lecturer as a 500 with nothing to act on.
+  //
+  // Fuzzing found ten distinct crashes of exactly this kind, and one shape the validator
+  // ACCEPTED and the trial builder then choked on — a factor whose `levels` was not an
+  // array. So this pass is also what makes "validated" mean "buildable": stop here when
+  // anything is the wrong type, and everything downstream can trust what it reads.
+  const isStr = (v: unknown): v is string => typeof v === 'string';
+  const isObj = (v: unknown) => !!v && typeof v === 'object' && !Array.isArray(v);
+  const label = (i: number, name: unknown) => (isStr(name) && name ? `"${name}"` : `#${i + 1}`);
+  const shapes: string[] = [];
+  const bad = (what: string, expected: string) => shapes.push(`${what} must be ${expected}.`);
+
+  def.factors.forEach((f, i) => {
+    if (!isObj(f)) return bad(`Factor #${i + 1}`, 'an object');
+    const at = `Factor ${label(i, f.name)}`;
+    if (!isStr(f.name) || !f.name) bad(`${at}'s "name"`, 'a non-empty string');
+    if (f.levels !== undefined && !Array.isArray(f.levels)) bad(`${at}'s "levels"`, 'an array');
+    if (f.from !== undefined && !isStr(f.from)) bad(`${at}'s "from"`, 'a pool name');
+    if (f.sample !== undefined && !Number.isFinite(f.sample)) bad(`${at}'s "sample"`, 'a number');
+    if (f.derivedFrom !== undefined && (!Array.isArray(f.derivedFrom) || !f.derivedFrom.every(isStr))) {
+      bad(`${at}'s "derivedFrom"`, 'an array of factor names');
+    }
+    if (f.mapping !== undefined && !isObj(f.mapping)) bad(`${at}'s "mapping"`, 'an object');
+  });
+
+  if (def.pools !== undefined) {
+    if (!isObj(def.pools)) bad('"pools"', 'an object of named lists');
+    else {
+      for (const [name, pool] of Object.entries(def.pools)) {
+        if (!Array.isArray(pool)) bad(`Pool "${name}"`, 'an array');
+        else if (!pool.every(isObj)) bad(`Pool "${name}"`, 'an array of objects');
+      }
+    }
+  }
+
+  if (!Number.isFinite(def.repetitions) || def.repetitions < 1 || !Number.isInteger(def.repetitions)) {
+    bad('"repetitions"', 'a whole number of at least 1');
+  }
+
+  def.store.forEach((key, i) => { if (!isStr(key)) bad(`Entry #${i + 1} of "store"`, 'a string'); });
+
+  def.trial.phases.forEach((p, i) => {
+    if (!isObj(p)) return bad(`Phase #${i + 1}`, 'an object');
+    if (!isStr(p.name) || !p.name) bad(`Phase ${label(i, p.name)}'s "name"`, 'a non-empty string');
+    if (!isObj(p.display)) bad(`Phase ${label(i, p.name)}'s "display"`, 'an object');
+  });
+
+  const responseShapes: unknown[] =
+    Array.isArray(def.trial.response) ? def.trial.response : [def.trial.response];
+  responseShapes.forEach((s, i) => {
+    if (!isObj(s)) return bad(`Response #${i + 1}`, 'an object');
+    if (!isStr((s as ResponseStep).kind)) bad(`Response #${i + 1}'s "kind"`, 'a string');
+  });
+
+  if (!isObj(def.trial.correct) || !isStr(def.trial.correct.kind)) {
+    bad('"trial.correct"', 'an object with a "kind"');
+  }
+
+  def.dashboard.charts.forEach((c, i) => {
+    if (!isObj(c)) return bad(`Chart #${i + 1}`, 'an object');
+    const at = `Chart ${label(i, c.title)}`;
+    if (!isStr(c.groupBy)) bad(`${at}'s "groupBy"`, 'a factor name');
+    if (!isStr(c.measure)) bad(`${at}'s "measure"`, 'a measure name');
+    if (c.seriesBy !== undefined && !isStr(c.seriesBy)) bad(`${at}'s "seriesBy"`, 'a factor name');
+  });
+
+  if (def.exclude !== undefined) {
+    if (!Array.isArray(def.exclude)) bad('"exclude"', 'an array of cells to drop');
+    else def.exclude.forEach((cell, i) => {
+      if (!isObj(cell)) bad(`Entry #${i + 1} of "exclude"`, 'an object of factor values');
+    });
+  }
+
+  if (def.assets !== undefined) {
+    if (!isObj(def.assets)) bad('"assets"', 'an object with "base" and "files"');
+    else {
+      if (!isStr(def.assets.base)) bad('"assets.base"', 'a URL ending in "/"');
+      if (!Array.isArray(def.assets.files) || !def.assets.files.every(isStr)) {
+        bad('"assets.files"', 'a list of filenames');
+      }
+    }
+  }
+
+  if (shapes.length) {
+    for (const message of shapes) err(message);
+    return issues;
+  }
+
   // ── Factors and pools ──────────────────────────────────────────────────────
   if (def.factors.length === 0) err('The design has no factors, so there is nothing to vary.');
 
@@ -185,7 +279,14 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   const total = cells * def.repetitions;
   if (total === 0) err('The design produces no trials.');
   else if (total < 8) warn(`Only ${total} trials — too few to show an effect reliably.`);
-  else if (total > 400) warn(`${total} trials is a long session; consider fewer repetitions.`);
+  else if (total > MAX_TRIALS) {
+    // An error rather than a warning, because nothing downstream survives it. The trial
+    // list is built in memory and the mock generator multiplies it by the participant
+    // count, so a design this size does not run slowly — it exhausts the tab. Fuzzing
+    // produced `repetitions: 1e9` on an otherwise valid definition and took the process
+    // down with "JavaScript heap out of memory".
+    err(`${total.toLocaleString()} trials is far more than any session can run, and building it would exhaust memory. Reduce the repetitions or the number of levels.`);
+  } else if (total > 400) warn(`${total} trials is a long session; consider fewer repetitions.`);
 
   if (def.practice && def.practice.count > total) {
     warn(`Practice is ${def.practice.count} trials but the design only has ${total}.`);

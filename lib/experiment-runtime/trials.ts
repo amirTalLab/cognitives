@@ -67,6 +67,17 @@ export function seededRandom(seed: number) {
   return () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
 }
 
+/**
+ * Trials past which a design is not long, but impossible.
+ *
+ * A classroom task is 40-120 trials, and 400 already earns a warning from the validator.
+ * This is the point where the list stops being something to sit through and becomes
+ * something that cannot be allocated — generous enough that no real design reaches it by
+ * accident. Lives here rather than in validate.ts because the validator imports from this
+ * module, and the reverse would be a cycle.
+ */
+export const MAX_TRIALS = 5000;
+
 /** Fisher-Yates. Genuinely random, unlike a comparator-based sort shuffle. */
 export function shuffle<T>(items: T[], rng: () => number = Math.random): T[] {
   const out = [...items];
@@ -139,6 +150,19 @@ export function buildTrials(
   // before counterbalancing so that alternates evenly over the trials that survive rather
   // than over a list with holes in it.
   if (def.exclude?.length) rows = rows.filter(row => !excluded(row, def.exclude!));
+
+  // Checked before allocating, not after. The validator rejects a design this large, but
+  // this runs on definitions that did not necessarily come through it — a row read straight
+  // from the database, a preview built from sessionStorage — and `repetitions: 1e9` here
+  // does not fail slowly, it takes the tab down with it. Refusing with a message the
+  // lecturer can act on is the better failure.
+  const planned = rows.length * def.repetitions;
+  if (!Number.isFinite(planned) || planned > MAX_TRIALS) {
+    throw new Error(
+      `This experiment asks for ${Number.isFinite(planned) ? planned.toLocaleString() : 'an unlimited number of'} trials, ` +
+      `which is more than can be built (the limit is ${MAX_TRIALS.toLocaleString()}). Reduce "repetitions" or the number of levels.`,
+    );
+  }
 
   rows = Array.from({ length: def.repetitions }, () => rows).flat();
   rows = shuffle(rows, rng);
