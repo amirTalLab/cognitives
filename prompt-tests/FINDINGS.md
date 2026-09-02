@@ -203,7 +203,44 @@ drives all 5 of its charts.
 **The gate holds over HTTP:** `POST /api/create/definition` returns 401 both with no
 password header and with a wrong one.
 
-### 13. E2E covers none of the new runtime *(new)*
+### 15. A student saw a blank screen when the database was unreachable *(found by the new E2E, FIXED)*
+
+`loadDefinition` handles an error *response* from Supabase, but a **throw** — an unreachable
+host, which is exactly what a paused project produces — rejected all the way out of
+`getDefinition`. The page awaits it with `.then()` alone, so nothing ever set the stage and
+the participant was left on an empty dark screen with no message, indefinitely.
+
+This site has already had a paused project once. Every student holding a link would have
+seen nothing at all, with no way to tell a wrong link from an outage.
+
+Fixed: the network call is caught in `registry.ts`, and the page also catches, so an
+experiment that cannot be loaded says so instead of hanging.
+
+### 16. Mock data was silently replaced by a slow real fetch *(found by the new E2E, FIXED)*
+
+`load()` had no staleness guard. Mock rows are produced synchronously; a real fetch takes
+as long as the network does. Switching Mock Data on set the mock rows, then the fetch
+started a moment earlier resolved and overwrote them — the badge still read "mock data"
+while the chart showed the real (usually empty) set. A lecturer demonstrating an effect
+would watch it appear and vanish a second later.
+
+Proven by a test that delays the read by 2.5s: it failed before the fix, passes after.
+Fixed with a load id, so only the newest load may write rows.
+
+Worth noting how close this came to being missed: the first version of the test asserted
+`/\d+ participants/`, which **matches "0 participants"** — it passed while the bug was
+live. The assertion now requires a non-zero count.
+
+### 13. E2E covers none of the new runtime *(CLOSED)*
+
+`tests/run-definition.spec.ts` adds 12 tests: unknown slug, landing validation, language
+toggle, a full participant run to the thank-you screen, a phone viewport with no horizontal
+overflow, the inter-trial flash regression, the password gate, mock data with a render
+budget, the reveal control, and every built-in definition's dashboard rendering with mock
+data. **35 E2E tests pass in total**, up from 23.
+
+Two of them are regression tests for the bugs a person had to find by hand this week, and
+writing them immediately surfaced findings 15 and 16.
 
 All 23 tests exercise the sixteen hand-written experiments. Nothing covers `/run/{slug}`,
 the definition teacher dashboard, the Mock Data toggle, the QR code, or a mobile viewport —
@@ -220,6 +257,25 @@ show a preflight banner — but confirming to an anonymous caller that a funded 
 behind the other endpoints is free reconnaissance. Gating it costs nothing.
 
 ---
+
+## Needs you: 52 test rows are in the production results table
+
+The first run of the E2E suite took the Stroop experiment for real, and every trial saved a
+row — 52 of them, named **"E2E Tester"** under `stroopClassic`, in the live
+`experiment_results` table alongside genuine data. The suite now intercepts every request to
+`/rest/v1/**` so it can never reach the database again, but the rows already written cannot
+be removed with the anon key: there is no delete policy for `anon` on that table, so a
+DELETE returns 200 and removes nothing.
+
+Run this once in the Supabase SQL editor:
+
+```sql
+delete from experiment_results where participant_name = 'E2E Tester';
+```
+
+Related: **no results table can be cleaned from the app.** Only `mental_rep_results` grants
+delete to `anon`. Every other table needs the SQL editor for any correction — a stray test
+run, a student who asks to be removed. Worth deciding deliberately rather than by accident.
 
 ## Not yet run
 

@@ -27,10 +27,15 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   const [rows, setRows] = useState<TrialRow[]>([]);
 
   useEffect(() => {
-    getDefinition(slug).then(d => {
-      setDef(d);
-      setStage(d ? 'landing' : 'missing');
-    });
+    // Caught as well as resolved: an unhandled rejection leaves the stage on 'loading',
+    // which renders as an empty dark screen forever. A participant given a stale link
+    // should be told the experiment is not there, not left looking at nothing.
+    getDefinition(slug)
+      .then(d => {
+        setDef(d);
+        setStage(d ? 'landing' : 'missing');
+      })
+      .catch(() => setStage('missing'));
   }, [slug]);
 
   const rtl = language === 'he';

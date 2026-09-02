@@ -10,7 +10,7 @@
 // with the counts underneath, right-aligned button group, amber reserved for mock data,
 // and every chart behind a Reveal so a class can predict the result before seeing it.
 
-import { useCallback, useEffect, useState, FormEvent, ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, FormEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { FlaskConical } from 'lucide-react';
 import {
@@ -162,11 +162,24 @@ export function Dashboard({ definition, fetchRows }: {
     if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
   }, []);
 
+  // Which load is the current one. Mock rows are produced synchronously while a real fetch
+  // takes as long as the network does, so without this the fetch started before Mock Data
+  // was switched on resolves afterwards and replaces the mock rows — the badge still reads
+  // "mock data" while the chart shows the real (usually empty) set. A lecturer
+  // demonstrating an effect watches it vanish a second after it appears.
+  const loadId = useRef(0);
+
   const load = useCallback(async () => {
+    const id = ++loadId.current;
     if (useMock) { setRows(generateMockRows(definition)); return; }
     setLoading(true);
-    try { setRows(await fetchRows()); } catch { setRows([]); }
-    setLoading(false);
+    try {
+      const fetched = await fetchRows();
+      if (id === loadId.current) setRows(fetched);
+    } catch {
+      if (id === loadId.current) setRows([]);
+    }
+    if (id === loadId.current) setLoading(false);
   }, [useMock, definition, fetchRows]);
 
   useEffect(() => { if (authed) void load(); }, [authed, load]);

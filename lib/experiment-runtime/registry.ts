@@ -58,7 +58,15 @@ export async function getDefinition(slug: string): Promise<ExperimentDefinition 
   const builtIn = BUILT_IN.find(d => d.slug === slug);
   if (builtIn) return builtIn;
 
-  return await loadDefinition(slug);
+  // A throw here — not an error response, an unreachable host — used to reject all the way
+  // out of this function. The page awaits it with .then() alone, so nothing ever set the
+  // stage and the participant was left on a blank screen with no message. That is the
+  // exact shape of a paused Supabase project, which this site has already had once.
+  try {
+    return await loadDefinition(slug);
+  } catch {
+    return null;
+  }
 }
 
 export async function listDefinitions(): Promise<ExperimentDefinition[]> {
