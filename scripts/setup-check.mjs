@@ -129,8 +129,9 @@ console.log('');
 
 if (canPreview) {
   console.log(`  ${c.bold('To start:')} run ${c.bold('claude')} in this folder, then:`);
-  console.log(`    ${c.dim('/experiment build a Stroop task')}`);
+  console.log(`    ${c.dim('/experiment')}                          ${c.dim('— it asks what you want')}`);
   console.log(`    ${c.dim('/experiment papers/your-paper.pdf')}`);
+  console.log(`    ${c.dim('/experiment people rate how typical each animal is of its category')}`);
   console.log('');
   console.log(`  ${c.dim('Guide: docs/BUILD-AN-EXPERIMENT.md')}`);
   console.log('');

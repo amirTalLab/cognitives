@@ -45,9 +45,14 @@ claude                # start Claude Code in this folder
 Then, inside Claude Code:
 
 ```
-/experiment build a Stroop task
-/experiment papers/sternberg-1966.pdf     # put PDFs in papers/ first
+/experiment                                    # asks what you want to build
+/experiment papers/sternberg-1966.pdf          # put PDFs in papers/ first
+/experiment people judge whether two words are related, measuring reaction time
 ```
+
+Any behavioural task fits: your own design, a paradigm you describe from memory, or an
+experiment out of a paper. It is not limited to the classics — most of what gets built this
+way has never existed on the site before.
 
 It runs the same stages as the web wizard and **stops for you at each decision**:
 

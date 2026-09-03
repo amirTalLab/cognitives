@@ -100,9 +100,17 @@ Then type:
 …or go straight in:
 
 ```
-/experiment build a Stroop task
 /experiment papers/sternberg-1966.pdf
+/experiment people judge whether two words are related, measuring reaction time
+/experiment my own design: three set sizes, participants report whether a shape was in the set
 ```
+
+**Anything behavioural fits.** Your own design, a task you can describe from memory, or an
+experiment from a paper. It is not a library of famous paradigms — you are describing what
+*you* want students to do, and most experiments built this way are new to the site.
+
+If you are unsure whether an idea will fit, just describe it. Claude will tell you whether it
+can be built, and if not, why — some things genuinely cannot be (see the end of this guide).
 
 **From a paper?** Put the PDF in the `papers/` folder first, then give its path.
 

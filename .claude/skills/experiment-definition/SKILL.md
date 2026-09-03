@@ -1,6 +1,6 @@
 ---
 name: experiment-definition
-description: "Build a cognitive experiment for the cognitives site as a DEFINITION (validated JSON run by the shared runtime) instead of generated pages. Use this whenever the user wants a new experiment, task or study added — 'build a Stroop task', 'make the experiment from this paper', 'add a lexical decision experiment' — and especially when they want to avoid the metered /create pipeline and use the Claude Code subscription instead. Produces experiments/<slug>.json, validates it with npm run exp:check, and publishes it to /run/<slug>. Falls back to new-cognitive-experiment only for designs the schema cannot express."
+description: "Build a cognitive experiment for the cognitives site as a DEFINITION (validated JSON run by the shared runtime) instead of generated pages. Use this whenever the user wants a new experiment, task or study added — from a paper, from a design they describe in their own words, or from an idea they want turned into something students can take — and especially when they want to avoid the metered /create pipeline and use the Claude Code subscription instead. Any behavioural task is in scope, not only well-known paradigms. Produces experiments/<slug>.json, validates it with npm run exp:check, and publishes it to /run/<slug>. Falls back to new-cognitive-experiment only for designs the schema cannot express."
 ---
 
 # Build an Experiment as a Definition

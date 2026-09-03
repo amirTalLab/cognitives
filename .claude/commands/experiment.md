@@ -1,6 +1,6 @@
 ---
 description: Build a classroom experiment — from a paper, or from a description. Same result as the /create page, on your Claude subscription instead of the metered API.
-argument-hint: [a PDF path, or a description like "a Stroop task"]
+argument-hint: [a PDF in papers/, or a description of the task you want]
 ---
 
 Build an experiment for the cognitives site, following the same stages the `/create` page
@@ -9,8 +9,11 @@ publish.**
 
 The request: **$ARGUMENTS**
 
-If that is empty, ask what they want to build — a paper in `papers/`, or a paradigm they can
-describe — and stop until they answer.
+If that is empty, ask what they want to build and stop until they answer. Offer the three
+shapes a request takes: a paper in `papers/`, a task they describe in their own words, or a
+design they already have on paper. **Do not offer a menu of famous paradigms** — this builds
+whatever behavioural task they want, and most of what gets made here is new to the site
+rather than a replication of a classic.
 
 Use the **`experiment-definition`** skill. When the request names a PDF, run
 **`experiment-from-paper`** first for the paper stages, then come back to
