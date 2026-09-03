@@ -24,15 +24,70 @@ landing page → (practice) → experiment → thanks, plus a `teacher/` dashboa
 
 ## Adding an experiment
 
-Two routes to the same result — a validated definition run by the shared runtime, live at
-`/run/<slug>` with no deploy:
+An experiment is **data, not code**: a validated JSON definition run by one shared runtime
+at `/run/<slug>`. Adding one adds a file — no pages to write, nothing to build, no deploy.
 
-- **In the browser** — the `/create` page. Upload a paper, approve the design, publish.
-  Billed to the lab's Anthropic key.
-- **In a terminal, free** — Claude Code and the `/experiment` command, on your own Claude
-  subscription. **[docs/BUILD-AN-EXPERIMENT.md](docs/BUILD-AN-EXPERIMENT.md)** walks a
-  lecturer through it from a fresh clone; `npm run exp:setup` says whether the machine is
-  ready.
+There are two front ends onto the same pipeline, producing the same artifact:
+
+| | `/create` page | Terminal + Claude Code |
+|---|---|---|
+| Cost | billed to the lab's Anthropic key | **free** — your Claude subscription |
+| Setup | none | clone + `npm install`, once |
+| Best for | a one-off | iterating, or several experiments |
+
+### From a terminal
+
+```bash
+npm run exp:setup     # ready? if not, it prints the one thing to fix
+claude                # start Claude Code in this folder
+```
+
+Then, inside Claude Code:
+
+```
+/experiment build a Stroop task
+/experiment papers/sternberg-1966.pdf     # put PDFs in papers/ first
+```
+
+It runs the same stages as the web wizard and **stops for you at each decision**:
+
+1. **Which experiment** — for a paper, the candidates found in it, each with a verdict on
+   whether it can be recreated in a browser. A paper that yields nothing usable is refused
+   rather than stretched into something.
+2. **The spec** — the design as a table *before* any JSON, every value marked `[from paper]`
+   or `[inferred]`. Correct anything wrong here; it is far cheaper than fixing it later.
+3. **Build + check** — writes `experiments/<slug>.json` and runs `npm run exp:check`, the
+   same validator the site runs. It reports what the design actually builds ("48 trials, 24
+   per condition, ~6 min"), which is where you notice a design twice as long as you meant.
+4. **Preview** — with `npm run dev` running, take it yourself at `/run/<slug>`, and open
+   `/run/<slug>/teacher` with **Mock Data** on to judge the charts with no participants.
+   Timings and wording read fine as JSON and turn out wrong on screen.
+5. **Refine** — say what to change in plain language ("make the mask 300ms", "add a
+   confidence rating", "halve the trials"). It edits, re-checks, you refresh. Free, so
+   iterate.
+6. **Publish** — `npm run exp:publish` makes it live at `/run/<slug>` immediately, for
+   anyone with the link. `exp:unpublish` takes it back down.
+
+Then hand students the link, or the QR code on the teacher dashboard.
+
+**No Anthropic API key is needed for this path** — that is what the website uses and what
+this avoids. The two Supabase keys are needed only to *publish*; building and previewing
+work without them.
+
+Full walkthrough for someone starting from a fresh clone, written for a lecturer rather than
+a developer: **[docs/BUILD-AN-EXPERIMENT.md](docs/BUILD-AN-EXPERIMENT.md)**.
+
+### Registering it on the homepage
+
+Publishing makes an experiment reachable by link. To list it on the homepage as well, three
+places must agree — ask Claude to *"list it on the homepage"* and it makes all three edits:
+
+- `app/page.tsx` — the card, with `href: '/run/<slug>'`
+- `middleware.ts` — the slug in `EXPERIMENT_SLUGS` **and** `'/run/<slug>/:path*'` in
+  `config.matcher`
+
+Both middleware entries are required. With the slug but no matcher, the lock toggle reports
+success and does nothing — `npm run test:pipeline` now checks for exactly that.
 
 ## Tech stack
 
