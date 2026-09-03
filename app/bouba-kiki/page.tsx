@@ -67,7 +67,7 @@ export default function BoubaKikiIntro() {
   const t = content[language];
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 ${language === 'he' ? 'rtl' : 'ltr'}`}>
+    <div className={`min-h-screen bg-[#0f172a] ${language === 'he' ? 'rtl' : 'ltr'}`}>
       <div className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Header */}
         <motion.div
@@ -76,17 +76,17 @@ export default function BoubaKikiIntro() {
           className="text-center mb-8"
         >
           <div className="flex items-center justify-center gap-3 mb-4">
-            <Shapes className="w-12 h-12 text-indigo-600" />
-            <h1 className="text-4xl font-bold text-gray-900">{t.title}</h1>
+            <Shapes className="w-12 h-12 text-indigo-400" />
+            <h1 className="text-4xl font-bold text-gray-100">{t.title}</h1>
           </div>
-          <p className="text-lg text-indigo-600 font-medium">{t.subtitle}</p>
+          <p className="text-lg text-indigo-400 font-medium">{t.subtitle}</p>
         </motion.div>
 
         {/* Language Toggle */}
         <div className="flex justify-end mb-6">
           <button
             onClick={() => setLanguage(language === 'en' ? 'he' : 'en')}
-            className="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 hover:bg-gray-800 rounded-lg transition-colors"
           >
             {t.languageToggle}
           </button>
@@ -97,18 +97,18 @@ export default function BoubaKikiIntro() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl shadow-xl p-8 mb-6"
+          className="bg-gray-900 border border-gray-700 rounded-2xl shadow-xl p-8 mb-6"
         >
-          <h2 className="text-2xl font-semibold text-gray-900 mb-4">{t.welcome}</h2>
-          <p className="text-gray-700 mb-6 leading-relaxed">{t.intro}</p>
+          <h2 className="text-2xl font-semibold text-gray-100 mb-4">{t.welcome}</h2>
+          <p className="text-gray-300 mb-6 leading-relaxed">{t.intro}</p>
 
-          <div className="bg-indigo-50 rounded-xl p-6 mb-6">
-            <h3 className="font-semibold text-gray-900 mb-3">Instructions:</h3>
+          <div className="bg-gray-800 rounded-xl p-6 mb-6">
+            <h3 className="font-semibold text-gray-100 mb-3">Instructions:</h3>
             <ul className="space-y-2">
               {t.instructions.map((instruction, index) => (
                 <li key={index} className="flex items-start gap-2">
-                  <span className="text-indigo-600 font-bold mt-0.5">•</span>
-                  <span className="text-gray-700">{instruction}</span>
+                  <span className="text-indigo-400 font-bold mt-0.5">•</span>
+                  <span className="text-gray-300">{instruction}</span>
                 </li>
               ))}
             </ul>
@@ -116,7 +116,7 @@ export default function BoubaKikiIntro() {
 
           {/* Name Input */}
           <div className="mb-6">
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
               {t.nameLabel}
             </label>
             <input
@@ -125,7 +125,7 @@ export default function BoubaKikiIntro() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t.namePlaceholder}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   handleStart();
@@ -137,7 +137,7 @@ export default function BoubaKikiIntro() {
           {/* Start Button */}
           <button
             onClick={handleStart}
-            className="w-full bg-indigo-600 text-white py-4 rounded-lg font-semibold hover:bg-indigo-700 transition-colors shadow-lg hover:shadow-xl"
+            className="w-full bg-indigo-500 text-white py-4 rounded-lg font-semibold hover:bg-indigo-400 transition-colors shadow-lg hover:shadow-xl"
           >
             {t.startButton}
           </button>
@@ -151,7 +151,7 @@ export default function BoubaKikiIntro() {
         >
           <button
             onClick={() => router.push('/')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors mx-auto"
+            className="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition-colors mx-auto"
           >
             <ChevronLeft className="w-5 h-5" />
             {t.backButton}

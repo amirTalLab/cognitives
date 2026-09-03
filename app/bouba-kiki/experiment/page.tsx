@@ -119,8 +119,8 @@ export default function BoubaKikiExperiment() {
 
   if (!sessionId || trials.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-xl text-gray-600">Loading experiment...</div>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="text-xl text-gray-400">Loading experiment...</div>
       </div>
     );
   }
@@ -150,11 +150,11 @@ export default function BoubaKikiExperiment() {
   const t = content[language];
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex flex-col ${language === 'he' ? 'rtl' : 'ltr'}`}>
+    <div className={`min-h-screen bg-[#0f172a] flex flex-col ${language === 'he' ? 'rtl' : 'ltr'}`}>
       {/* Progress Bar */}
       <div className="w-full bg-gray-200 h-2">
         <motion.div
-          className="h-2 bg-indigo-600"
+          className="h-2 bg-indigo-500"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.3 }}
@@ -162,7 +162,7 @@ export default function BoubaKikiExperiment() {
       </div>
 
       {/* Trial Counter */}
-      <div className="text-center py-4 text-gray-600">
+      <div className="text-center py-4 text-gray-400">
         Trial {currentIndex + 1} / {trials.length}
       </div>
 
@@ -189,9 +189,9 @@ export default function BoubaKikiExperiment() {
             >
               {/* Question */}
               <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 mb-4">{t.question}</h2>
+                <h2 className="text-3xl font-bold text-gray-100 mb-4">{t.question}</h2>
                 {!trial.isControl && (
-                  <div className="text-6xl font-bold text-indigo-600 mb-8">{trial.word}</div>
+                  <div className="text-6xl font-bold text-indigo-400 mb-8">{trial.word}</div>
                 )}
               </div>
 
@@ -238,7 +238,7 @@ export default function BoubaKikiExperiment() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleResponse('bouba')}
-                      className="px-12 py-4 bg-indigo-600 text-white text-xl font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-lg"
+                      className="px-12 py-4 bg-indigo-500 text-white text-xl font-semibold rounded-lg hover:bg-indigo-400 transition-colors shadow-lg"
                     >
                       {t.boubaButton}
                     </motion.button>
@@ -246,7 +246,7 @@ export default function BoubaKikiExperiment() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleResponse('kiki')}
-                      className="px-12 py-4 bg-purple-600 text-white text-xl font-semibold rounded-lg hover:bg-purple-700 transition-colors shadow-lg"
+                      className="px-12 py-4 bg-purple-500 text-white text-xl font-semibold rounded-lg hover:bg-purple-400 transition-colors shadow-lg"
                     >
                       {t.kikiButton}
                     </motion.button>
@@ -257,7 +257,7 @@ export default function BoubaKikiExperiment() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleResponse('left')}
-                      className="px-12 py-4 bg-indigo-600 text-white text-xl font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-lg"
+                      className="px-12 py-4 bg-indigo-500 text-white text-xl font-semibold rounded-lg hover:bg-indigo-400 transition-colors shadow-lg"
                     >
                       {t.leftButton}
                     </motion.button>
@@ -265,7 +265,7 @@ export default function BoubaKikiExperiment() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleResponse('right')}
-                      className="px-12 py-4 bg-purple-600 text-white text-xl font-semibold rounded-lg hover:bg-purple-700 transition-colors shadow-lg"
+                      className="px-12 py-4 bg-purple-500 text-white text-xl font-semibold rounded-lg hover:bg-purple-400 transition-colors shadow-lg"
                     >
                       {t.rightButton}
                     </motion.button>

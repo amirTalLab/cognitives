@@ -65,7 +65,7 @@ export default function ScanningStudy() {
   const tc = timerContent[language];
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 ${language === 'he' ? 'rtl' : 'ltr'}`}>
+    <div className={`min-h-screen bg-[#0f172a] ${language === 'he' ? 'rtl' : 'ltr'}`}>
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
         <motion.div
@@ -74,8 +74,8 @@ export default function ScanningStudy() {
           className="text-center mb-6"
         >
           <div className="flex items-center justify-center gap-3 mb-2">
-            <Map className="w-10 h-10 text-cyan-600" />
-            <h1 className="text-3xl font-bold text-gray-900">{t.studyTitle}</h1>
+            <Map className="w-10 h-10 text-cyan-400" />
+            <h1 className="text-3xl font-bold text-gray-100">{t.studyTitle}</h1>
           </div>
         </motion.div>
 
@@ -84,9 +84,9 @@ export default function ScanningStudy() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-cyan-100 rounded-xl p-4 mb-6 text-center"
+          className="bg-gray-800 rounded-xl p-4 mb-6 text-center"
         >
-          <ul className="space-y-1 text-gray-700">
+          <ul className="space-y-1 text-gray-300">
             {t.studyInstructions.map((instruction, index) => (
               <li key={index}>{instruction}</li>
             ))}
@@ -101,19 +101,19 @@ export default function ScanningStudy() {
           className="text-center mb-6"
         >
           {!studyComplete ? (
-            <div className="inline-flex items-center gap-3 bg-white rounded-full px-6 py-3 shadow-lg">
-              <span className="text-gray-600">{tc.timeRemaining}</span>
-              <span className={`text-3xl font-bold ${timeLeft <= 10 ? 'text-red-500' : 'text-cyan-600'}`}>
+            <div className="inline-flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-full px-6 py-3 shadow-lg">
+              <span className="text-gray-400">{tc.timeRemaining}</span>
+              <span className={`text-3xl font-bold ${timeLeft <= 10 ? 'text-red-500' : 'text-cyan-400'}`}>
                 {timeLeft}
               </span>
-              <span className="text-gray-600">{tc.seconds}</span>
+              <span className="text-gray-400">{tc.seconds}</span>
             </div>
           ) : (
             <div className="inline-flex flex-col items-center gap-4">
-              <span className="text-2xl font-bold text-green-600">{tc.studyComplete}</span>
+              <span className="text-2xl font-bold text-green-400">{tc.studyComplete}</span>
               <button
                 onClick={handleContinue}
-                className="bg-cyan-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-cyan-700 transition-colors shadow-lg"
+                className="bg-cyan-500 text-white px-8 py-3 rounded-lg font-semibold hover:bg-cyan-400 transition-colors shadow-lg"
               >
                 {tc.continueButton}
               </button>
@@ -126,7 +126,7 @@ export default function ScanningStudy() {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.3 }}
-          className="bg-white rounded-2xl shadow-xl p-6 mb-6"
+          className="bg-gray-900 border border-gray-700 rounded-2xl shadow-xl p-6 mb-6"
         >
           <IslandMap
             width={700}
@@ -141,7 +141,7 @@ export default function ScanningStudy() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-          className="text-center text-gray-600"
+          className="text-center text-gray-400"
         >
           {tc.memorize}
         </motion.div>

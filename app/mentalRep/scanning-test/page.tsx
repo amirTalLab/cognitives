@@ -115,8 +115,8 @@ export default function ScanningTest() {
 
   if (!sessionId || trials.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 flex items-center justify-center">
-        <div className="text-xl text-gray-600">Loading...</div>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="text-xl text-gray-400">Loading...</div>
       </div>
     );
   }
@@ -130,11 +130,11 @@ export default function ScanningTest() {
   const toName = language === 'he' ? trial.toLandmark.nameHe : trial.toLandmark.name;
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 flex flex-col ${language === 'he' ? 'rtl' : 'ltr'}`}>
+    <div className={`min-h-screen bg-[#0f172a] flex flex-col ${language === 'he' ? 'rtl' : 'ltr'}`}>
       {/* Progress Bar */}
       <div className="w-full bg-gray-200 h-2">
         <motion.div
-          className="h-2 bg-cyan-600"
+          className="h-2 bg-cyan-500"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.3 }}
@@ -142,7 +142,7 @@ export default function ScanningTest() {
       </div>
 
       {/* Trial Counter */}
-      <div className="text-center py-4 text-gray-600">
+      <div className="text-center py-4 text-gray-400">
         {language === 'en' ? 'Trial' : 'ניסוי'} {currentIndex + 1} / {trials.length}
       </div>
 
@@ -169,19 +169,19 @@ export default function ScanningTest() {
               exit={{ opacity: 0, scale: 0.9 }}
               className="text-center"
             >
-              <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md">
-                <MapPin className="w-16 h-16 text-cyan-600 mx-auto mb-4" />
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-xl p-8 max-w-md">
+                <MapPin className="w-16 h-16 text-cyan-400 mx-auto mb-4" />
 
                 <div className="mb-6">
-                  <div className="text-gray-600 mb-1">{t.startLabel}</div>
-                  <div className="text-3xl font-bold text-cyan-700">{fromName}</div>
+                  <div className="text-gray-400 mb-1">{t.startLabel}</div>
+                  <div className="text-3xl font-bold text-cyan-400">{fromName}</div>
                 </div>
 
                 <div className="text-4xl text-gray-400 mb-6">↓</div>
 
                 <div>
-                  <div className="text-gray-600 mb-1">{t.targetLabel}</div>
-                  <div className="text-3xl font-bold text-blue-700">{toName}</div>
+                  <div className="text-gray-400 mb-1">{t.targetLabel}</div>
+                  <div className="text-3xl font-bold text-blue-400">{toName}</div>
                 </div>
               </div>
             </motion.div>
@@ -204,27 +204,27 @@ export default function ScanningTest() {
                   {t.foundIt}
                 </motion.div>
               ) : (
-                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg">
+                <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-xl p-8 max-w-lg">
                   <div className="flex items-center justify-center gap-4 mb-8">
                     <div className="text-center">
                       <div className="text-sm text-gray-500 mb-1">{t.startLabel}</div>
-                      <div className="text-2xl font-bold text-cyan-700">{fromName}</div>
+                      <div className="text-2xl font-bold text-cyan-400">{fromName}</div>
                     </div>
 
                     <div className="text-3xl text-gray-300">→</div>
 
                     <div className="text-center">
                       <div className="text-sm text-gray-500 mb-1">{t.targetLabel}</div>
-                      <div className="text-2xl font-bold text-blue-700">{toName}</div>
+                      <div className="text-2xl font-bold text-blue-400">{toName}</div>
                     </div>
                   </div>
 
-                  <div className="bg-cyan-50 rounded-xl p-6 mb-6">
-                    <p className="text-lg text-gray-700">{t.testInstructions}</p>
+                  <div className="bg-gray-800 rounded-xl p-6 mb-6">
+                    <p className="text-lg text-gray-300">{t.testInstructions}</p>
                   </div>
 
                   <div className="animate-pulse">
-                    <div className="bg-cyan-600 text-white px-8 py-4 rounded-lg text-xl font-semibold inline-block">
+                    <div className="bg-cyan-500 text-white px-8 py-4 rounded-lg text-xl font-semibold inline-block">
                       {t.pressSpace}
                     </div>
                   </div>

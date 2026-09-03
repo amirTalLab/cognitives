@@ -142,16 +142,16 @@ export default function BoubaKikiResults() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-xl text-gray-600">Loading results...</div>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="text-xl text-gray-400">Loading results...</div>
       </div>
     );
   }
 
   if (!summary) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-xl text-gray-600">No results found</div>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="text-xl text-gray-400">No results found</div>
       </div>
     );
   }
@@ -201,7 +201,7 @@ export default function BoubaKikiResults() {
   ];
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 ${language === 'he' ? 'rtl' : 'ltr'}`}>
+    <div className={`min-h-screen bg-[#0f172a] ${language === 'he' ? 'rtl' : 'ltr'}`}>
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         {/* Header */}
         <motion.div
@@ -210,11 +210,11 @@ export default function BoubaKikiResults() {
           className="text-center mb-8"
         >
           <div className="flex items-center justify-center gap-3 mb-4">
-            <Shapes className="w-12 h-12 text-indigo-600" />
-            <h1 className="text-4xl font-bold text-gray-900">{t.title}</h1>
+            <Shapes className="w-12 h-12 text-indigo-400" />
+            <h1 className="text-4xl font-bold text-gray-100">{t.title}</h1>
           </div>
           {participantName && (
-            <p className="text-lg text-gray-600">
+            <p className="text-lg text-gray-400">
               {participantName}
             </p>
           )}
@@ -227,21 +227,21 @@ export default function BoubaKikiResults() {
           transition={{ delay: 0.1 }}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
         >
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="text-sm text-gray-600 mb-1">{t.overallAccuracy}</div>
-            <div className="text-3xl font-bold text-indigo-600">{summary.accuracy.toFixed(1)}%</div>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-lg p-6">
+            <div className="text-sm text-gray-400 mb-1">{t.overallAccuracy}</div>
+            <div className="text-3xl font-bold text-indigo-400">{summary.accuracy.toFixed(1)}%</div>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="text-sm text-gray-600 mb-1">{t.boubaAccuracy}</div>
-            <div className="text-3xl font-bold text-indigo-600">{summary.boubaAccuracy.toFixed(1)}%</div>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-lg p-6">
+            <div className="text-sm text-gray-400 mb-1">{t.boubaAccuracy}</div>
+            <div className="text-3xl font-bold text-indigo-400">{summary.boubaAccuracy.toFixed(1)}%</div>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="text-sm text-gray-600 mb-1">{t.kikiAccuracy}</div>
-            <div className="text-3xl font-bold text-purple-600">{summary.kikiAccuracy.toFixed(1)}%</div>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-lg p-6">
+            <div className="text-sm text-gray-400 mb-1">{t.kikiAccuracy}</div>
+            <div className="text-3xl font-bold text-purple-400">{summary.kikiAccuracy.toFixed(1)}%</div>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="text-sm text-gray-600 mb-1">{t.meanRT}</div>
-            <div className="text-3xl font-bold text-gray-700">{summary.meanRT.toFixed(0)}ms</div>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-lg p-6">
+            <div className="text-sm text-gray-400 mb-1">{t.meanRT}</div>
+            <div className="text-3xl font-bold text-gray-300">{summary.meanRT.toFixed(0)}ms</div>
           </div>
         </motion.div>
 
@@ -250,9 +250,9 @@ export default function BoubaKikiResults() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl shadow-lg p-6 mb-8"
+          className="bg-gray-900 border border-gray-700 rounded-xl shadow-lg p-6 mb-8"
         >
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">{t.chartTitle}</h2>
+          <h2 className="text-xl font-semibold text-gray-100 mb-4">{t.chartTitle}</h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -270,10 +270,10 @@ export default function BoubaKikiResults() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-indigo-50 rounded-xl p-6 mb-8"
+          className="bg-gray-800 rounded-xl p-6 mb-8"
         >
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">{t.interpretation}</h3>
-          <p className="text-gray-700 leading-relaxed">{t.interpretationText}</p>
+          <h3 className="text-lg font-semibold text-gray-100 mb-2">{t.interpretation}</h3>
+          <p className="text-gray-300 leading-relaxed">{t.interpretationText}</p>
         </motion.div>
 
         {/* Action Buttons */}
@@ -285,7 +285,7 @@ export default function BoubaKikiResults() {
         >
           <button
             onClick={downloadData}
-            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-lg"
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-400 transition-colors shadow-lg"
           >
             <Download className="w-5 h-5" />
             {t.downloadButton}
@@ -293,7 +293,7 @@ export default function BoubaKikiResults() {
 
           <button
             onClick={() => router.push('/bouba-kiki/teacher')}
-            className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-lg"
+            className="flex items-center gap-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-400 transition-colors shadow-lg"
           >
             {t.teacherButton}
           </button>

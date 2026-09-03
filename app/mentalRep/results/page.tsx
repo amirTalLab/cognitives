@@ -197,16 +197,16 @@ export default function MentalRepResults() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 flex items-center justify-center">
-        <div className="text-xl text-gray-600">Loading results...</div>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="text-xl text-gray-400">Loading results...</div>
       </div>
     );
   }
 
   if (!summary) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 flex items-center justify-center">
-        <div className="text-xl text-gray-600">No results found</div>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="text-xl text-gray-400">No results found</div>
       </div>
     );
   }
@@ -251,7 +251,7 @@ export default function MentalRepResults() {
   const t = content[language];
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-cyan-50 to-blue-50 ${language === 'he' ? 'rtl' : 'ltr'}`}>
+    <div className={`min-h-screen bg-[#0f172a] ${language === 'he' ? 'rtl' : 'ltr'}`}>
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <motion.div
@@ -260,10 +260,10 @@ export default function MentalRepResults() {
           className="text-center mb-8"
         >
           <div className="flex items-center justify-center gap-3 mb-4">
-            <BrainCog className="w-12 h-12 text-cyan-600" />
-            <h1 className="text-4xl font-bold text-gray-900">{t.title}</h1>
+            <BrainCog className="w-12 h-12 text-cyan-400" />
+            <h1 className="text-4xl font-bold text-gray-100">{t.title}</h1>
           </div>
-          {participantName && <p className="text-lg text-gray-600">{participantName}</p>}
+          {participantName && <p className="text-lg text-gray-400">{participantName}</p>}
         </motion.div>
 
         {/* Scanning Results */}
@@ -271,29 +271,29 @@ export default function MentalRepResults() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl shadow-xl p-6 mb-8"
+          className="bg-gray-900 border border-gray-700 rounded-2xl shadow-xl p-6 mb-8"
         >
-          <h2 className="text-2xl font-bold text-cyan-700 mb-4">{t.scanningTitle}</h2>
+          <h2 className="text-2xl font-bold text-cyan-400 mb-4">{t.scanningTitle}</h2>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-cyan-50 rounded-xl p-4">
-              <div className="text-sm text-gray-600">{t.trials}</div>
-              <div className="text-2xl font-bold text-cyan-600">{summary.scanning.totalTrials}</div>
+            <div className="bg-gray-800 rounded-xl p-4">
+              <div className="text-sm text-gray-400">{t.trials}</div>
+              <div className="text-2xl font-bold text-cyan-400">{summary.scanning.totalTrials}</div>
             </div>
-            <div className="bg-cyan-50 rounded-xl p-4">
-              <div className="text-sm text-gray-600">{t.meanRT}</div>
-              <div className="text-2xl font-bold text-cyan-600">{summary.scanning.meanRT.toFixed(0)}ms</div>
+            <div className="bg-gray-800 rounded-xl p-4">
+              <div className="text-sm text-gray-400">{t.meanRT}</div>
+              <div className="text-2xl font-bold text-cyan-400">{summary.scanning.meanRT.toFixed(0)}ms</div>
             </div>
-            <div className="bg-cyan-50 rounded-xl p-4 col-span-2">
-              <div className="text-sm text-gray-600">{t.correlation} (Distance × RT)</div>
-              <div className="text-2xl font-bold text-cyan-600">r = {summary.scanning.correlation.toFixed(3)}</div>
+            <div className="bg-gray-800 rounded-xl p-4 col-span-2">
+              <div className="text-sm text-gray-400">{t.correlation} (Distance × RT)</div>
+              <div className="text-2xl font-bold text-cyan-400">r = {summary.scanning.correlation.toFixed(3)}</div>
             </div>
           </div>
 
           {/* Chart */}
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">{t.rtByDistance}</h3>
+            <h3 className="text-lg font-semibold text-gray-300 mb-2">{t.rtByDistance}</h3>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={summary.scanning.rtByDistance}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -318,7 +318,7 @@ export default function MentalRepResults() {
             </ResponsiveContainer>
           </div>
 
-          <p className="text-gray-600 text-sm bg-cyan-50 rounded-lg p-4">{t.scanningInterpretation}</p>
+          <p className="text-gray-400 text-sm bg-gray-800 rounded-lg p-4">{t.scanningInterpretation}</p>
         </motion.div>
 
         {/* Rotation Results */}
@@ -326,33 +326,33 @@ export default function MentalRepResults() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl shadow-xl p-6 mb-8"
+          className="bg-gray-900 border border-gray-700 rounded-2xl shadow-xl p-6 mb-8"
         >
-          <h2 className="text-2xl font-bold text-blue-700 mb-4">{t.rotationTitle}</h2>
+          <h2 className="text-2xl font-bold text-blue-400 mb-4">{t.rotationTitle}</h2>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-50 rounded-xl p-4">
-              <div className="text-sm text-gray-600">{t.trials}</div>
-              <div className="text-2xl font-bold text-blue-600">{summary.rotation.totalTrials}</div>
+            <div className="bg-gray-800 rounded-xl p-4">
+              <div className="text-sm text-gray-400">{t.trials}</div>
+              <div className="text-2xl font-bold text-blue-400">{summary.rotation.totalTrials}</div>
             </div>
-            <div className="bg-blue-50 rounded-xl p-4">
-              <div className="text-sm text-gray-600">{t.accuracy}</div>
-              <div className="text-2xl font-bold text-blue-600">{summary.rotation.accuracy.toFixed(1)}%</div>
+            <div className="bg-gray-800 rounded-xl p-4">
+              <div className="text-sm text-gray-400">{t.accuracy}</div>
+              <div className="text-2xl font-bold text-blue-400">{summary.rotation.accuracy.toFixed(1)}%</div>
             </div>
-            <div className="bg-blue-50 rounded-xl p-4">
-              <div className="text-sm text-gray-600">{t.meanRT}</div>
-              <div className="text-2xl font-bold text-blue-600">{summary.rotation.meanRT.toFixed(0)}ms</div>
+            <div className="bg-gray-800 rounded-xl p-4">
+              <div className="text-sm text-gray-400">{t.meanRT}</div>
+              <div className="text-2xl font-bold text-blue-400">{summary.rotation.meanRT.toFixed(0)}ms</div>
             </div>
-            <div className="bg-blue-50 rounded-xl p-4">
-              <div className="text-sm text-gray-600">{t.correlation} (Angle × RT)</div>
-              <div className="text-2xl font-bold text-blue-600">r = {summary.rotation.correlation.toFixed(3)}</div>
+            <div className="bg-gray-800 rounded-xl p-4">
+              <div className="text-sm text-gray-400">{t.correlation} (Angle × RT)</div>
+              <div className="text-2xl font-bold text-blue-400">r = {summary.rotation.correlation.toFixed(3)}</div>
             </div>
           </div>
 
           {/* Chart */}
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">{t.rtByAngle}</h3>
+            <h3 className="text-lg font-semibold text-gray-300 mb-2">{t.rtByAngle}</h3>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={summary.rotation.rtByAngle}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -377,7 +377,7 @@ export default function MentalRepResults() {
             </ResponsiveContainer>
           </div>
 
-          <p className="text-gray-600 text-sm bg-blue-50 rounded-lg p-4">{t.rotationInterpretation}</p>
+          <p className="text-gray-400 text-sm bg-gray-800 rounded-lg p-4">{t.rotationInterpretation}</p>
         </motion.div>
 
         {/* Action Buttons */}
@@ -389,7 +389,7 @@ export default function MentalRepResults() {
         >
           <button
             onClick={downloadData}
-            className="flex items-center gap-2 px-6 py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors shadow-lg"
+            className="flex items-center gap-2 px-6 py-3 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 transition-colors shadow-lg"
           >
             <Download className="w-5 h-5" />
             {t.downloadButton}
@@ -397,7 +397,7 @@ export default function MentalRepResults() {
 
           <button
             onClick={() => router.push('/mentalRep/teacher')}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
+            className="flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-400 transition-colors shadow-lg"
           >
             {t.teacherButton}
           </button>
