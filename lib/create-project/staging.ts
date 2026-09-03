@@ -14,7 +14,7 @@ const EXISTING_SLUGS = new Set([
   'stroop', 'drm', 'bouba-kiki', 'mentalRep', 'summaryStats',
   'posnerCueing', 'visualSearch', 'CompositeFace', 'wordSuperiority',
   'srt', 'twoStepTask', 'serialOrder', 'testingEffect', 'logics',
-  'creativity', 'bRMS', 'boubaKikiPaper', 'create', 'api', 'locked',
+  'creativity', 'bRMS', 'create', 'api', 'locked',
 ]);
 
 /** camelCase or kebab slug -> kebab, matching the lib/ and types/ naming convention. */

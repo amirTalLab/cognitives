@@ -44,17 +44,34 @@ test('full Stroop participant flow: landing → practice → 36 trials → thank
   await expect(page).toHaveURL('/stroop/experiment');
 
   // Practice phase — banner visible; wrong answers repeat the trial, so answer correctly.
-  await expect(page.locator('text=Practice Trial')).toBeVisible();
+  // The banner follows the language chosen on the landing page, and Hebrew is the default.
+  await expect(page.locator('text=ניסוי אימון')).toBeVisible();
   for (let i = 0; i < PRACTICE_TRIALS; i++) {
     await answerTrialCorrectly(page);
   }
 
   // Real phase — practice banner gone.
-  await expect(page.locator('text=Practice Trial')).toHaveCount(0);
+  await expect(page.locator('text=ניסוי אימון')).toHaveCount(0);
   for (let i = 0; i < REAL_TRIALS; i++) {
     if (page.url().endsWith('/stroop/thanks')) break;
     await answerTrialCorrectly(page);
   }
 
   await expect(page).toHaveURL('/stroop/thanks', { timeout: 10_000 });
+});
+
+test('the language toggle carries English through the whole run', async ({ page }) => {
+  // Stroop used to be Hebrew on the landing and English inside, so a participant could not
+  // run it in one language. The toggle now sets the language for every page of the run.
+  await page.goto('/stroop');
+  await page.click('text=English');
+  await expect(page.locator('h1')).toContainText('Stroop Experiment');
+
+  await page.fill('#fullName', 'Playwright Tester');
+  await page.click('text=Start experiment');
+  await expect(page).toHaveURL('/stroop/experiment');
+
+  // The experiment page reads the choice back out of sessionStorage.
+  await expect(page.locator('text=Practice Trial')).toBeVisible();
+  await expect(page.locator('text=font colour')).toBeVisible();
 });

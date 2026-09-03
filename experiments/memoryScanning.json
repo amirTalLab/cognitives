@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "slug": "memoryScanning",
+  "title": "Memory Scanning (Sternberg)",
+  "titleHe": "סריקת זיכרון (שטרנברג)",
+  "category": "MEMORY",
+  "instructions": {
+    "en": "On each trial you will see a short list of digits — try to remember them. After a brief pause a single digit appears. Press YES if that digit was in the list, and NO if it was not. Answer as fast as you can while staying accurate.",
+    "he": "בכל ניסיון תוצג רשימה קצרה של ספרות — נסו לזכור אותה. אחרי הפסקה קצרה תופיע ספרה בודדת. הקישו כן אם הספרה הייתה ברשימה, ולא אם לא הייתה. ענו מהר ככל האפשר תוך שמירה על דיוק."
+  },
+  "factors": [
+    { "name": "setSize", "levels": [1, 2, 4, 6] },
+    { "name": "variant", "levels": ["a", "b", "c"] },
+    { "name": "probeType", "levels": ["present", "absent"] },
+    {
+      "name": "memorySet",
+      "derivedFrom": ["setSize", "variant"],
+      "mapping": {
+        "1|a": "4",
+        "1|b": "7",
+        "1|c": "3",
+        "2|a": "5 1",
+        "2|b": "8 3",
+        "2|c": "2 9",
+        "4|a": "3 7 1 9",
+        "4|b": "2 6 4 8",
+        "4|c": "5 0 8 3",
+        "6|a": "3 7 1 9 5 2",
+        "6|b": "2 6 4 8 0 1",
+        "6|c": "5 0 8 3 6 7"
+      }
+    },
+    {
+      "name": "probe",
+      "derivedFrom": ["setSize", "variant", "probeType"],
+      "mapping": {
+        "1|a|present": "4", "1|a|absent": "8",
+        "1|b|present": "7", "1|b|absent": "2",
+        "1|c|present": "3", "1|c|absent": "9",
+        "2|a|present": "5", "2|a|absent": "8",
+        "2|b|present": "3", "2|b|absent": "6",
+        "2|c|present": "9", "2|c|absent": "4",
+        "4|a|present": "7", "4|a|absent": "5",
+        "4|b|present": "4", "4|b|absent": "1",
+        "4|c|present": "0", "4|c|absent": "6",
+        "6|a|present": "9", "6|a|absent": "4",
+        "6|b|present": "6", "6|b|absent": "7",
+        "6|c|present": "3", "6|c|absent": "1"
+      }
+    },
+    {
+      "name": "encodeMs",
+      "derivedFrom": ["setSize"],
+      "mapping": { "1": 800, "2": 1600, "4": 3200, "6": 4800 }
+    }
+  ],
+  "repetitions": 2,
+  "practice": { "count": 2, "feedback": true },
+  "trial": {
+    "phases": [
+      { "name": "fixation", "display": { "kind": "fixation" }, "durationMs": 500 },
+      {
+        "name": "memorize",
+        "display": { "kind": "text", "text": "{memorySet}", "font": "mono", "size": 48 },
+        "durationMs": "{encodeMs}"
+      },
+      { "name": "delay", "display": { "kind": "blank" }, "durationMs": 2000 },
+      { "name": "warning", "display": { "kind": "fixation", "symbol": "+" }, "durationMs": 500 },
+      {
+        "name": "probe",
+        "display": { "kind": "text", "text": "{probe}", "font": "mono", "size": 72 },
+        "awaitsResponse": true,
+        "startsClock": true
+      }
+    ],
+    "response": {
+      "kind": "choice",
+      "layout": "row",
+      "options": [
+        { "value": "present", "label": "כן", "key": "f" },
+        { "value": "absent", "label": "לא", "key": "j" }
+      ]
+    },
+    "correct": { "kind": "matchesFactor", "factor": "probeType" },
+    "itiMs": 1000
+  },
+  "store": ["setSize", "variant", "probeType", "memorySet", "probe"],
+  "dashboard": {
+    "charts": [
+      {
+        "title": "Reaction time by set size",
+        "kind": "line",
+        "groupBy": "setSize",
+        "measure": "meanRt",
+        "seriesBy": "probeType",
+        "yLabel": "Mean RT (ms)",
+        "errorBars": true
+      },
+      {
+        "title": "Accuracy by set size",
+        "kind": "bar",
+        "groupBy": "setSize",
+        "measure": "accuracy",
+        "yLabel": "% correct",
+        "errorBars": true
+      }
+    ]
+  },
+  "mock": {
+    "participants": 24,
+    "baseRtMs": 397,
+    "baseAccuracy": 0.97,
+    "effects": [
+      { "factor": "setSize", "level": "1", "rtDeltaMs": 38 },
+      { "factor": "setSize", "level": "2", "rtDeltaMs": 76 },
+      { "factor": "setSize", "level": "4", "rtDeltaMs": 152 },
+      { "factor": "setSize", "level": "6", "rtDeltaMs": 228 },
+      { "factor": "probeType", "level": "absent", "rtDeltaMs": 20 }
+    ]
+  },
+  "simplifications": [
+    { "what": "The memory set is shown all at once instead of one digit at a time at 1.2s each, with study time kept proportional at 800ms per digit.", "why": "A variable-length sequence of displays is not expressible — the phase list is fixed for every trial. Proportional exposure preserves per-item encoding time, and the set-size effect on retrieval RT is robust to simultaneous presentation, which is how many modern replications run it." },
+    { "what": "Set sizes 1, 2, 4 and 6 with three fixed digit sets each, rather than a fresh random series of length 1-6 on every trial.", "why": "Keeps every cell balanced and the session classroom-sized; three variants per size stop a single set being learned across trials." },
+    { "what": "The recall-the-series-in-order step after each response was dropped.", "why": "It checked that the set was still held; it costs time and the reaction-time effect does not depend on it." },
+    { "what": "Inter-trial gap of 1s rather than the paper's 3.7s.", "why": "The gap separates trials; its length does not affect the scanning result." }
+  ]
+}

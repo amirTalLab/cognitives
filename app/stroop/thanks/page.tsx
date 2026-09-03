@@ -1,11 +1,22 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle } from 'lucide-react';
 
 export default function ThanksPage() {
+  // Whatever language the participant chose on the landing page, so the run ends in the
+  // language it started in.
+  const [isHe, setIsHe] = useState(true);
+  useEffect(() => {
+    setIsHe(sessionStorage.getItem('stroop_language') !== 'en');
+  }, []);
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8">
+    <main
+      className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center p-8"
+      dir={isHe ? 'rtl' : 'ltr'}
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -21,12 +32,12 @@ export default function ThanksPage() {
           <CheckCircle className="w-24 h-24 text-emerald-400" />
         </motion.div>
 
-        <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6">
-          !תודה
+        <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6 text-gray-100">
+          {isHe ? 'תודה!' : 'Thank you!'}
         </h1>
 
-        <p className="text-sm text-muted">
-          ניתן כעת לסגור את החלון
+        <p className="text-sm text-gray-400">
+          {isHe ? 'ניתן כעת לסגור את החלון' : 'You can now close this window'}
         </p>
       </motion.div>
     </main>

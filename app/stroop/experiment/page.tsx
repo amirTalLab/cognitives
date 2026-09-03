@@ -28,6 +28,9 @@ export default function ExperimentPage() {
   const [isWaiting, setIsWaiting] = useState(false);
   const [results, setResults] = useState<TrialResult[]>([]);
   const [practiceError, setPracticeError] = useState<ColorKey | null>(null);
+  // Chosen on the landing page. The stimuli themselves are Latin script in every condition
+  // (red / adom / rojo / flurg), so only the surrounding instructions change.
+  const [isHe, setIsHe] = useState(true);
   const startTimeRef = useRef<number>(0);
 
   useEffect(() => {
@@ -39,6 +42,7 @@ export default function ExperimentPage() {
     }
     setSessionId(storedSessionId);
     setParticipantName(storedName);
+    setIsHe(sessionStorage.getItem('stroop_language') !== 'en');
     setPracticeTrials(generatePracticeTrials());
     setTrials(generateTrials());
   }, [router]);
@@ -150,8 +154,8 @@ export default function ExperimentPage() {
 
   if (!sessionId || trials.length === 0 || practiceTrials.length === 0) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <div className="text-muted">Loading...</div>
+      <main className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="text-gray-400">{isHe ? 'טוען…' : 'Loading…'}</div>
       </main>
     );
   }
@@ -161,11 +165,13 @@ export default function ExperimentPage() {
   const totalForProgress = isPractice ? PRACTICE_TRIALS_COUNT : TOTAL_TRIALS;
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8">
+    <main className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center p-8">
       <div className="fixed top-8 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
         {isPractice ? (
           <div className="text-center">
-            <p className="text-sm font-medium text-emerald-400 mb-2">Practice Trial</p>
+            <p className="text-sm font-medium text-emerald-400 mb-2">
+              {isHe ? 'ניסוי אימון' : 'Practice Trial'}
+            </p>
             <ProgressBar current={currentIndex + 1} total={totalForProgress} />
           </div>
         ) : (
@@ -196,18 +202,22 @@ export default function ExperimentPage() {
       </div>
 
       <div className="fixed bottom-8 flex flex-col items-center gap-4">
-        <span className="text-sm text-muted">
-          Press the button matching the <strong>font color</strong>
+        <span className="text-sm text-gray-400">
+          {isHe ? (
+            <>לחצו על הכפתור שמתאים ל<strong>צבע האותיות</strong></>
+          ) : (
+            <>Press the button matching the <strong>font colour</strong></>
+          )}
         </span>
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={handleRestart}
-          className="flex items-center gap-2 px-4 py-2 text-sm text-muted
-                     hover:text-foreground transition-colors"
+          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-400
+                     hover:text-gray-200 transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
-          Restart
+          {isHe ? 'התחלה מחדש' : 'Restart'}
         </motion.button>
       </div>
     </main>

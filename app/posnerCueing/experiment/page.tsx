@@ -24,6 +24,12 @@ export default function PosnerExperimentPage() {
   const [feedbackMsg, setFeedbackMsg] = useState('');
   const [mainProgress, setMainProgress] = useState(0);
   const [isPracticeUI, setIsPracticeUI] = useState(true);
+  // Chosen on the landing page; the arrows and target are language-neutral, so only the
+  // surrounding text changes.
+  const [isHe, setIsHe] = useState(true);
+  // Also a ref: the feedback messages are set from timing-critical callbacks, and reading
+  // the ref keeps those callbacks' dependency lists exactly as they were.
+  const isHeRef = useRef(true);
 
   // Refs
   const phaseRef = useRef<Phase>('loading');
@@ -115,7 +121,7 @@ export default function PosnerExperimentPage() {
           const missTimeout = setTimeout(() => {
             if (phaseRef.current !== 'target') return;
             if (!trial.isPractice) saveResult(trial, 'miss', false, null);
-            setFeedbackMsg('!פספסת – נסה ללחוץ מהר יותר');
+            setFeedbackMsg(isHeRef.current ? 'פספסת — נסו ללחוץ מהר יותר!' : 'Missed — try to respond faster!');
             setPhaseSync('feedback');
             setTimeout(() => {
               if (phaseRef.current !== 'feedback') return;
@@ -138,7 +144,7 @@ export default function PosnerExperimentPage() {
     if (p === 'fixation' || p === 'cue') {
       if (missTimeoutRef.current) clearTimeout(missTimeoutRef.current);
       if (catchTimeoutRef.current) clearTimeout(catchTimeoutRef.current);
-      setFeedbackMsg('!מוקדם מדי – המתן ל-●');
+      setFeedbackMsg(isHeRef.current ? 'מוקדם מדי — המתינו ל-●!' : 'Too early — wait for the ●!');
       setPhaseSync('feedback');
       setTimeout(() => {
         if (phaseRef.current !== 'feedback') return;
@@ -152,7 +158,7 @@ export default function PosnerExperimentPage() {
       if (trial.validity === 'catch') {
         if (catchTimeoutRef.current) clearTimeout(catchTimeoutRef.current);
         if (!trial.isPractice) saveResult(trial, 'false_alarm', false, null);
-        setFeedbackMsg('!לא היה יעד – אל תלחץ');
+        setFeedbackMsg(isHeRef.current ? 'לא היה יעד — אין ללחוץ!' : 'No target — do not press!');
         setPhaseSync('feedback');
         setTimeout(() => {
           if (phaseRef.current !== 'feedback') return;
@@ -185,6 +191,9 @@ export default function PosnerExperimentPage() {
     const sid = sessionStorage.getItem('posner_session_id') ?? '';
     const name = sessionStorage.getItem('posner_participant_name') ?? '';
     if (!sid) { router.push('/posnerCueing'); return; }
+    const he = sessionStorage.getItem('posner_language') !== 'en';
+    setIsHe(he);
+    isHeRef.current = he;
     sessionIdRef.current = sid;
     participantNameRef.current = name;
 
@@ -232,7 +241,7 @@ export default function PosnerExperimentPage() {
   if (phase === 'loading') {
     return (
       <main className="min-h-screen bg-zinc-900 flex items-center justify-center">
-        <p className="text-white text-xl">טוען...</p>
+        <p className="text-white text-xl">{isHe ? 'טוען…' : 'Loading…'}</p>
       </main>
     );
   }
@@ -240,17 +249,17 @@ export default function PosnerExperimentPage() {
   if (phase === 'practice_break') {
     return (
       <main className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center gap-8 p-8">
-        <div className="text-center" dir="rtl">
+        <div className="text-center" dir={isHe ? 'rtl' : 'ltr'}>
           <p className="text-4xl mb-4">✓</p>
-          <h2 className="text-3xl font-bold text-amber-400 mb-3">!תרגול הסתיים</h2>
-          <p className="text-white text-lg mb-2">עכשיו יתחיל הניסוי האמיתי.</p>
-          <p className="text-zinc-400 text-sm">132 ניסיונות</p>
+          <h2 className="text-3xl font-bold text-amber-400 mb-3">{isHe ? 'התרגול הסתיים!' : 'Practice complete!'}</h2>
+          <p className="text-white text-lg mb-2">{isHe ? 'עכשיו יתחיל הניסוי האמיתי.' : 'The real experiment starts now.'}</p>
+          <p className="text-zinc-400 text-sm">{isHe ? '132 ניסיונות' : '132 trials'}</p>
         </div>
         <button
           onClick={startMainTrials}
           className="px-10 py-4 bg-amber-400 hover:bg-amber-300 text-zinc-900 font-bold text-xl rounded-xl transition-colors touch-manipulation"
         >
-          התחל
+          {isHe ? 'התחל' : 'Start'}
         </button>
       </main>
     );
@@ -268,7 +277,7 @@ export default function PosnerExperimentPage() {
         {isPracticeUI && (
           <div className="flex justify-center pt-1">
             <span className="text-xs text-amber-400 bg-zinc-800 px-3 py-0.5 rounded-full border border-amber-400/30">
-              תרגול
+              {isHe ? 'תרגול' : 'Practice'}
             </span>
           </div>
         )}
@@ -319,7 +328,7 @@ export default function PosnerExperimentPage() {
             className="w-full max-w-xs h-16 bg-amber-400 text-zinc-900 font-bold text-xl rounded-2xl
                        shadow-lg shadow-amber-400/30 active:scale-95 transition-transform touch-manipulation select-none"
           >
-            ● לחץ / Tap
+            {isHe ? '● לחצו' : '● Press'}
           </button>
         )}
         {!showResponseButton && phase !== 'feedback' && <div className="h-16" />}

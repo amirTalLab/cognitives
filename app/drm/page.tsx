@@ -39,7 +39,7 @@ export default function DRMHomePage() {
   const he = lang === 'he';
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8">
+    <main className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center p-8">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

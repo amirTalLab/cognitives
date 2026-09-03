@@ -73,8 +73,11 @@ function computeStats(results: PosnerResult[]): Stats {
 export default function PosnerResultsPage() {
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
+  // Whatever language the participant chose on the landing page.
+  const [isHe, setIsHe] = useState(true);
 
   useEffect(() => {
+    setIsHe(sessionStorage.getItem('posner_language') !== 'en');
     const raw = sessionStorage.getItem('posner_results');
     if (!raw) {
       router.push('/posnerCueing');
@@ -91,14 +94,14 @@ export default function PosnerResultsPage() {
   if (!stats) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p className="text-muted">טוען תוצאות...</p>
+        <p className="text-muted">{isHe ? 'טוען תוצאות…' : 'Loading results…'}</p>
       </main>
     );
   }
 
   const validityBarData = [
-    { name: 'תקף (Valid)', rt: stats.validRT },
-    { name: 'לא תקף (Invalid)', rt: stats.invalidRT },
+    { name: isHe ? 'תקף' : 'Valid', rt: stats.validRT },
+    { name: isHe ? 'לא תקף' : 'Invalid', rt: stats.invalidRT },
   ];
 
   const soaGroupedData = [
@@ -108,8 +111,12 @@ export default function PosnerResultsPage() {
 
   const interpretationText =
     stats.validityEffect > 20
-      ? `אפקט ההכוונה שלך הוא ${stats.validityEffect} מ"ש. הרמז החזותי שיפר משמעותית את מהירות תגובתך כאשר הוא הצביע לכיוון הנכון, בהשוואה לכיוון הלא נכון. זהו אפקט פוזנר הקלאסי!`
-      : `אפקט ההכוונה שלך קטן יחסית (${stats.validityEffect} מ"ש). ייתכן שהצלחת לא להיות מושפע מהרמז, או שנדרשים יותר ניסיונות לקבלת תוצאה יציבה.`;
+      ? (isHe
+          ? `אפקט ההכוונה שלך הוא ${stats.validityEffect} מ"ש. הרמז שיפר משמעותית את מהירות התגובה כשהצביע לכיוון הנכון, בהשוואה לכיוון הלא נכון. זהו אפקט פוזנר הקלאסי!`
+          : `Your cueing effect is ${stats.validityEffect} ms. The cue markedly sped up your response when it pointed the right way, compared with the wrong way. That is the classic Posner effect!`)
+      : (isHe
+          ? `אפקט ההכוונה שלך קטן יחסית (${stats.validityEffect} מ"ש). ייתכן שלא הושפעת מהרמז, או שנדרשים יותר ניסיונות לתוצאה יציבה.`
+          : `Your cueing effect is relatively small (${stats.validityEffect} ms). You may not have been influenced by the cue, or more trials may be needed for a stable estimate.`);
 
   return (
     <main className="min-h-screen flex flex-col items-center py-8 px-4 md:px-8">
@@ -121,9 +128,9 @@ export default function PosnerResultsPage() {
       >
         <div className="flex items-center justify-center gap-3 mb-2">
           <Target className="w-8 h-8 text-amber-400" />
-          <h1 className="text-4xl md:text-5xl font-bold text-center">התוצאות שלך</h1>
+          <h1 className="text-4xl md:text-5xl font-bold text-center">{isHe ? 'התוצאות שלך' : 'Your results'}</h1>
         </div>
-        <p className="text-muted text-center mb-8">ניסוי הכוונת תשומת לב – אפקט פוזנר</p>
+        <p className="text-muted text-center mb-8">{isHe ? 'ניסוי הכוונת תשומת לב — אפקט פוזנר' : 'Spatial cueing — the Posner effect'}</p>
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -162,7 +169,7 @@ export default function PosnerResultsPage() {
 
         {/* Bar chart: RT by validity */}
         <div className="bg-card border border-border rounded-xl p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">זמן תגובה לפי תקפות הרמז</h2>
+          <h2 className="text-lg font-semibold mb-4">{isHe ? 'זמן תגובה לפי תקפות הרמז' : 'Reaction time by cue validity'}</h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={validityBarData} margin={{ left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
@@ -183,7 +190,7 @@ export default function PosnerResultsPage() {
 
         {/* Grouped bar chart: RT by validity × SOA */}
         <div className="bg-card border border-border rounded-xl p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">זמן תגובה לפי תקפות × SOA</h2>
+          <h2 className="text-lg font-semibold mb-4">{isHe ? 'זמן תגובה לפי תקפות × SOA' : 'Reaction time by validity × SOA'}</h2>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={soaGroupedData} margin={{ left: 10, bottom: 5 }} barCategoryGap="25%">
               <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
@@ -209,13 +216,13 @@ export default function PosnerResultsPage() {
 
         {/* Catch stats */}
         <div className="bg-card border border-border rounded-xl p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-3">ניסיונות Catch</h2>
-          <div className="flex gap-6 text-sm text-muted" dir="rtl">
+          <h2 className="text-lg font-semibold mb-3">{isHe ? 'ניסיונות Catch' : 'Catch trials'}</h2>
+          <div className="flex gap-6 text-sm text-muted" dir={isHe ? 'rtl' : 'ltr'}>
             <span>
-              סה&quot;כ ניסיונות catch: <strong className="text-foreground">{stats.catchTotal}</strong>
+              {isHe ? 'סה"כ ניסיונות catch: ' : 'Catch trials: '}<strong className="text-foreground">{stats.catchTotal}</strong>
             </span>
             <span>
-              אזעקות שקר: <strong className="text-rose-400">{stats.catchFalseAlarms}</strong>
+              {isHe ? 'אזעקות שווא: ' : 'False alarms: '}<strong className="text-rose-400">{stats.catchFalseAlarms}</strong>
               {' '}({stats.catchFalseAlarmRate}%)
             </span>
           </div>
@@ -223,8 +230,8 @@ export default function PosnerResultsPage() {
 
         {/* Interpretation */}
         <div className="bg-card border border-amber-400/20 rounded-xl p-6 mb-8">
-          <h2 className="text-lg font-semibold mb-3">מה המשמעות?</h2>
-          <p className="text-muted leading-relaxed text-sm" dir="rtl">{interpretationText}</p>
+          <h2 className="text-lg font-semibold mb-3">{isHe ? 'מה המשמעות?' : 'What does this mean?'}</h2>
+          <p className="text-muted leading-relaxed text-sm" dir={isHe ? 'rtl' : 'ltr'}>{interpretationText}</p>
         </div>
 
         {/* Actions */}
@@ -236,7 +243,7 @@ export default function PosnerResultsPage() {
             className="px-6 py-3 bg-card border border-border rounded-xl font-medium
                        transition-colors hover:bg-border"
           >
-            חזרה לדף הבית
+            {isHe ? 'חזרה לדף הבית' : 'Back to home'}
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.02 }}
