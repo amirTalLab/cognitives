@@ -13,8 +13,17 @@ repo that can be reviewed, diffed and committed.
 no pages to write, nothing to build, and nothing to deploy: a definition previews the
 moment it is published.
 
-Pipeline: **design → `experiments/<slug>.json` → `exp:check` → `exp:publish` → try it →
-edit the JSON and repeat.**
+Same stages as the `/create` page, in the same order, so the two paths are one pipeline with
+two front ends:
+
+**analyze → choose → spec → build → check → preview → refine → publish**
+
+The lecturer decides at three of those — which experiment, whether the spec is right, and
+whether to publish. Stop and wait at each; do not run them together.
+
+`/experiment` is the entry point for someone who does not know the skills exist. If a
+command fails in a way that looks like setup rather than design — a missing dependency, no
+database — run `npm run exp:setup` and give them the one line it prints.
 
 ---
 
@@ -197,6 +206,16 @@ instructions all look fine in JSON and turn out wrong on screen.
 A local file also *overrides* a published experiment of the same slug in development, so
 revising a live experiment is safe: pull its definition into `experiments/`, edit, preview,
 and only then publish.
+
+### Refining
+
+This is where the wizard's chat happens instead. Take changes in the lecturer's own words —
+"make the mask 300ms", "add a confidence rating", "too many trials" — edit the JSON, re-run
+`exp:check`, and tell them to refresh. Expect several rounds; it costs nothing, so never
+talk them out of one.
+
+Change only what was asked. A refine that quietly also renumbers the trials or rewrites the
+instructions destroys the lecturer's trust in every later round.
 
 ---
 

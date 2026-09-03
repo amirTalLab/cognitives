@@ -22,6 +22,18 @@ lecturers view class-wide statistics on password-gated teacher dashboards.
 Every experiment follows the same route convention under `app/<slug>/`:
 landing page → (practice) → experiment → thanks, plus a `teacher/` dashboard.
 
+## Adding an experiment
+
+Two routes to the same result — a validated definition run by the shared runtime, live at
+`/run/<slug>` with no deploy:
+
+- **In the browser** — the `/create` page. Upload a paper, approve the design, publish.
+  Billed to the lab's Anthropic key.
+- **In a terminal, free** — Claude Code and the `/experiment` command, on your own Claude
+  subscription. **[docs/BUILD-AN-EXPERIMENT.md](docs/BUILD-AN-EXPERIMENT.md)** walks a
+  lecturer through it from a fresh clone; `npm run exp:setup` says whether the machine is
+  ready.
+
 ## Tech stack
 
 - **Next.js 16** (App Router) · **React 19** · **TypeScript 5**
@@ -56,6 +68,11 @@ toggles. Individual experiments are reachable directly at `/<slug>`
 | `npm run lint` | ESLint |
 | `npm test` | Playwright E2E suite (first time: `npx playwright install chromium`) |
 | `npm run test:ui` / `test:headed` / `test:report` | Interactive / visible-browser / report view |
+| `npm run test:pipeline` | Offline tests for the create pipeline and runtime (no key, no network) |
+| `npm run exp:setup` | Is this machine ready to build experiments? |
+| `npm run exp:check -- experiments/<slug>.json` | Validate a definition and describe what it builds |
+| `npm run exp:publish` / `exp:unpublish` / `exp:list` | Publish, retract, list |
+| `npm run exp:doctor` / `exp:verify` | Database health / live schema matches the setup file |
 
 ## Project layout
 

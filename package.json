@@ -16,6 +16,7 @@
     "test:headed": "playwright test --headed",
     "test:report": "playwright show-report",
     "exp": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/definition.mjs",
+    "exp:setup": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/setup-check.mjs",
     "exp:check": "npm run exp --silent -- check",
     "exp:assets": "npm run exp --silent -- assets",
     "exp:publish": "npm run exp --silent -- publish",
