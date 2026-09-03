@@ -130,6 +130,50 @@ for (const [name, def] of CORPUS) {
   });
 }
 
+// ── A2. Registration ──────────────────────────────────────────────────────────
+//
+// An experiment has to be registered in three places to work fully: the homepage lists it,
+// middleware knows its slug, and middleware's matcher covers its URL. Miss the matcher and
+// the lock toggle still appears to work while doing nothing — a locked experiment students
+// can walk straight into. That happened to flankerLetterTask, which was registered as
+// '/flankerLetterTask/:path*' when it lives at /run/flankerLetterTask, so middleware was
+// matching a route that does not exist.
+//
+// Static, so it costs nothing and cannot be forgotten.
+
+const homepage = readFileSync(join(process.cwd(), 'app', 'page.tsx'), 'utf8');
+const middleware = readFileSync(join(process.cwd(), 'middleware.ts'), 'utf8');
+
+/** Slugs the homepage links to /run/{slug}. */
+const runSlugs = [...homepage.matchAll(/href:\s*'\/run\/([A-Za-z0-9_-]+)'/g)].map(m => m[1]);
+
+test('the homepage links at least one definition experiment', () => {
+  assert.ok(runSlugs.length > 0, 'expected at least one href: "/run/..." on the homepage');
+});
+
+for (const slug of runSlugs) {
+  test(`[${slug}] is registered for locking`, () => {
+    assert.ok(
+      new RegExp(`'${slug}'`).test(middleware.split('export const config')[0]),
+      `"${slug}" is on the homepage but missing from EXPERIMENT_SLUGS, so its lock does nothing`,
+    );
+  });
+
+  test(`[${slug}] has a matcher entry for its real URL`, () => {
+    const matcher = middleware.split('export const config')[1] ?? '';
+    assert.ok(
+      matcher.includes(`'/run/${slug}/:path*'`),
+      `"${slug}" lives at /run/${slug} but has no '/run/${slug}/:path*' matcher entry — ` +
+      'middleware never runs for it and locking silently fails',
+    );
+    assert.ok(
+      !new RegExp(`'/${slug}/:path\\*'`).test(matcher),
+      `"${slug}" is matched as '/${slug}/:path*', a route that does not exist. ` +
+      `It should be '/run/${slug}/:path*'`,
+    );
+  });
+}
+
 // ── B. Trials engine ──────────────────────────────────────────────────────────
 
 /** A small design with a knob for each feature under test. */

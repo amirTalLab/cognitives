@@ -92,7 +92,10 @@ export const config = {
     '/creativity/:path*',
     '/bRMS/:path*',
     '/boubaKikiDemo/:path*',
-    '/flankerLetterTask/:path*',
+    // Definition experiments live under /run/{slug}. Registering one as a bare
+    // '/{slug}/:path*' matches a route that does not exist, so middleware never runs and
+    // the lock toggle silently does nothing — which is what happened to flankerLetterTask.
+    '/run/flankerLetterTask/:path*',
     '/run/lexicalDecisionPairs/:path*',
   ],
 };
