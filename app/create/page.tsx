@@ -15,7 +15,7 @@ import { motion } from 'framer-motion';
 import {
   Sparkles, Upload, FileText, Check, AlertTriangle, XCircle, Loader2, Home,
   Send, ArrowLeft, FlaskConical, ExternalLink, RefreshCw,
-  Trash2, Play, Database, Terminal, Image as ImageIcon,
+  Trash2, Play, Database, Terminal, Image as ImageIcon, History,
 } from 'lucide-react';
 import { verifyPassword } from '@/lib/auth';
 import { AssetManifest, ExperimentDefinition } from '@/lib/experiment-runtime/schema';
@@ -28,6 +28,9 @@ import {
   GeneratedFile, GenerateResponse, Spec, Stage, Usage, UsageEntry, estimateCost,
   blankSpec, SPEC_PLACEHOLDERS,
 } from '@/lib/create-project/types';
+import {
+  CreateDraft, DraftState, clearDraft, describeDraft, readDraft, worthSaving, writeDraft,
+} from '@/lib/create-project/draft';
 
 /** One entry per Claude Code skill file the pipeline runs on. */
 type SkillStatus = { name: string; loaded: boolean; bytes: number };
@@ -147,6 +150,9 @@ export default function CreateProjectPage() {
   const [definition, setDefinition] = useState<ExperimentDefinition | null>(null);
   const [, setIssues] = useState<ValidationIssue[]>([]);
   const [usage, setUsage] = useState<UsageEntry[]>([]);
+  // Unfinished work found in localStorage on load. Offered, never applied automatically —
+  // silently dropping someone into a stale half-finished state is its own kind of broken.
+  const [restorable, setRestorable] = useState<CreateDraft | null>(null);
 
   /** Records what a stage actually cost, so the running total is measured, not guessed. */
   const meter = useCallback((stage: string, model: 'fast' | 'strong', u?: Usage) => {
@@ -184,6 +190,61 @@ export default function CreateProjectPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ── Draft persistence ───────────────────────────────────────────────────────
+  // Every stage here is a paid call, so losing the tab used to mean paying to get back to
+  // where you already were. The draft is written on every change and offered on the next
+  // visit.
+
+  useEffect(() => {
+    if (!authed) return;
+    setRestorable(readDraft());
+  }, [authed]);
+
+  const draftState: DraftState = {
+    stage, pdfName, analysis, candidate, spec, assets, definition,
+    files, notes, problems, messages, usage, staged, compileState, finishResult,
+  };
+
+  useEffect(() => {
+    // The guard matters as much as the write: landing on an empty wizard must not overwrite
+    // a real draft with nothing before it has been offered back.
+    if (!authed || !worthSaving(draftState)) return;
+    writeDraft(draftState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, stage, pdfName, analysis, candidate, spec, assets, definition,
+      files, notes, problems, messages, usage, staged, compileState, finishResult]);
+
+  /** Puts a saved draft back into state. Costs nothing — no stage is re-run. */
+  function restoreDraft(draft: CreateDraft) {
+    setStage(draft.stage);
+    setPdfName(draft.pdfName);
+    setAnalysis(draft.analysis);
+    setCandidate(draft.candidate);
+    setSpec(draft.spec);
+    setAssets(draft.assets);
+    setDefinition(draft.definition);
+    setFiles(draft.files);
+    setNotes(draft.notes);
+    setProblems(draft.problems);
+    setMessages(draft.messages);
+    setUsage(draft.usage);
+    setStaged(draft.staged);
+    setCompileState(draft.compileState);
+    setFinishResult(draft.finishResult);
+    // The preview iframe reads the definition out of sessionStorage, which a closed tab
+    // empties. Without this the restored wizard would show a working preview pane pointing
+    // at an experiment the runtime no longer knows about.
+    if (draft.definition) putPreview(draft.definition);
+    setPreviewNonce(n => n + 1);
+    setRestorable(null);
+    setError(null);
+  }
+
+  function discardDraft() {
+    clearDraft();
+    setRestorable(null);
+  }
+
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     if (await verifyPassword(pwInput)) {
@@ -212,7 +273,14 @@ export default function CreateProjectPage() {
     }
   }, []);
 
-  async function onPickPdf(file: File) {
+  /**
+   * Reads a chosen PDF into memory.
+   *
+   * `keepWork` is the re-attach case: the bytes are the one part of a draft that is not
+   * saved, so handing the same file back after a refresh has to leave the analysis and spec
+   * that were paid for exactly where they are.
+   */
+  async function onPickPdf(file: File, keepWork = false) {
     setError(null);
     setStageResult(null);
     if (!file.name.toLowerCase().endsWith('.pdf')) {
@@ -226,7 +294,10 @@ export default function CreateProjectPage() {
     const b64 = await fileToBase64(file);
     setPdfName(file.name);
     setPdfBase64(b64);
-    // Uploading a different paper invalidates everything downstream.
+    if (keepWork) return;
+
+    // Uploading a different paper invalidates everything downstream — including any draft
+    // still on disk, which belongs to the paper being replaced.
     setAnalysis(null);
     setCandidate(null);
     setSpec(null);
@@ -234,6 +305,10 @@ export default function CreateProjectPage() {
     setAssetErrors([]);
     setFiles([]);
     setMessages([]);
+    // Cleared so the save effect sees nothing worth saving and leaves the discard below
+    // standing, instead of immediately rewriting a draft for the paper just replaced.
+    setDefinition(null);
+    discardDraft();
   }
 
   /**
@@ -720,6 +795,29 @@ export default function CreateProjectPage() {
           </div>
         )}
 
+        {/* Unfinished work from a previous visit. Shown only while nothing is in progress,
+            so it can never appear over work that would be lost by taking it. */}
+        {restorable && !worthSaving(draftState) && (
+          <div className="mb-6 p-4 rounded-2xl border border-emerald-400/40 bg-emerald-400/10">
+            <div className="flex items-start gap-3 flex-wrap">
+              <History className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-64">
+                <p className="text-sm font-semibold text-emerald-300">Unfinished experiment found</p>
+                <p className="text-sm text-gray-300 mt-0.5">{describeDraft(restorable)}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Restoring costs nothing — no stage is run again.
+                </p>
+              </div>
+              <div className="flex gap-3 flex-wrap ml-auto">
+                <button onClick={discardDraft} className={BTN}>Discard</button>
+                <button onClick={() => restoreDraft(restorable)} className={BTN_PRIMARY}>
+                  Restore
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Stage 1: upload ─────────────────────────────────────────────────── */}
         {stage === 'upload' && (
           <section className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
@@ -797,6 +895,30 @@ export default function CreateProjectPage() {
               )}
             </div>
 
+            {/* The one gap a restored draft can have. The PDF bytes are far too large to
+                save alongside it, and extracting the spec reads the paper a second time —
+                so the file has to be handed back. Free: nothing is re-analysed. */}
+            {!pdfBase64 && (
+              <div className="bg-gray-900 border border-amber-400/40 rounded-2xl p-6">
+                <div className="flex items-start gap-3 flex-wrap">
+                  <FileText className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-64">
+                    <p className="text-sm font-semibold text-amber-300">Re-attach the paper to continue</p>
+                    <p className="text-sm text-gray-400 mt-0.5">
+                      The experiments below were restored, but the PDF itself is too large to save with
+                      them. Choose <span className="text-gray-300">{pdfName || 'the same file'}</span> again to
+                      build one of them — the paper is not read again, so this costs nothing.
+                    </p>
+                  </div>
+                  <label className={`${BTN_PRIMARY} cursor-pointer ml-auto`}>
+                    <input type="file" accept="application/pdf,.pdf" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) void onPickPdf(f, true); }} />
+                    Choose the PDF
+                  </label>
+                </div>
+              </div>
+            )}
+
             {analysis.candidates.map(c => {
               const f = FEASIBILITY[c.feasibility] ?? FEASIBILITY['not-recreatable'];
               const selectable = c.feasibility !== 'not-recreatable';
@@ -808,7 +930,9 @@ export default function CreateProjectPage() {
                       <f.Icon className="w-3 h-3" />{f.label}
                     </span>
                     {selectable && (
-                      <button onClick={() => chooseCandidate(c)} disabled={!!busy} className={`${BTN_PRIMARY} ml-auto`}>
+                      <button onClick={() => chooseCandidate(c)} disabled={!!busy || !pdfBase64}
+                        title={pdfBase64 ? undefined : 'Re-attach the paper first'}
+                        className={`${BTN_PRIMARY} ml-auto`}>
                         Build this one
                       </button>
                     )}

@@ -205,3 +205,117 @@ test('validation catches a sample larger than its pool', () => {
   def.dashboard.charts[0].groupBy = 'item.w';
   assert.ok(errorsOf(def).length > 0, 'a sample bigger than the pool should be an error');
 });
+
+// ── Wizard draft persistence ──────────────────────────────────────────────────
+//
+// The create wizard holds several paid API results in React state, so a refresh used to
+// throw the work and the money away. These cover the draft that now survives it — in
+// particular the two ways a naive implementation loses data anyway: overwriting a real
+// draft with an empty one on load, and trusting whatever JSON happens to be in storage.
+
+/** The smallest localStorage that behaves like the real one, including the quota error. */
+function fakeStorage(limitChars = Infinity) {
+  const map = new Map();
+  return {
+    getItem: k => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => {
+      if (String(v).length > limitChars) {
+        const err = new Error('QuotaExceededError');
+        err.name = 'QuotaExceededError';
+        throw err;
+      }
+      map.set(k, String(v));
+    },
+    removeItem: k => map.delete(k),
+    get size() { return map.size; },
+  };
+}
+
+globalThis.window = globalThis;
+globalThis.localStorage = fakeStorage();
+
+const { readDraft, writeDraft, clearDraft, worthSaving, describeDraft } =
+  await import('../lib/create-project/draft.ts');
+
+/** A draft state with nothing in it — what the page holds on a fresh load. */
+function emptyState() {
+  return {
+    stage: 'upload', pdfName: '', analysis: null, candidate: null, spec: null,
+    assets: null, definition: null, files: [], notes: '', problems: [],
+    messages: [], usage: [], staged: false, compileState: null, finishResult: null,
+  };
+}
+
+test('a draft round-trips through storage', () => {
+  globalThis.localStorage = fakeStorage();
+  const state = { ...emptyState(), stage: 'refine', pdfName: 'sternberg.pdf',
+    definition: structuredClone(MINIMAL), usage: [{ stage: 'Generate definition', model: 'strong', input: 9, output: 9, cacheWrite: 0, cacheRead: 0 }] };
+
+  writeDraft(state);
+  const back = readDraft();
+  assert.equal(back.stage, 'refine');
+  assert.equal(back.pdfName, 'sternberg.pdf');
+  assert.deepEqual(back.definition, MINIMAL);
+  assert.equal(back.usage.length, 1, 'the spend table has to survive too');
+  assert.ok(back.savedAt > 0, 'a draft needs a timestamp to be describable');
+});
+
+test('an empty wizard is not worth saving, so it cannot clobber a real draft', () => {
+  // The whole guard: landing on /create writes empty state on first render. If that were
+  // saved, the draft would be destroyed before it was ever offered back.
+  assert.equal(worthSaving(emptyState()), false);
+  assert.equal(worthSaving({ ...emptyState(), analysis: { paperTitle: 'x', candidates: [] } }), true);
+  assert.equal(worthSaving({ ...emptyState(), spec: { slug: 'a' } }), true);
+  assert.equal(worthSaving({ ...emptyState(), definition: MINIMAL }), true);
+  assert.equal(worthSaving({ ...emptyState(), files: [{ path: 'a', contents: '' }] }), true);
+});
+
+test('an untouched blank spec does not count as work', () => {
+  // "No paper — describe it myself" installs a spec with every field empty. If that counted,
+  // pressing the button would destroy a saved draft before it had even been offered back.
+  const blank = {
+    slug: '', title: '', titleHe: '', category: 'PERCEPTION',
+    fields: [{ key: 'design', label: 'Design description', value: '', source: 'inferred' }],
+  };
+  assert.equal(worthSaving({ ...emptyState(), spec: blank }), false);
+  assert.equal(worthSaving({ ...emptyState(), spec: { ...blank, title: 'Stroop' } }), true,
+    'typing a title is real work and must start being saved');
+  assert.equal(
+    worthSaving({ ...emptyState(), spec: { ...blank, fields: [{ ...blank.fields[0], value: 'a' }] } }),
+    true, 'typing into any spec field is real work too');
+});
+
+test('corrupt or foreign storage contents are ignored, not thrown', () => {
+  globalThis.localStorage = fakeStorage();
+  globalThis.localStorage.setItem('cognitives_create_draft', '{not json');
+  assert.equal(readDraft(), null);
+
+  globalThis.localStorage.setItem('cognitives_create_draft', JSON.stringify({ version: 99, stage: 'refine' }));
+  assert.equal(readDraft(), null, 'a draft from a future schema must not be half-applied');
+});
+
+test('a draft too large to store fails quietly rather than breaking the pipeline', () => {
+  globalThis.localStorage = fakeStorage(50);
+  assert.doesNotThrow(() => writeDraft({ ...emptyState(), notes: 'x'.repeat(500) }));
+  assert.equal(readDraft(), null);
+});
+
+test('clearing removes the draft', () => {
+  globalThis.localStorage = fakeStorage();
+  writeDraft({ ...emptyState(), definition: MINIMAL });
+  assert.ok(readDraft());
+  clearDraft();
+  assert.equal(readDraft(), null);
+});
+
+test('the restore prompt names the experiment and how long ago it stopped', () => {
+  const base = { ...emptyState(), version: 1, savedAt: Date.now() - 5 * 60_000, stage: 'spec' };
+  const line = describeDraft({ ...base, spec: { title: 'Memory Scanning' } });
+  assert.match(line, /Memory Scanning/);
+  assert.match(line, /5 minutes ago/);
+  assert.match(line, /design spec/);
+
+  // Falls back through the names available at earlier stages rather than saying "undefined".
+  assert.match(describeDraft({ ...base, pdfName: 'sternberg.pdf' }), /sternberg\.pdf/);
+  assert.match(describeDraft(base), /Untitled experiment/);
+});
