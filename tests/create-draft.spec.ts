@@ -179,3 +179,66 @@ test('work is saved as it happens, without any explicit save', async ({ page }) 
   await page.getByRole('button', { name: 'Restore' }).click();
   await expect(page.getByLabel('English title')).toHaveValue('Attentional Blink');
 });
+
+// ── Leaving while a stage is running ──────────────────────────────────────────
+//
+// The one loss the draft cannot prevent: the API call has been billed and its reply will
+// never reach a page that is no longer there. The guard is scoped to exactly that window,
+// so both halves matter — it has to fire mid-call, and it has to stay quiet the rest of
+// the time, or it would be nagging about exits that now cost nothing.
+
+/**
+ * Starts a generate that never comes back, leaving the wizard busy.
+ *
+ * The route is stalled rather than answered so the page sits in the state this guard is
+ * about. Nothing reaches Anthropic — the request is intercepted in the browser.
+ */
+async function startStalledGenerate(page: Page) {
+  await page.route('**/api/create/definition', () => { /* never fulfilled */ });
+  await page.getByRole('button', { name: 'Generate the experiment' }).click();
+  await expect(page.getByText('Designing the experiment…')).toBeVisible();
+}
+
+/** Closes the tab as a user would, reporting whether the browser challenged it. */
+async function closeAndReportDialog(page: Page): Promise<boolean> {
+  let asked = false;
+  page.on('dialog', d => { asked = true; void d.dismiss(); });
+  await page.close({ runBeforeUnload: true });
+  // A plain sleep, not page.waitForTimeout: when no dialog is raised the page is already
+  // gone by now, and waiting on it would throw instead of reporting the "no" this is for.
+  await new Promise(r => setTimeout(r, 500));
+  return asked;
+}
+
+test('leaving mid-call is challenged, because that reply can never be recovered', async ({ page }) => {
+  await openCreate(page, draft({ stage: 'spec' }));
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await startStalledGenerate(page);
+
+  expect(await closeAndReportDialog(page), 'a billed call in flight should be defended').toBe(true);
+});
+
+test('leaving when idle is not challenged, because the draft already has it', async ({ page }) => {
+  await openCreate(page, draft({ stage: 'spec' }));
+  // A real gesture, so the browser would allow a prompt if one were registered — otherwise
+  // this test would pass for the wrong reason.
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByRole('heading', { name: 'Design spec' })).toBeVisible();
+
+  expect(await closeAndReportDialog(page), 'an idle wizard must not nag on the way out').toBe(false);
+});
+
+test('the challenge is dropped once the call finishes', async ({ page }) => {
+  await openCreate(page, draft({ stage: 'spec' }));
+  await page.getByRole('button', { name: 'Restore' }).click();
+
+  // Answered this time, so busy clears and the guard should unregister with it. A guard
+  // that only ever went up would turn every later exit into a false alarm.
+  await page.route('**/api/create/definition', route => route.fulfill({
+    status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'stopped for the test' }),
+  }));
+  await page.getByRole('button', { name: 'Generate the experiment' }).click();
+  await expect(page.getByText('stopped for the test')).toBeVisible();
+
+  expect(await closeAndReportDialog(page), 'the guard must come down with the spinner').toBe(false);
+});

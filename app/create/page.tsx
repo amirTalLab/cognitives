@@ -214,6 +214,26 @@ export default function CreateProjectPage() {
   }, [authed, stage, pdfName, analysis, candidate, spec, assets, definition,
       files, notes, problems, messages, usage, staged, compileState, finishResult]);
 
+  /**
+   * Warns before leaving, but only while a stage is actually running.
+   *
+   * This is the one loss the draft cannot prevent: the call has been billed and its reply
+   * will never reach a page that is no longer there, so there is nothing to have saved.
+   * Every other moment is already covered, which is exactly why the guard is this narrow —
+   * a blanket warning would fire mostly on exits that now cost nothing, and browsers force
+   * a fixed "changes you made may not be saved" wording that would be untrue.
+   */
+  useEffect(() => {
+    if (!busy) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Still required by some browsers to actually raise the prompt.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [busy]);
+
   /** Puts a saved draft back into state. Costs nothing — no stage is re-run. */
   function restoreDraft(draft: CreateDraft) {
     setStage(draft.stage);
