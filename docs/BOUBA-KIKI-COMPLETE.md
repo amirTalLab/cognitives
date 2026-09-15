@@ -216,7 +216,7 @@ git commit -m "Add Bouba-Kiki experiment
 git push
 ```
 
-Vercel will auto-deploy. Test at: https://cognitives-xi.vercel.app/bouba-kiki
+Vercel will auto-deploy. Test at: https://cognitives.vercel.app/bouba-kiki
 
 ---
 

@@ -66,7 +66,7 @@ After updating the schema:
 
 ## Then Test the Experiment
 
-1. Go to https://cognitives-xi.vercel.app/drm
+1. Go to https://cognitives.vercel.app/drm
 2. Complete the full flow
 3. Check that data saves successfully
 4. Verify in Supabase that you see 84 rows per participant

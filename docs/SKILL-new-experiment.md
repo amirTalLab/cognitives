@@ -1,12 +1,12 @@
 # Build a New Cognitive Experiment
 
-Use this file at the start of a new conversation to guide building a complete experiment for the cognitives-xi.vercel.app site.
+Use this file at the start of a new conversation to guide building a complete experiment for the cognitives.vercel.app site.
 
 ---
 
 ## Overview
 
-Builds a complete, deployable cognitive psychology experiment for **cognitives-xi.vercel.app** — a Next.js + Supabase site for a Hebrew-language university Cognitive Processes course.
+Builds a complete, deployable cognitive psychology experiment for **cognitives.vercel.app** — a Next.js + Supabase site for a Hebrew-language university Cognitive Processes course.
 
 **Tech stack:** Next.js 15 App Router · TypeScript strict · Tailwind CSS · Framer Motion · Recharts · Supabase · Lucide React · Vercel
 

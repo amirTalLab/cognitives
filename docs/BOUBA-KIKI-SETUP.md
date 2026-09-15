@@ -102,7 +102,7 @@ After successful local testing:
 1. Commit all files to git
 2. Push to GitHub
 3. Vercel will auto-deploy
-4. Test on production: https://cognitives-xi.vercel.app/bouba-kiki
+4. Test on production: https://cognitives.vercel.app/bouba-kiki
 
 ---
 

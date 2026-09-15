@@ -249,7 +249,7 @@ git commit -m "Add {exp-name} experiment"
 git push
 ```
 
-Then verify at: `https://cognitives-xi.vercel.app/{exp-name}`
+Then verify at: `https://cognitives.vercel.app/{exp-name}`
 
 ---
 

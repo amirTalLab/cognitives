@@ -18,7 +18,7 @@
 
 -- ---- locks.sql -----------------------------------------------------
 
--- Experiment lock state for cognitives-xi.vercel.app
+-- Experiment lock state for cognitives.vercel.app
 -- Run this once in the Supabase SQL editor.
 
 CREATE TABLE IF NOT EXISTS experiment_locks (

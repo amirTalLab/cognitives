@@ -117,6 +117,6 @@ Before deployment, verify:
 
 1. Push changes to GitHub
 2. Wait for Vercel deployment
-3. Test complete flow at cognitives-xi.vercel.app/drm
+3. Test complete flow at cognitives.vercel.app/drm
 4. Verify data in Supabase table
 5. Check teacher dashboard displays results correctly
