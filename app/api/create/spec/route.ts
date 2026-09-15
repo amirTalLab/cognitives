@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No experiment was selected.' }, { status: 400 });
     }
 
-    if (isMockMode()) {
+    if (isMockMode(req)) {
       await mockDelay();
       return NextResponse.json({ ...MOCK_SPEC, title: candidate.name || MOCK_SPEC.title });
     }

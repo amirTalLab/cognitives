@@ -61,13 +61,23 @@ type PreviewTab = (typeof PREVIEW_TABS)[number]['key'];
 const BTN = 'px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 const BTN_PRIMARY = 'px-4 py-2 text-sm bg-purple-500 hover:bg-purple-400 text-white font-semibold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
+/**
+ * TEMPORARY: the live mock toggle. Session-only, so it switches itself off with the tab
+ * rather than leaving a lecturer's browser silently producing fake experiments.
+ */
+const MOCK_KEY = 'ss_create_mock';
+
 /** POSTs JSON and unwraps the route's `{ error }` shape into a thrown Error. */
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   // The server gates the metered endpoints on the shared password; send it on every call.
   const key = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ss_create_key') ?? '' : '';
+  const headers: Record<string, string> = { 'content-type': 'application/json', 'x-cognitives-access': key };
+  if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(MOCK_KEY) === '1') {
+    headers['x-cognitives-mock'] = '1';
+  }
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-cognitives-access': key },
+    headers,
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
@@ -122,7 +132,10 @@ export default function CreateProjectPage() {
   const [canWriteFiles, setCanWriteFiles] = useState(false);
   const [canCreateTables, setCanCreateTables] = useState(false);
   const [skills, setSkills] = useState<SkillStatus[]>([]);
-  const [mock, setMock] = useState(false);
+  // CREATE_MOCK on a local server, or the page's own toggle (TEMPORARY, for the live site).
+  const [serverMock, setServerMock] = useState(false);
+  const [liveMock, setLiveMock] = useState(false);
+  const mock = serverMock || liveMock;
 
   const [pdfName, setPdfName] = useState('');
   const [pdfBase64, setPdfBase64] = useState('');
@@ -174,6 +187,7 @@ export default function CreateProjectPage() {
 
   useEffect(() => {
     if (!authed) return;
+    setLiveMock(sessionStorage.getItem(MOCK_KEY) === '1');
     fetch('/api/create/status')
       .then(r => r.json())
       .then((d: { configured: boolean; canWriteFiles: boolean; skills: SkillStatus[]; mock: boolean; canCreateTables: boolean }) => {
@@ -181,7 +195,7 @@ export default function CreateProjectPage() {
         setCanWriteFiles(d.canWriteFiles);
         setCanCreateTables(d.canCreateTables);
         setSkills(d.skills ?? []);
-        setMock(d.mock);
+        setServerMock(d.mock);
       })
       .catch(() => setConfigured(false));
   }, [authed]);
@@ -503,6 +517,12 @@ export default function CreateProjectPage() {
     // results table. Publishing it means saving the definition itself, so it outlives the
     // browser session that generated it.
     if (definition) {
+      // A mock definition is the bouba-kiki fixture under a demo slug. Publishing writes to
+      // the real database, where students would find it — so mock mode stops here.
+      if (mock) {
+        setFinishResult('Mock mode — nothing was published. Switch mock mode off and build for real to publish.');
+        return;
+      }
       // Validated server-side first, then written from here — the browser holds the
       // Supabase client, and a definition that fails validation must never be saved.
       const check = await postJson<{ ok: boolean; error?: string }>(
@@ -757,8 +777,10 @@ export default function CreateProjectPage() {
           <div className="mb-6 p-4 rounded-2xl border border-amber-400/40 bg-amber-400/10 text-amber-300 text-sm">
             <strong className="block mb-1">Mock mode — no API calls, no cost.</strong>
             Every stage returns canned fixtures, so the wizard can be clicked through end to end for free.
-            Nothing here reflects what Claude would actually produce. Remove <code className="text-amber-200">CREATE_MOCK=1</code> from{' '}
-            <code className="text-amber-200">.env.local</code> and restart to run it for real.
+            Nothing here reflects what Claude would actually produce, and nothing can be published.{' '}
+            {serverMock
+              ? <>Remove <code className="text-amber-200">CREATE_MOCK=1</code> from <code className="text-amber-200">.env.local</code> and restart to run it for real.</>
+              : <>Refresh to get back to the upload screen, then switch the Mock mode button off to run it for real.</>}
           </div>
         )}
 
@@ -850,6 +872,24 @@ export default function CreateProjectPage() {
               <button onClick={writeSpecByHand} disabled={!!busy} className={BTN}>
                 No paper — describe it myself
               </button>
+              {/* TEMPORARY: free click-through on the live site. Only on this screen, so it
+                  is chosen before a build rather than flipped halfway through a real one. */}
+              {!serverMock && (
+                <button aria-pressed={liveMock} disabled={!!busy}
+                  onClick={() => {
+                    const next = !liveMock;
+                    try {
+                      if (next) sessionStorage.setItem(MOCK_KEY, '1');
+                      else sessionStorage.removeItem(MOCK_KEY);
+                    } catch { /* storage blocked: the toggle simply does nothing */ }
+                    setLiveMock(next);
+                  }}
+                  className={liveMock
+                    ? 'px-4 py-2 text-sm rounded-lg border border-amber-400 bg-amber-500/20 text-amber-300 transition-colors disabled:opacity-40'
+                    : BTN}>
+                  Mock mode: {liveMock ? 'on' : 'off'}
+                </button>
+              )}
               <button onClick={analyze} disabled={!pdfBase64 || !!busy || (configured === false && !mock)} className={`${BTN_PRIMARY} ml-auto`}>
                 Find experiments
               </button>

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const { pdfBase64, filename } = await req.json() as { pdfBase64: string; filename?: string };
     validatePdf(pdfBase64);
 
-    if (isMockMode()) {
+    if (isMockMode(req)) {
       await mockDelay();
       // Filename is the switch between the two branches worth eyeballing: a paper with
       // usable experiments, and the refusal case. Name a test file "…review.pdf" to see

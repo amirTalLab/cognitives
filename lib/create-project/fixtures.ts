@@ -25,9 +25,21 @@ export const MOCK_DEFINITION: ExperimentDefinition = { ...BOUBA_KIKI, slug: 'bou
 
 // Named isMockMode, not useMock: eslint's rules-of-hooks treats any `useX` function as a
 // React hook and rejects calling it from an async route handler.
-/** True when the wizard should serve fixtures instead of calling the API. */
-export function isMockMode(): boolean {
-  return process.env.CREATE_MOCK === '1' && process.env.NODE_ENV === 'development';
+/** Header the create page sends while its mock toggle is on. */
+export const MOCK_HEADER = 'x-cognitives-mock';
+
+/**
+ * True when the wizard should serve fixtures instead of calling the API.
+ *
+ * Two switches: CREATE_MOCK=1 on a local dev server, or — TEMPORARY, for testing the live
+ * site without paying for builds — the page's mock toggle, sent per request as a header.
+ * The header can only ever make a request cheaper: it swaps a paid call for canned
+ * fixtures that are already public in this repo. Every metered route still checks the
+ * password before it gets here, so it opens nothing.
+ */
+export function isMockMode(req?: Request): boolean {
+  if (process.env.CREATE_MOCK === '1' && process.env.NODE_ENV === 'development') return true;
+  return req?.headers.get(MOCK_HEADER) === '1';
 }
 
 /** Makes the loading banners visible, so their copy and placement can be judged. */

@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No message to respond to.' }, { status: 400 });
     }
 
-    if (isMockMode()) {
+    if (isMockMode(req)) {
       await mockDelay(700);
       return NextResponse.json({
         definition,

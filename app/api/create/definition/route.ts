@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No spec was provided.' }, { status: 400 });
     }
 
-    if (isMockMode()) {
+    if (isMockMode(req)) {
       await mockDelay(1200);
       return NextResponse.json({ definition: MOCK_DEFINITION, issues: [], repairs: 0 });
     }

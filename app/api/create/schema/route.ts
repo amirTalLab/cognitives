@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No schema SQL was generated for this experiment.' }, { status: 400 });
     }
 
-    if (isMockMode()) {
+    if (isMockMode(req)) {
       await mockDelay(400);
       // Still run the allow-list: mock mode is where it gets exercised for free, and SQL
       // that would be refused in production must be refused here too.
@@ -55,7 +55,7 @@ export async function DELETE(req: NextRequest) {
     const { slug, table } = await req.json() as { slug: string; table?: string };
     validateSlug(slug);
 
-    if (isMockMode()) {
+    if (isMockMode(req)) {
       await mockDelay(300);
       return NextResponse.json({ result: 'dropped', simulated: true });
     }

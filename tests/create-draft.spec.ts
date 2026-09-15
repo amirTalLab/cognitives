@@ -301,6 +301,8 @@ test('edited instructions survive a refresh with the rest of the draft', async (
 });
 
 test('publishing sends the edited instructions, not the generated ones', async ({ page }) => {
+  // Mock mode refuses to publish at all, so this needs a server that is not in it.
+  await serverNotInMock(page);
   await openRefine(page);
   await page.getByLabel('Hebrew instructions').fill('הוראות שנערכו ביד.');
 
@@ -317,6 +319,66 @@ test('publishing sends the edited instructions, not the generated ones', async (
   await expect(page.getByText(/stopped for the test/)).toBeVisible();
 
   expect(published).toContain('הוראות שנערכו ביד.');
+});
+
+// ── Live mock toggle (temporary) ──────────────────────────────────────────────
+//
+// Lets the deployed builder be clicked through for free. Status is faked as "not mock"
+// so these hold whether or not the test server happens to have CREATE_MOCK=1 set.
+
+async function serverNotInMock(page: Page) {
+  await page.route('**/api/create/status', route => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ configured: true, canWriteFiles: false, canCreateTables: false, skills: [], mock: false }),
+  }));
+}
+
+test('the mock header does not get past the password', async ({ request }) => {
+  const res = await request.post('/api/create/analyze', {
+    headers: { 'x-cognitives-mock': '1', 'x-cognitives-access': 'not-the-password' },
+    data: { pdfBase64: 'JVBERi0=', filename: 'x.pdf' },
+  });
+  expect(res.status(), 'mock mode must never become a way around the gate').toBe(401);
+});
+
+test('the mock toggle is off by default, and marks builder calls once switched on', async ({ page }) => {
+  await serverNotInMock(page);
+  const sent: (string | undefined)[] = [];
+  await page.route('**/api/create/analyze', route => {
+    sent.push(route.request().headers()['x-cognitives-mock']);
+    return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'stopped' }) });
+  });
+  await openCreate(page);
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 test'),
+  });
+
+  const toggle = page.getByRole('button', { name: /^Mock mode/ });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Find experiments' }).click();
+  await expect.poll(() => sent.length).toBe(1);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Mock mode — no API calls, no cost.')).toBeVisible();
+  await page.getByRole('button', { name: 'Find experiments' }).click();
+  await expect.poll(() => sent.length).toBe(2);
+
+  expect(sent).toEqual([undefined, '1']);
+});
+
+test('mock mode never publishes, so a fake experiment cannot reach students', async ({ page }) => {
+  await serverNotInMock(page);
+  let published = false;
+  await page.route('**/api/create/publish', route => { published = true; return route.abort(); });
+  await openCreate(page, draft());
+
+  await page.getByRole('button', { name: /^Mock mode/ }).click();
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await page.getByRole('button', { name: 'Finish & publish' }).click();
+
+  await expect(page.getByText(/Mock mode — nothing was published/)).toBeVisible();
+  expect(published).toBe(false);
 });
 
 test('an empty language is flagged, since those participants would read nothing', async ({ page }) => {
