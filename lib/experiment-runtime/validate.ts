@@ -13,7 +13,7 @@
 // scripts/definition.mjs, which runs the real validator from the terminal under Node's
 // type stripping — that leaves a value import of a types-only module behind and fails.
 import type { ExperimentDefinition, ResponseStep } from './schema';
-import { excluded, MAX_TRIALS } from './trials';
+import { excluded, MAX_TRIALS, NO_RESPONSE } from './trials';
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -185,7 +185,27 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     if (!isObj(p)) return bad(`Phase #${i + 1}`, 'an object');
     if (!isStr(p.name) || !p.name) bad(`Phase ${label(i, p.name)}'s "name"`, 'a non-empty string');
     if (!isObj(p.display)) bad(`Phase ${label(i, p.name)}'s "display"`, 'an object');
+    if (p.timeoutMs !== undefined && !Number.isFinite(p.timeoutMs) && !isStr(p.timeoutMs)) {
+      bad(`Phase ${label(i, p.name)}'s "timeoutMs"`, 'a number of milliseconds');
+    }
   });
+
+  if (def.trial.earlyFrom !== undefined && !isStr(def.trial.earlyFrom)) {
+    bad('"trial.earlyFrom"', 'a phase name');
+  }
+  if (def.trial.feedback !== undefined) {
+    const fb = def.trial.feedback as unknown as Record<string, unknown>;
+    if (!isObj(fb)) bad('"trial.feedback"', 'an object');
+    else {
+      if (!Number.isFinite(fb.durationMs)) bad('"trial.feedback.durationMs"', 'a number of milliseconds');
+      for (const key of ['correct', 'incorrect', 'timeout', 'early']) {
+        const message = fb[key] as Record<string, unknown> | undefined;
+        if (message !== undefined && (!isObj(message) || !isStr(message.en) || !isStr(message.he))) {
+          bad(`"trial.feedback.${key}"`, 'an object with "en" and "he" text');
+        }
+      }
+    }
+  }
 
   const responseShapes: unknown[] =
     Array.isArray(def.trial.response) ? def.trial.response : [def.trial.response];
@@ -204,6 +224,15 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     if (!isStr(c.groupBy)) bad(`${at}'s "groupBy"`, 'a factor name');
     if (!isStr(c.measure)) bad(`${at}'s "measure"`, 'a measure name');
     if (c.seriesBy !== undefined && !isStr(c.seriesBy)) bad(`${at}'s "seriesBy"`, 'a factor name');
+    if (c.filter !== undefined && !isObj(c.filter)) bad(`${at}'s "filter"`, 'an object of field values');
+    if (c.correctOnly !== undefined && typeof c.correctOnly !== 'boolean') bad(`${at}'s "correctOnly"`, 'true or false');
+    if (c.bin !== undefined && (!Number.isFinite(c.bin) || c.bin <= 0)) bad(`${at}'s "bin"`, 'a positive number');
+    if (c.difference !== undefined) {
+      const d = c.difference as unknown as Record<string, unknown>;
+      if (!isObj(d) || !isStr(d.factor) || d.level === undefined || d.minus === undefined) {
+        bad(`${at}'s "difference"`, 'an object with "factor", "level" and "minus"');
+      }
+    }
   });
 
   if (def.exclude !== undefined) {
@@ -303,12 +332,23 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     ? def.trial.response
     : responsePhases.slice(0, 1).map(phase => ({ ...def.trial.response, phase } as ResponseStep));
 
+  // Response phases that end by themselves. Not pressing is an answer there, which is the
+  // only thing that makes a single "go" button a real choice rather than a trial that
+  // cannot be failed.
+  const timeoutPhases = new Set(
+    def.trial.phases.filter(p => p.awaitsResponse && p.timeoutMs !== undefined).map(p => p.name),
+  );
+
   for (const step of steps) {
     if (!responsePhases.includes(step.phase)) {
       err(`A response is bound to phase "${step.phase}", which does not await a response.`);
     }
-    if (step.kind === 'choice' && step.options.length < 2) {
-      err(`The choice in phase "${step.phase}" has fewer than two options.`);
+    if (step.kind === 'choice') {
+      if (timeoutPhases.has(step.phase) ? step.options.length < 1 : step.options.length < 2) {
+        err(timeoutPhases.has(step.phase)
+          ? `The choice in phase "${step.phase}" has no options.`
+          : `The choice in phase "${step.phase}" has fewer than two options. A single "go" button needs "timeoutMs" on that phase, so that not pressing is also an answer.`);
+      }
     }
   }
   for (const phase of responsePhases) {
@@ -323,6 +363,37 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     }
     if (typeof phase.durationMs === 'number' && phase.durationMs < 0) {
       err(`Phase "${phase.name}" has a negative duration.`);
+    }
+    if (phase.timeoutMs !== undefined) {
+      if (!phase.awaitsResponse) {
+        err(`Phase "${phase.name}" has "timeoutMs" but does not await a response — a timed phase already ends after its "durationMs".`);
+      }
+      if (typeof phase.timeoutMs === 'number' && phase.timeoutMs <= 0) {
+        err(`Phase "${phase.name}" has a "timeoutMs" of ${phase.timeoutMs}; it must be above zero.`);
+      }
+    }
+  }
+
+  if (def.trial.earlyFrom !== undefined) {
+    const at = def.trial.phases.findIndex(p => p.name === def.trial.earlyFrom);
+    const first = def.trial.phases.findIndex(p => p.name === steps[0]?.phase);
+    if (at === -1) {
+      err(`"trial.earlyFrom" names "${def.trial.earlyFrom}", which is not a phase.`);
+    } else if (first !== -1 && at >= first) {
+      err(`"trial.earlyFrom" must name a phase before the response phase "${steps[0].phase}", or no press could ever count as too early.`);
+    }
+  }
+
+  if (def.trial.feedback) {
+    const fb = def.trial.feedback;
+    if (fb.durationMs <= 0) {
+      err('"trial.feedback.durationMs" must be above zero, or the message would never be seen.');
+    }
+    if (!fb.correct && !fb.incorrect && !fb.timeout && !fb.early) {
+      warn('"trial.feedback" has no messages, so it shows nothing.');
+    }
+    if (!fb.inMain && !def.practice?.feedback) {
+      warn('"trial.feedback" shows nowhere: it needs "inMain": true, or "practice.feedback": true.');
     }
   }
 
@@ -465,6 +536,9 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     } else {
       const responses = steps.flatMap(s => (s.kind === 'choice' ? s.options.map(o => o.value) : []));
       const literal = responses.filter(v => !v.includes('{'));
+      // Wherever a response phase can run out, "none" is a real answer — the right one on a
+      // catch or no-go trial.
+      if (timeoutPhases.size > 0 && literal.length > 0) literal.push(NO_RESPONSE);
       for (const expected of Object.values(rule.expect)) {
         if (literal.length > 0 && !literal.includes(expected)) {
           err(`Correctness expects the response "${expected}", which is not one of the options.`);
@@ -480,12 +554,23 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   if (def.dashboard.charts.length === 0) {
     warn('No dashboard charts, so the teacher view will have nothing to show.');
   }
-  const derived = new Set(['participant', 'is_correct', 'confidence']);
+  // trial_index is on every row's spine, which is what lets a chart bin by position in the
+  // session without the definition storing it.
+  const derived = new Set(['participant', 'is_correct', 'confidence', 'trial_index']);
+  const stored = def.store.map(s => s.replace(/\./g, '_'));
+  const readable = (field: string) => stored.includes(field.replace(/\./g, '_')) || derived.has(field);
   for (const chart of def.dashboard.charts) {
-    const key = chart.groupBy.replace(/\./g, '_');
-    const stored = def.store.map(s => s.replace(/\./g, '_'));
-    if (!stored.includes(key) && !derived.has(chart.groupBy)) {
+    if (!readable(chart.groupBy)) {
       warn(`Chart "${chart.title}" groups by "${chart.groupBy}", which is not in the stored fields.`);
+    }
+    // A filter or difference over a field no row has matches nothing, so the chart is empty.
+    for (const field of Object.keys(chart.filter ?? {})) {
+      if (!readable(field)) {
+        warn(`Chart "${chart.title}" filters on "${field}", which is not in the stored fields, so it would show nothing.`);
+      }
+    }
+    if (chart.difference && !readable(chart.difference.factor)) {
+      warn(`Chart "${chart.title}" takes a difference over "${chart.difference.factor}", which is not in the stored fields, so it would show nothing.`);
     }
   }
 

@@ -200,6 +200,49 @@ export function buildTrials(
   }));
 }
 
+// ─── Timeouts, early responses and feedback ───────────────────────────────────
+
+/**
+ * The response recorded when a response phase with `timeoutMs` runs out.
+ *
+ * A real value rather than a blank, because in a go/no-go or catch trial it IS the right
+ * answer: the correctness mapping says `"catch": "none"`, and scoring needs nothing else.
+ */
+export const NO_RESPONSE = 'none';
+
+/** The response recorded when the participant answers before the response phase began. */
+export const EARLY_RESPONSE = 'early';
+
+export interface Outcome {
+  correct: boolean | null;
+  timedOut: boolean;
+  early: boolean;
+}
+
+/**
+ * The message a trial's outcome earns under `trial.feedback`, or null for none.
+ *
+ * Checked in order — too early, correct, timed out, incorrect — so a catch trial correctly
+ * left alone counts as correct rather than as a miss, and a miss can say "respond faster"
+ * rather than the generic "incorrect" when the definition gives it that message.
+ */
+export function feedbackMessage(
+  def: ExperimentDefinition,
+  outcome: Outcome,
+  practice: boolean,
+): { en: string; he: string } | null {
+  const fb = def.trial.feedback;
+  if (!fb) return null;
+  const applies = practice ? def.practice?.feedback === true : fb.inMain === true;
+  if (!applies) return null;
+
+  if (outcome.early) return fb.early ?? fb.incorrect ?? null;
+  if (outcome.correct === true) return fb.correct ?? null;
+  if (outcome.timedOut) return fb.timeout ?? fb.incorrect ?? null;
+  if (outcome.correct === false) return fb.incorrect ?? null;
+  return null;
+}
+
 // ─── Scoring ──────────────────────────────────────────────────────────────────
 
 /**

@@ -14,7 +14,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { ExperimentDefinition, ResponseSpec, ResponseStep } from './schema';
-import { buildTrials, isCorrect, payloadOf, resolve, Trial } from './trials';
+import {
+  buildTrials, EARLY_RESPONSE, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf, resolve, Trial,
+} from './trials';
 import { DisplayView, SEED_KEY, ASSET_BASE_KEY } from './DisplayView';
 import { saveTrial } from './store';
 
@@ -24,7 +26,8 @@ export interface TrialRow {
   is_practice: boolean;
   response: string;
   is_correct: boolean | null;
-  reaction_time_ms: number;
+  /** Null when nothing was timed: the response phase ran out, or the press came too early. */
+  reaction_time_ms: number | null;
   payload: Record<string, unknown>;
   /** Extra responses beyond the first, e.g. a confidence rating. */
   extra?: Record<string, string>;
@@ -47,17 +50,31 @@ function responseSteps(def: ExperimentDefinition): ResponseStep[] {
   return [{ ...(spec as ResponseSpec), phase }];
 }
 
+/** A keyboard event's key, in the spelling definitions use for `key`. */
+function keyName(e: KeyboardEvent): string {
+  return e.key === ' ' ? 'space' : e.key.toLowerCase();
+}
+
+type Feedback = { correct: boolean | null; message?: { en: string; he: string } };
+
 export function Runner({ definition, language, practice = false, onComplete, onSaveFailure }: RunnerProps) {
   const [trials] = useState<Trial[]>(() => buildTrials(definition, { practice }));
   const [trialIdx, setTrialIdx] = useState(0);
   const [phaseIdx, setPhaseIdx] = useState(0);
-  const [feedback, setFeedback] = useState<null | { correct: boolean | null }>(null);
+  const [feedback, setFeedback] = useState<null | Feedback>(null);
   // True during the inter-trial gap: the screen is blank and the phase machine is idle.
   const [iti, setIti] = useState(false);
 
   const rows = useRef<TrialRow[]>([]);
   const clock = useRef(0);
   const answers = useRef<Record<string, string>>({});
+  // Set when the first response phase ran out, so the row records no reaction time.
+  const timedOut = useRef(false);
+  // One row and one advance per trial, however it ends. A click landing in the same instant
+  // as a timeout, or a key pressed while a feedback message is up, would otherwise record
+  // the trial twice or skip the next one entirely.
+  const settled = useRef(false);
+  const advancing = useRef(false);
 
   const trial = trials[trialIdx];
   // Displays that draw something random (array layouts) read the seed from here, so a
@@ -70,7 +87,17 @@ export function Runner({ definition, language, practice = false, onComplete, onS
   const steps = responseSteps(definition);
   const rtl = language === 'he';
 
+  // The stretch before the response phase in which the response controls are already shown,
+  // when the definition asks for one. A press in it is an anticipation.
+  const earlyIdx = definition.trial.earlyFrom
+    ? phases.findIndex(p => p.name === definition.trial.earlyFrom)
+    : -1;
+  const firstResponseIdx = phases.findIndex(p => p.name === steps[0]?.phase);
+  const inEarlyWindow = earlyIdx >= 0 && phaseIdx >= earlyIdx && phaseIdx < firstResponseIdx;
+
   const advance = useCallback(() => {
+    if (advancing.current) return;
+    advancing.current = true;
     setFeedback(null);
     if (trialIdx + 1 >= trials.length) {
       onComplete(rows.current);
@@ -85,21 +112,31 @@ export function Runner({ definition, language, practice = false, onComplete, onS
       setTrialIdx(i => i + 1);
       setPhaseIdx(0);
       setIti(false);
+      settled.current = false;
+      advancing.current = false;
     }, definition.trial.itiMs ?? 300);
   }, [trialIdx, trials.length, onComplete, definition.trial.itiMs]);
 
-  const finishTrial = useCallback(() => {
+  const finishTrial = useCallback((early = false) => {
+    if (settled.current) return;
+    settled.current = true;
+
     const given = answers.current;
     const first = steps[0];
-    const primary = given[first.phase] ?? '';
-    const correct = isCorrect(definition, trial, primary);
+    const primary = early ? EARLY_RESPONSE : (given[first.phase] ?? '');
+    const correct = early ? false : isCorrect(definition, trial, primary);
+    const wasTimedOut = !early && timedOut.current;
 
     const extra: Record<string, string> = {};
-    for (const step of steps.slice(1)) {
-      if (given[step.phase] !== undefined) extra[step.phase] = given[step.phase];
+    if (!early) {
+      for (const step of steps.slice(1)) {
+        if (given[step.phase] !== undefined) extra[step.phase] = given[step.phase];
+      }
     }
 
-    const rt = Math.round(performance.now() - clock.current);
+    // No reaction time when nothing was timed: a timeout has none, and a press during the
+    // cue measured from a clock that has not started yet would be a negative or stale number.
+    const rt = early || wasTimedOut ? null : Math.round(performance.now() - clock.current);
     const payload = payloadOf(definition, trial);
 
     rows.current.push({
@@ -128,6 +165,16 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     }).then(ok => { if (!ok) onSaveFailure?.(); });
 
     answers.current = {};
+    timedOut.current = false;
+
+    // Per-outcome messages, when the definition has them. They time out by themselves, so a
+    // speeded task keeps its pace instead of waiting on a Next button after every miss.
+    if (definition.trial.feedback) {
+      const message = feedbackMessage(definition, { correct, timedOut: wasTimedOut, early }, practice);
+      if (message) { setFeedback({ correct, message }); return; }
+      advance();
+      return;
+    }
 
     const showFeedback = practice && definition.practice?.feedback && correct !== null;
     if (showFeedback) {
@@ -150,7 +197,31 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     return () => clearTimeout(timer);
   }, [phaseIdx, trialIdx, phase, feedback, iti, trial]);
 
+  // A response phase with a time limit ends on its own, answered "none" — which is a miss on
+  // a go trial and the correct answer on a catch or no-go trial.
+  useEffect(() => {
+    if (!phase?.awaitsResponse || feedback || iti) return;
+    const ms = Number(resolve(phase.timeoutMs, trial?.values ?? {}) ?? 0);
+    if (!(ms > 0)) return;
+    const timer = setTimeout(() => {
+      if (phase.name === steps[0]?.phase) timedOut.current = true;
+      answer(NO_RESPONSE);
+    }, ms);
+    return () => clearTimeout(timer);
+    // `answer` is re-created every render; what it acts on — this phase of this trial — is
+    // exactly what the dependencies below track.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phaseIdx, trialIdx, phase, feedback, iti, trial]);
+
+  // Messages from `trial.feedback` clear themselves.
+  useEffect(() => {
+    if (!feedback?.message) return;
+    const timer = setTimeout(advance, definition.trial.feedback?.durationMs ?? 800);
+    return () => clearTimeout(timer);
+  }, [feedback, advance, definition.trial.feedback]);
+
   function answer(value: string) {
+    if (inEarlyWindow) { finishTrial(true); return; }
     if (!phase?.awaitsResponse) return;
     answers.current[phase.name] = value;
 
@@ -162,11 +233,15 @@ export function Runner({ definition, language, practice = false, onComplete, onS
   // Keyboard shortcuts, where the definition supplies them. Buttons remain the primary
   // route — students take these on phones, so keys can only ever be an accelerator.
   useEffect(() => {
-    const step = steps.find(s => s.phase === phase?.name);
-    if (!step || step.kind !== 'choice') return;
+    const step = steps.find(s => s.phase === phase?.name) ?? (inEarlyWindow ? steps[0] : undefined);
+    if (!step || step.kind !== 'choice' || feedback || iti) return;
     const handler = (e: KeyboardEvent) => {
-      const hit = step.options.find(o => o.key && o.key.toLowerCase() === e.key.toLowerCase());
-      if (hit) answer(String(resolve(hit.value, trial?.values ?? {}) ?? hit.value));
+      const pressed = keyName(e);
+      const hit = step.options.find(o => o.key && o.key.toLowerCase() === pressed);
+      if (!hit) return;
+      // Space would otherwise also scroll the page, or "click" whichever button has focus.
+      e.preventDefault();
+      answer(String(resolve(hit.value, trial?.values ?? {}) ?? hit.value));
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -174,8 +249,8 @@ export function Runner({ definition, language, practice = false, onComplete, onS
 
   if (!trial || !phase) return null;
 
-  const step = steps.find(s => s.phase === phase.name);
-  const showResponse = phase.awaitsResponse && !feedback && !iti;
+  const step = steps.find(s => s.phase === phase.name) ?? (inEarlyWindow ? steps[0] : undefined);
+  const showResponse = (phase.awaitsResponse || inEarlyWindow) && !feedback && !iti;
 
   return (
     <main style={{ height: '100dvh' }} className="bg-[#0f172a] flex flex-col">
@@ -194,7 +269,14 @@ export function Runner({ definition, language, practice = false, onComplete, onS
           <ResponseView step={step} values={values} rtl={rtl} onAnswer={answer} />
         )}
 
-        {feedback && (
+        {feedback && feedback.message && (
+          <p dir={rtl ? 'rtl' : 'ltr'}
+            className={`text-lg font-semibold ${feedback.correct ? 'text-emerald-400' : 'text-red-400'}`}>
+            {rtl ? feedback.message.he : feedback.message.en}
+          </p>
+        )}
+
+        {feedback && !feedback.message && (
           <div className="flex flex-col items-center gap-4" dir={rtl ? 'rtl' : 'ltr'}>
             <p className={`text-lg font-semibold ${feedback.correct ? 'text-emerald-400' : 'text-red-400'}`}>
               {feedback.correct ? (rtl ? 'נכון' : 'Correct') : (rtl ? 'לא נכון' : 'Incorrect')}

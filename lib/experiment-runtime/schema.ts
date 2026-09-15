@@ -114,7 +114,17 @@ export type Display =
   /** Something at a screen location — Posner cues and targets, where the side is the manipulation. */
   | { kind: 'positioned'; at: Bound<'left' | 'right' | 'top' | 'bottom' | 'center'>; content: Display }
   /** Several displays at once. */
-  | { kind: 'stack'; items: Display[] };
+  | { kind: 'stack'; items: Display[] }
+  /** Displays side by side, left to right — a cue flanked by two placeholder boxes. */
+  | { kind: 'row'; items: Display[]; gap?: number }
+  /**
+   * An outlined box, optionally holding something.
+   *
+   * Posner cueing is the case: two boxes stay on screen the whole trial, the target appears
+   * inside one, and an exogenous cue is one box's border changing colour. `color` is the
+   * border, so it can be bound to a factor like any other colour.
+   */
+  | { kind: 'frame'; content?: Display; size?: Bound<number>; color?: Bound<string>; thickness?: Bound<number> };
 
 // ─── Phases ───────────────────────────────────────────────────────────────────
 
@@ -137,6 +147,16 @@ export interface Phase {
   awaitsResponse?: boolean;
   /** Timer from which reaction time is measured. Defaults to the response phase. */
   startsClock?: boolean;
+  /**
+   * On a response phase: stop waiting after this many milliseconds.
+   *
+   * The trial is then recorded with the response "none" and no reaction time. That one rule
+   * covers two things: a deadline (a miss, "respond faster"), and a WITHHELD response, where
+   * "none" is the right answer — catch trials in Posner cueing, no-go trials in go/no-go.
+   * Score that with a `mapping` rule: `{ "catch": "none", "valid": "press" }`. A choice with
+   * a timeout may offer a single option, the one "go" button.
+   */
+  timeoutMs?: Bound<number>;
 }
 
 // ─── Responses ────────────────────────────────────────────────────────────────
@@ -201,6 +221,11 @@ export interface MockSpec {
     rtDeltaMs?: number;
     /** Added to baseAccuracy, as a proportion: 0.1 means ten points higher. */
     accuracyDelta?: number;
+    /**
+     * RT change per trial into the session, for effects that change as it goes on — an
+     * exogenous cue the participant learns to ignore. -0.4 is 40ms faster by trial 100.
+     */
+    rtPerTrialMs?: number;
   }[];
 }
 
@@ -262,6 +287,25 @@ export interface ChartSpec {
   yLabel?: string;
   /** SEM error bars, computed per participant first. Defaults to true for bar charts. */
   errorBars?: boolean;
+  /**
+   * Only rows whose stored fields match — one value, or any of a list:
+   * `{ "trialType.validity": ["valid", "invalid"] }`. Leaves out the trials a chart is not
+   * about, such as catch trials in a reaction-time chart.
+   */
+  filter?: Record<string, string | number | boolean | (string | number | boolean)[]>;
+  /** Only correctly answered trials — the usual rule for reaction times. */
+  correctOnly?: boolean;
+  /**
+   * One level minus another, computed within each participant before averaging: a validity
+   * effect is `{ "factor": "validity", "level": "invalid", "minus": "valid" }`. Grouped by
+   * "participant" it shows everyone's effect; grouped by a factor, the mean effect per level.
+   */
+  difference?: { factor: string; level: string | number | boolean; minus: string | number | boolean };
+  /**
+   * Groups a numeric field into bins of this size, numbered from 1. `groupBy: "trial_index"`
+   * with `bin: 33` splits a 132-trial session into quarters.
+   */
+  bin?: number;
 }
 
 // ─── The definition ───────────────────────────────────────────────────────────
@@ -318,6 +362,34 @@ export interface ExperimentDefinition {
     correct: CorrectRule;
     /** Inter-trial interval. */
     itiMs?: number;
+    /**
+     * Name of a timed phase from which the response controls are already on screen.
+     *
+     * Answering before the response phase begins ends the trial as too early: recorded with
+     * the response "early", scored incorrect, with no reaction time. Posner cueing needs
+     * this — a press during the cue is an anticipation, not a detection — and without it
+     * the button would only appear with the target, which moves the layout and gives the
+     * target away.
+     */
+    earlyFrom?: string;
+    /**
+     * Brief messages per outcome, shown for `durationMs` and then moving on by themselves.
+     *
+     * When present this replaces the practice-only "Correct / Incorrect · Next" screen. It
+     * shows in practice when `practice.feedback` is true, and in the main block only with
+     * `inMain`. An outcome with no message shows nothing — Posner says "Missed" and "Too
+     * early" but stays silent on a hit.
+     */
+    feedback?: {
+      durationMs: number;
+      inMain?: boolean;
+      correct?: { en: string; he: string };
+      incorrect?: { en: string; he: string };
+      /** A response phase that ran out. Falls back to `incorrect`. */
+      timeout?: { en: string; he: string };
+      /** A press before the response phase. Falls back to `incorrect`. */
+      early?: { en: string; he: string };
+    };
   };
 
   /**
@@ -362,8 +434,6 @@ export interface ExperimentDefinition {
 //                      -> task switching, n-back, Iowa gambling, reversal learning
 //   adaptive difficulty staircases, spans that grow until failure
 //                      -> digit span, Weber/JND, stop-signal
-//   withheld response   "correct" meaning do not press
-//                      -> go/no-go, stop-signal
 //   block structure     blocked designs with block-level instructions and feedback
 //                      -> implicit association test
 //   audio               generated tones, stereo presentation
@@ -371,6 +441,9 @@ export interface ExperimentDefinition {
 //   within-trial sequence  RSVP streams, alternating displays
 //                      -> attentional blink, change blindness
 //
-// All six are additive: a new Display or Phase variant plus a renderer branch. None of
+// Withheld responses were on this list until `timeoutMs`, `trial.earlyFrom` and
+// `trial.feedback` were added to port Posner cueing — which is what "additive" meant:
+//
+// All of these are additive: a new Display or Phase variant plus a renderer branch. None of
 // them require rethinking the factors-crossed-and-shuffled core, which is why it is worth
 // getting that core right first and adding these against real demand.

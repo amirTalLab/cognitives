@@ -160,8 +160,9 @@ examples in `lib/experiment-runtime/` show which.
 **`new-cognitive-experiment`** — generates real Next.js pages. Reaches anything, but is
 slower, needs review and a deploy, and is fixed once written. Use it only when the design
 needs something the definition schema cannot express: trial history (the next trial
-depending on preceding ones), adaptive difficulty, a withheld response (go/no-go), block
-structure, audio, or a sequence within a trial (RSVP). The authoritative list is the
+depending on preceding ones), adaptive difficulty, block structure, audio, or a sequence
+within a trial (RSVP). A withheld response (go/no-go, catch trials) and a response deadline
+ARE expressible — see `timeoutMs` in the schema. The authoritative list is the
 "Not yet expressible" section at the bottom of `lib/experiment-runtime/schema.ts`.
 
 When the design is close to the boundary, check whether a stated simplification saves it —

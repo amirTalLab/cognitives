@@ -192,6 +192,32 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
         </div>
       );
 
+    case 'row':
+      return (
+        // Explicitly left-to-right: "left box" must mean the left of the screen even when an
+        // ancestor sets dir="rtl" for a Hebrew run.
+        <div className="flex items-center justify-center"
+          style={{ gap: `min(${node.gap ?? 40}px, 6vw)`, direction: 'ltr' }}>
+          {node.items.map((item, i) => <DisplayView key={i} node={item} values={values} />)}
+        </div>
+      );
+
+    case 'frame': {
+      const size = Number(resolve(node.size, values) ?? 120);
+      const border = resolve(node.color, values) as string | undefined;
+      const thickness = Number(resolve(node.thickness, values) ?? 2);
+      return (
+        // Capped by viewport width so two boxes and a cue still fit side by side on a phone.
+        <div style={{
+          width: `min(${size}px, 22vw)`, height: `min(${size}px, 22vw)`, flexShrink: 0,
+          border: `${thickness}px solid ${border ? color(border) : '#71717a'}`, borderRadius: 8,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box',
+        }}>
+          {node.content && <DisplayView node={node.content} values={values} />}
+        </div>
+      );
+    }
+
     case 'array':
       return <ArrayView node={node} values={values} />;
 

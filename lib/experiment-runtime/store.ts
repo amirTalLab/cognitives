@@ -70,7 +70,8 @@ export interface SaveArgs {
   isPractice: boolean;
   response: string;
   isCorrect: boolean | null;
-  reactionTimeMs: number;
+  /** Null when there was no timed response: a timeout, or an answer given too early. */
+  reactionTimeMs: number | null;
   payload: Record<string, unknown>;
 }
 

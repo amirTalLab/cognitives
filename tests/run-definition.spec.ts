@@ -247,7 +247,7 @@ test.describe('definition runtime — teacher dashboard', () => {
     // Cheap breadth: a definition whose charts reference a factor that does not exist would
     // otherwise only surface when a lecturer opened it in front of a class.
     test.setTimeout(180_000);
-    for (const slug of ['stroopClassic', 'flanker', 'posnerClassic', 'boubaKiki', 'visualSearch', 'navonPrecedence']) {
+    for (const slug of ['stroopClassic', 'flanker', 'posnerClassic', 'boubaKiki', 'visualSearch', 'navonPrecedence', 'posnerCueing']) {
       await asTeacher(page, slug);
       const mock = page.getByRole('button', { name: 'Mock Data' });
       if (!(await mock.isVisible().catch(() => false))) continue;
@@ -255,5 +255,181 @@ test.describe('definition runtime — teacher dashboard', () => {
       await expect(page.getByText(/[1-9]\d* participants/)).toBeVisible({ timeout: 15_000 });
       expect(await page.locator('text=/No experiment named/').count()).toBe(0);
     }
+  });
+});
+
+// ── Timeouts, withheld responses, early presses ─────────────────────────────
+//
+// Added with the Posner port. The unit tests pin down the rules; these check the runner
+// actually applies them in a browser — the part a timer bug or a double-fired key would
+// break — and what reaches the database for each outcome.
+//
+// Each scenario is a one- or two-trial definition handed to /run through the preview store,
+// the same channel /create uses, so no timing depends on a long real experiment.
+
+type Row = Record<string, unknown>;
+
+function speeded(slug: string, kind: 'go' | 'nogo', trialOver: Record<string, unknown> = {}) {
+  return {
+    version: 1, slug, title: 'Speeded', titleHe: 'מהירות', category: 'ATTENTION',
+    instructions: { en: 'Press when you see go.', he: 'לחצו כשמופיע go.' },
+    factors: [{ name: 'kind', levels: [kind] }],
+    repetitions: 1,
+    trial: {
+      phases: [
+        { name: 'wait', display: { kind: 'fixation' }, durationMs: 300 },
+        { name: 'go', display: { kind: 'text', text: '{kind}' }, awaitsResponse: true, startsClock: true, timeoutMs: 700 },
+      ],
+      response: { kind: 'choice', options: [{ value: 'press', label: 'Press', labelHe: 'לחצו', key: 'space' }] },
+      correct: { kind: 'mapping', factor: 'kind', expect: { go: 'press', nogo: 'none' } },
+      itiMs: 100,
+      feedback: {
+        durationMs: 1200, inMain: true,
+        timeout: { en: 'Missed', he: 'פספוס' },
+        incorrect: { en: 'Wrong', he: 'שגוי' },
+        early: { en: 'Too early', he: 'מוקדם מדי' },
+      },
+      ...trialOver,
+    },
+    store: ['kind'],
+    dashboard: { charts: [{ title: 'c', kind: 'bar', groupBy: 'kind', measure: 'accuracy' }] },
+  };
+}
+
+/** Runs a definition from the preview store, in English, returning every row it saves. */
+async function runPreview(page: Page, def: { slug: string } & Row): Promise<Row[]> {
+  const saved: Row[] = [];
+  // Registered after the suite's isolation route, so it wins for this table.
+  await page.route('**/rest/v1/experiment_results**', async route => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      saved.push(...(Array.isArray(body) ? body : [body]));
+    }
+    return route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(([key, value]) => sessionStorage.setItem(key, value),
+    ['cognitives_preview_definitions', JSON.stringify({ [def.slug]: def })] as const);
+
+  await open(page, `/run/${def.slug}`);
+  await page.getByRole('button', { name: 'English' }).click();
+  await page.getByPlaceholder('Name').fill('E2E Tester');
+  await page.getByRole('button', { name: 'Begin' }).click();
+  return saved;
+}
+
+const thanks = (page: Page) => page.getByRole('heading', { name: /thank you/i });
+
+test.describe('definition runtime — timeouts and withheld responses', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  test('a go trial left unanswered times out as a miss, with no reaction time', async ({ page }) => {
+    const saved = await runPreview(page, speeded('e2eMiss', 'go'));
+    await expect(page.getByText('Missed')).toBeVisible({ timeout: 5000 });
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+    await expect.poll(() => saved.length).toBe(1);
+    expect(saved[0]).toMatchObject({ response: 'none', is_correct: false, reaction_time_ms: null });
+  });
+
+  test('a no-go trial left alone is correct, and shows no message', async ({ page }) => {
+    const saved = await runPreview(page, speeded('e2eWithhold', 'nogo'));
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('100%')).toBeVisible();
+    await expect.poll(() => saved.length).toBe(1);
+    expect(saved[0]).toMatchObject({ response: 'none', is_correct: true, reaction_time_ms: null });
+  });
+
+  test('pressing before the target is caught as too early', async ({ page }) => {
+    const saved = await runPreview(page, speeded('e2eEarly', 'go', {
+      phases: [
+        { name: 'wait', display: { kind: 'fixation' }, durationMs: 4000 },
+        { name: 'go', display: { kind: 'text', text: '{kind}' }, awaitsResponse: true, startsClock: true, timeoutMs: 700 },
+      ],
+      earlyFrom: 'wait',
+    }));
+    // Already on screen during the wait — which is what makes an early press possible at all.
+    await page.getByRole('button', { name: /Press/ }).click();
+    await expect(page.getByText('Too early')).toBeVisible();
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+    await expect.poll(() => saved.length).toBe(1);
+    expect(saved[0]).toMatchObject({ response: 'early', is_correct: false, reaction_time_ms: null });
+  });
+
+  test('without earlyFrom the button does not appear before the response phase', async ({ page }) => {
+    await runPreview(page, speeded('e2eNoEarly', 'go', {
+      phases: [
+        { name: 'wait', display: { kind: 'fixation' }, durationMs: 1500 },
+        { name: 'go', display: { kind: 'text', text: '{kind}' }, awaitsResponse: true, startsClock: true, timeoutMs: 3000 },
+      ],
+    }));
+    await expect(page.getByText('+', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Press/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Press/ })).toBeVisible({ timeout: 5000 });
+  });
+
+  test('space answers each trial exactly once, and never skips the next one', async ({ page }) => {
+    const def = speeded('e2eSpace', 'go', {
+      phases: [
+        { name: 'wait', display: { kind: 'fixation' }, durationMs: 300 },
+        { name: 'go', display: { kind: 'text', text: '{kind}' }, awaitsResponse: true, startsClock: true, timeoutMs: 5000 },
+      ],
+    });
+    const saved = await runPreview(page, { ...def, repetitions: 2 });
+
+    await expect(page.getByText('go', { exact: true })).toBeVisible();
+    await page.keyboard.press('Space');
+    await page.keyboard.press('Space');
+
+    await expect(page.getByText('2 / 2')).toBeVisible();
+    await expect(page.getByText('go', { exact: true })).toBeVisible();
+    await page.keyboard.press('Space');
+
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(500);
+    expect(saved.map(r => r.trial_index)).toEqual([0, 1]);
+    for (const r of saved) {
+      expect(r).toMatchObject({ response: 'press', is_correct: true });
+      expect(typeof r.reaction_time_ms).toBe('number');
+    }
+  });
+});
+
+test.describe('Posner cueing — definition port', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  async function begin(page: Page) {
+    await open(page, '/run/posnerCueing');
+    await page.getByRole('button', { name: 'English' }).click();
+    await page.getByPlaceholder('Name').fill('E2E Tester');
+    await page.getByRole('button', { name: 'Begin' }).click();
+  }
+
+  test('the button is up from fixation, and pressing then is too early', async ({ page }) => {
+    await begin(page);
+    // Fixation is 800ms at its shortest, so a press straight away is an anticipation.
+    await page.getByRole('button', { name: /Press/ }).click();
+    await expect(page.getByText('Too early — wait for the ●!')).toBeVisible();
+  });
+
+  test('fits a phone without horizontal scrolling', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await begin(page);
+    await expect(page.getByRole('button', { name: /Press/ })).toBeVisible();
+    const overflows = await page.evaluate(() =>
+      document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+    expect(overflows).toBe(false);
+  });
+
+  test('its dashboard draws all three charts from mock data', async ({ page }) => {
+    await page.addInitScript(() => sessionStorage.setItem('ss_teacher_authed', '1'));
+    await open(page, '/run/posnerCueing/teacher');
+    await page.getByRole('button', { name: 'Mock Data' }).click();
+    await expect(page.getByText(/15 participants/)).toBeVisible({ timeout: 15_000 });
+
+    const reveals = page.getByRole('button', { name: 'Reveal' });
+    await expect(reveals).toHaveCount(3);
+    for (let i = 0; i < 3; i++) await reveals.first().click();
+    await expect(page.getByRole('button', { name: 'Hide' })).toHaveCount(3);
+    // One wrapper per chart. Not .recharts-surface: each legend icon is a surface too.
+    await expect(page.locator('.recharts-wrapper')).toHaveCount(3);
   });
 });

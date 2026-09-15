@@ -34,10 +34,11 @@ const { aggregate, generateMockRows, seriesNames, measureLabel, sem } =
 const roundTrips = await import('../lib/experiment-runtime/round-trips.ts');
 const probe = await import('../lib/experiment-runtime/generality-probe.ts');
 const templates = await import('../lib/experiment-runtime/templates.ts');
+const ports = await import('../lib/experiment-runtime/ports.ts');
 
 /** Every definition in the repo, named. */
 const CORPUS = [];
-for (const [mod, label] of [[roundTrips, 'round-trip'], [probe, 'probe'], [templates, 'template']]) {
+for (const [mod, label] of [[roundTrips, 'round-trip'], [probe, 'probe'], [templates, 'template'], [ports, 'port']]) {
   for (const [name, value] of Object.entries(mod)) {
     if (value && typeof value === 'object' && !Array.isArray(value) && value.version === 1 && value.slug) {
       CORPUS.push([`${label}:${name}`, value]);

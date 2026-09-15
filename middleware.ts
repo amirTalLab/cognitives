@@ -97,5 +97,8 @@ export const config = {
     // the lock toggle silently does nothing — which is what happened to flankerLetterTask.
     '/run/flankerLetterTask/:path*',
     '/run/lexicalDecisionPairs/:path*',
+    // The definition port of posnerCueing shares its slug, so the one lock covers both
+    // versions — locking Posner cannot leave the /run copy open to students.
+    '/run/posnerCueing/:path*',
   ],
 };

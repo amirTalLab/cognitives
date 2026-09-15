@@ -76,11 +76,14 @@ closest example and say what you assumed.
 ## Step 3 — When to stop and use the other skill
 
 Hand off to **`new-cognitive-experiment`** (which writes real pages, and needs review and a
-deploy) only when the design genuinely needs one of the six dimensions listed at the bottom
-of `schema.ts`:
+deploy) only when the design genuinely needs one of the dimensions listed at the bottom of
+`schema.ts`:
 
-trial history · adaptive difficulty · withheld response · block structure · audio ·
-within-trial sequences
+trial history · adaptive difficulty · block structure · audio · within-trial sequences
+
+A withheld response (go/no-go, catch trials), a response deadline and "too early" presses
+are NOT reasons to hand off — see `timeoutMs`, `trial.earlyFrom` and `trial.feedback`, and
+the POSNER_CUEING port for a worked example.
 
 Say so plainly and explain the trade-off: generated pages take longer, need a deploy, and
 cannot be edited by the lecturer afterwards.
@@ -126,6 +129,15 @@ Things that are easy to get wrong:
   show, so the dashboard can be judged before a single student has run it.
 - **`correctMeans`** when there is no right answer — bouba/kiki scores "chose the rounded
   shape", not accuracy, and the dashboard label has to say so.
+- **Speeded detection and withheld responses.** `timeoutMs` on the response phase ends it
+  with the response `"none"` and no RT; score catch or no-go trials with a `mapping` whose
+  expected value is `"none"`. A choice with a timeout may have a single "go" option (`key:
+  "space"` works). `trial.earlyFrom` shows the button from an earlier phase and records a
+  press there as `"early"`. `trial.feedback` gives short per-outcome messages that clear
+  themselves. POSNER_CUEING in `lib/experiment-runtime/ports.ts` uses all three.
+- **Charts** can `filter` rows by factor values, use `correctOnly` for RT, plot a
+  `difference` between two levels per participant (a validity or congruency effect), and
+  `bin` a numeric `groupBy` such as `trial_index`.
 
 ---
 

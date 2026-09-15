@@ -109,7 +109,10 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   // ── Thanks: this participant's own result, no teacher-level data ──
   const scored = rows.filter(r => r.is_correct !== null);
   const accuracy = scored.length ? Math.round((scored.filter(r => r.is_correct).length / scored.length) * 100) : null;
-  const meanRt = rows.length ? Math.round(rows.reduce((a, r) => a + r.reaction_time_ms, 0) / rows.length) : 0;
+  // Trials with no timed response (a timeout, or a press that came too early) have no RT,
+  // and averaging them in as zero would make the participant look impossibly fast.
+  const timed = rows.filter(r => r.reaction_time_ms !== null);
+  const meanRt = timed.length ? Math.round(timed.reduce((a, r) => a + (r.reaction_time_ms ?? 0), 0) / timed.length) : 0;
 
   return (
     <main className="min-h-screen bg-[#0f172a] flex items-center justify-center px-6 py-10">

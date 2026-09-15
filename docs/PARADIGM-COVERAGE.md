@@ -47,6 +47,12 @@ vs group, histogram; every chart behind a Reveal button.
 5. **Audio** — generated tones, stereo presentation
 6. **Within-trial sequences** — RSVP streams, alternating displays
 
+> **Update:** withheld responses are now supported — `timeoutMs` on a response phase,
+> with `trial.earlyFrom` for too-early presses and `trial.feedback` for per-outcome
+> messages. They were built to port Posner cueing (`lib/experiment-runtime/ports.ts`),
+> whose catch trials need them. Go/No-Go is therefore buildable; stop-signal still needs
+> an adaptive stop-signal delay.
+
 ---
 
 ## Scoring
