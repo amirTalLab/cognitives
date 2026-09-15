@@ -157,6 +157,12 @@ export interface Phase {
    * a timeout may offer a single option, the one "go" button.
    */
   timeoutMs?: Bound<number>;
+  /**
+   * On a timed phase: add a random 0–jitterMs to `durationMs`, drawn afresh on every trial
+   * (whole milliseconds, both ends included). A fixation of 800–1200ms is
+   * `durationMs: 800, jitterMs: 400`, so the participant cannot time what comes next.
+   */
+  jitterMs?: Bound<number>;
 }
 
 // ─── Responses ────────────────────────────────────────────────────────────────
@@ -306,6 +312,36 @@ export interface ChartSpec {
    * with `bin: 33` splits a 132-trial session into quarters.
    */
   bin?: number;
+  /**
+   * Average every trial once across the whole class, instead of each participant first.
+   * One value per group, so no error bar. For a chart that was always computed that way.
+   */
+  pooled?: boolean;
+  /** Order and name the groups: `[{ "value": "exo_invalid", "label": "Exogenous" }]`. Unlisted groups follow. */
+  groups?: { value: string | number | boolean; label?: string }[];
+  /** A line under the title saying how to read the chart. */
+  description?: string;
+  /** Label for the x axis. */
+  xLabel?: string;
+}
+
+/**
+ * A single number on the teacher dashboard — "Avg Validity Effect: +42ms".
+ *
+ * Computed by the same aggregation as a chart, over the whole class, so a card and a chart
+ * of the same measure always agree.
+ */
+export interface StatSpec {
+  label: string;
+  measure: ChartSpec['measure'];
+  ofResponse?: string;
+  filter?: ChartSpec['filter'];
+  correctOnly?: boolean;
+  difference?: ChartSpec['difference'];
+  /** Appended to the number: "ms", "%". */
+  unit?: string;
+  /** Show a "+" on positive values, for effects. */
+  signed?: boolean;
 }
 
 // ─── The definition ───────────────────────────────────────────────────────────
@@ -321,6 +357,16 @@ export interface ExperimentDefinition {
 
   /** Bilingual instructions shown on the landing page. Hebrew is the default language. */
   instructions: { en: string; he: string };
+
+  /** Let a participant start without typing a name. A name is required by default. */
+  nameOptional?: boolean;
+
+  /** The closing screen. By default a thank-you with the participant's accuracy and mean RT. */
+  thanks?: {
+    title?: { en: string; he: string };
+    /** False for the thank-you alone, with no score. */
+    showResults?: boolean;
+  };
 
   /** Image files this experiment needs. Absent when it draws everything from shapes and text. */
   assets?: AssetManifest;
@@ -353,6 +399,19 @@ export interface ExperimentDefinition {
     /** Trials drawn from the same design, with feedback after each. */
     count: number;
     feedback: boolean;
+    /**
+     * Whether practice trials are saved (flagged `is_practice`). Defaults to true: a dropout
+     * pattern during practice is worth seeing. False matches experiments that never stored
+     * practice at all.
+     */
+    record?: boolean;
+    /**
+     * A fixed practice set instead of a random draw from the design: `factor` (a pool-drawn
+     * factor) takes every item of `pool` instead of its usual pool, and `count` of the
+     * resulting trials are used. For a hand-picked practice block — six easy trials, one
+     * invalid, one catch — the way the original experiment was designed.
+     */
+    from?: { factor: string; pool: string };
   };
 
   trial: {
@@ -373,6 +432,18 @@ export interface ExperimentDefinition {
      */
     earlyFrom?: string;
     /**
+     * Whether a too-early press is saved as a trial. Defaults to true. False shows the early
+     * message and moves on to the next trial keeping nothing — how the hand-built
+     * experiments treat an anticipation.
+     */
+    recordEarly?: boolean;
+    /**
+     * What stays on screen during the inter-trial interval. Blank when absent. Placeholder
+     * boxes that are part of the paradigm — Posner's — belong here, or they vanish between
+     * trials.
+     */
+    itiDisplay?: Display;
+    /**
      * Brief messages per outcome, shown for `durationMs` and then moving on by themselves.
      *
      * When present this replaces the practice-only "Correct / Incorrect · Next" screen. It
@@ -389,6 +460,8 @@ export interface ExperimentDefinition {
       timeout?: { en: string; he: string };
       /** A press before the response phase. Falls back to `incorrect`. */
       early?: { en: string; he: string };
+      /** What is on screen while a message is up. The current phase's display when absent. */
+      display?: Display;
     };
   };
 
@@ -411,7 +484,7 @@ export interface ExperimentDefinition {
    */
   correctMeans?: string;
 
-  dashboard: { charts: ChartSpec[] };
+  dashboard: { charts: ChartSpec[]; stats?: StatSpec[] };
 
   /** Drives the Mock Data toggle on the teacher dashboard. */
   mock?: MockSpec;

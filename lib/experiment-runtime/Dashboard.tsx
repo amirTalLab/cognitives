@@ -19,17 +19,24 @@ import {
 } from 'recharts';
 import { verifyPassword } from '@/lib/auth';
 import type { ExperimentDefinition, ChartSpec } from './schema';
-import { aggregate, generateMockRows, measureLabel, ResultRow, seriesNames } from './aggregate';
+import { aggregate, generateMockRows, measureLabel, ResultRow, seriesNames, statValue } from './aggregate';
 
 const BTN = 'px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 transition-colors';
 const SERIES_COLORS = ['#a78bfa', '#38bdf8', '#fbbf24', '#34d399', '#f472b6'];
 
-function ChartCard({ title, children }: { title: string; children: (revealed: boolean) => ReactNode }) {
+function ChartCard({ title, description, children }: {
+  title: string;
+  description?: string;
+  children: (revealed: boolean) => ReactNode;
+}) {
   const [revealed, setRevealed] = useState(false);
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-gray-200">{title}</h3>
+      <div className="flex justify-between items-center mb-4 gap-4">
+        <div>
+          <h3 className="font-semibold text-gray-200">{title}</h3>
+          {description && <p className="text-sm text-gray-500 mt-1">{description}</p>}
+        </div>
         <button onClick={() => setRevealed(r => !r)}
           className="text-xs px-3 py-1 rounded-full border border-gray-600 text-gray-400 hover:border-purple-400 hover:text-purple-400 transition-colors">
           {revealed ? 'Hide' : 'Reveal'}
@@ -72,7 +79,8 @@ function ChartView({ chart, def, rows, revealed }: {
   const axes = (
     <>
       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-      <XAxis dataKey="group" stroke="#9ca3af" />
+      <XAxis dataKey="group" stroke="#9ca3af"
+        label={chart.xLabel ? { value: chart.xLabel, position: 'insideBottom', offset: -4, fill: '#9ca3af' } : undefined} />
       <YAxis stroke="#9ca3af" domain={percentage ? [0, 100] : ['auto', 'auto']}
         label={{ value: label, angle: -90, position: 'insideLeft', fill: '#9ca3af' }} />
       <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151' }} />
@@ -279,8 +287,24 @@ export function Dashboard({ definition, fetchRows }: {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
+            {definition.dashboard.stats?.length ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {definition.dashboard.stats.map((stat, i) => {
+                  const value = statValue(stat, rows);
+                  const shown = value === null
+                    ? '—'
+                    : `${stat.signed && value >= 0 ? '+' : ''}${Math.round(value)}${stat.unit ?? ''}`;
+                  return (
+                    <div key={i} className="bg-gray-900 border border-gray-700 rounded-2xl p-5">
+                      <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+                      <p className="text-2xl font-bold text-gray-100">{shown}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
             {definition.dashboard.charts.map((chart, i) => (
-              <ChartCard key={i} title={chart.title}>
+              <ChartCard key={i} title={chart.title} description={chart.description}>
                 {revealed => <ChartView chart={chart} def={definition} rows={rows} revealed={revealed} />}
               </ChartCard>
             ))}

@@ -186,15 +186,37 @@ export function aggregate(chart: ChartSpec, allRows: ResultRow[]): ChartPoint[] 
   // trials the chart is about.
   const rows = chart.filter || chart.correctOnly ? allRows.filter(r => included(chart, r)) : allRows;
 
+  // "sequence" is a row's place among ITS PARTICIPANT's rows in this chart, in the order they
+  // were run — that person's 1st, 2nd, 3rd exogenous trial, whatever trial numbers those
+  // happened to be. Counted after filtering, so it only counts what the chart counts.
+  const position = new Map<ResultRow, number>();
+  if (chart.groupBy === 'sequence') {
+    const bySession = new Map<string, ResultRow[]>();
+    for (const r of rows) {
+      const list = bySession.get(r.session_id);
+      if (list) list.push(r);
+      else bySession.set(r.session_id, [r]);
+    }
+    for (const list of bySession.values()) {
+      [...list]
+        .sort((a, b) => Number(a.trial_index) - Number(b.trial_index))
+        .forEach((r, i) => position.set(r, i));
+    }
+  }
+
   const key = chart.groupBy.replace(/\./g, '_');
   const bin = typeof chart.bin === 'number' && chart.bin > 0 ? chart.bin : 0;
   const groupValue = (r: ResultRow) => {
     if (chart.groupBy === 'participant') return String(r.participant_name);
+    if (chart.groupBy === 'all') return 'All';
+    const raw = chart.groupBy === 'sequence' ? position.get(r) : r[key];
     if (bin) {
-      // Numbered from 1: trial_index 0–32 with a bin of 33 is group 1.
-      const n = Number(r[key]);
-      return Number.isFinite(n) ? String(Math.floor(n / bin) + 1) : 'undefined';
+      // Numbered from 1: with a bin of 33, trial_index 0–32 is group 1.
+      const n = Number(raw);
+      return raw !== undefined && Number.isFinite(n) ? String(Math.floor(n / bin) + 1) : 'undefined';
     }
+    // Unbinned sequence positions are numbered from 1 too.
+    if (chart.groupBy === 'sequence') return raw === undefined ? 'undefined' : String(Number(raw) + 1);
     return String(r[key]);
   };
 
@@ -235,9 +257,13 @@ export function aggregate(chart: ChartSpec, allRows: ResultRow[]): ChartPoint[] 
     for (const series of seriesValues) {
       const bySession = bySeries.get(series === null ? NO_SERIES : series);
       // A participant with nothing measurable for a difference comes back NaN and is left out.
-      const byParticipant = bySession
-        ? [...bySession.values()].map(cell => cellMeasure(chart, cell)).filter(Number.isFinite)
-        : [];
+      // Pooled charts instead treat the whole class's trials as one set, each trial counting
+      // once — one value, so no error bar.
+      const byParticipant = !bySession
+        ? []
+        : chart.pooled
+          ? [cellMeasure(chart, [...bySession.values()].flat())].filter(Number.isFinite)
+          : [...bySession.values()].map(cell => cellMeasure(chart, cell)).filter(Number.isFinite);
       if (byParticipant.length) measured = true;
 
       const mean = byParticipant.length
@@ -257,11 +283,35 @@ export function aggregate(chart: ChartSpec, allRows: ResultRow[]): ChartPoint[] 
     // of zero there would read as "no effect" rather than "no data".
     return measured ? point : null;
   }).filter((p): p is ChartPoint => p !== null).sort((a, b) => {
+    // Groups the definition lists come first, in its order.
+    const ra = groupRank(chart, a.group), rb = groupRank(chart, b.group);
+    if (ra !== rb) return ra - rb;
     // Numeric groups sort numerically, so set sizes read 1, 2, 4, 8 rather than 1, 2, 4, 8
     // being alphabetised into 1, 2, 4, 8 — which breaks as soon as there is a 10.
     const na = Number(a.group), nb = Number(b.group);
     return !isNaN(na) && !isNaN(nb) ? na - nb : String(a.group).localeCompare(String(b.group));
-  });
+  }).map(p => ({ ...p, group: groupLabel(chart, p.group) }));
+}
+
+/** Where a group sits under `chart.groups`. Unlisted groups follow, so none is ever hidden. */
+function groupRank(chart: ChartSpec, group: string): number {
+  const i = chart.groups?.findIndex(g => String(g.value) === group) ?? -1;
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
+
+function groupLabel(chart: ChartSpec, group: string): string {
+  return chart.groups?.find(g => String(g.value) === group)?.label ?? group;
+}
+
+type StatSpec = NonNullable<ExperimentDefinition['dashboard']['stats']>[number];
+
+/**
+ * The number on a stat card: the same aggregation a chart does, over the whole class as a
+ * single group — so a card and a chart of the same measure can never disagree.
+ */
+export function statValue(stat: StatSpec, rows: ResultRow[]): number | null {
+  const [point] = aggregate({ ...stat, title: stat.label, kind: 'bar', groupBy: 'all' }, rows);
+  return point ? point.value : null;
 }
 
 /** Series names for a multi-series chart, in a stable order. */

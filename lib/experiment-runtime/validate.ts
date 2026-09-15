@@ -188,6 +188,9 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     if (p.timeoutMs !== undefined && !Number.isFinite(p.timeoutMs) && !isStr(p.timeoutMs)) {
       bad(`Phase ${label(i, p.name)}'s "timeoutMs"`, 'a number of milliseconds');
     }
+    if (p.jitterMs !== undefined && !Number.isFinite(p.jitterMs) && !isStr(p.jitterMs)) {
+      bad(`Phase ${label(i, p.name)}'s "jitterMs"`, 'a number of milliseconds');
+    }
   });
 
   if (def.trial.earlyFrom !== undefined && !isStr(def.trial.earlyFrom)) {
@@ -204,7 +207,57 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
           bad(`"trial.feedback.${key}"`, 'an object with "en" and "he" text');
         }
       }
+      if (fb.display !== undefined && !isObj(fb.display)) bad('"trial.feedback.display"', 'a display object');
     }
+  }
+  if (def.trial.itiDisplay !== undefined && !isObj(def.trial.itiDisplay)) {
+    bad('"trial.itiDisplay"', 'a display object');
+  }
+  if (def.trial.recordEarly !== undefined && typeof def.trial.recordEarly !== 'boolean') {
+    bad('"trial.recordEarly"', 'true or false');
+  }
+  if (def.nameOptional !== undefined && typeof def.nameOptional !== 'boolean') {
+    bad('"nameOptional"', 'true or false');
+  }
+  if (def.thanks !== undefined) {
+    const th = def.thanks as unknown as Record<string, unknown>;
+    if (!isObj(th)) bad('"thanks"', 'an object');
+    else {
+      const title = th.title as Record<string, unknown> | undefined;
+      if (title !== undefined && (!isObj(title) || !isStr(title.en) || !isStr(title.he))) {
+        bad('"thanks.title"', 'an object with "en" and "he" text');
+      }
+      if (th.showResults !== undefined && typeof th.showResults !== 'boolean') bad('"thanks.showResults"', 'true or false');
+    }
+  }
+  if (def.practice !== undefined) {
+    const pr = def.practice as unknown as Record<string, unknown>;
+    if (!isObj(pr)) bad('"practice"', 'an object with "count" and "feedback"');
+    else {
+      if (!Number.isFinite(pr.count)) bad('"practice.count"', 'a number');
+      if (pr.record !== undefined && typeof pr.record !== 'boolean') bad('"practice.record"', 'true or false');
+      const from = pr.from as Record<string, unknown> | undefined;
+      if (from !== undefined && (!isObj(from) || !isStr(from.factor) || !isStr(from.pool))) {
+        bad('"practice.from"', 'an object with "factor" and "pool"');
+      }
+    }
+  }
+  if (def.dashboard.stats !== undefined) {
+    if (!Array.isArray(def.dashboard.stats)) bad('"dashboard.stats"', 'an array');
+    else def.dashboard.stats.forEach((s, i) => {
+      if (!isObj(s)) return bad(`Stat #${i + 1}`, 'an object');
+      const at = `Stat ${label(i, s.label)}`;
+      if (!isStr(s.label)) bad(`${at}'s "label"`, 'text');
+      if (!isStr(s.measure)) bad(`${at}'s "measure"`, 'a measure name');
+      if (s.filter !== undefined && !isObj(s.filter)) bad(`${at}'s "filter"`, 'an object of field values');
+      if (s.correctOnly !== undefined && typeof s.correctOnly !== 'boolean') bad(`${at}'s "correctOnly"`, 'true or false');
+      if (s.difference !== undefined) {
+        const d = s.difference as unknown as Record<string, unknown>;
+        if (!isObj(d) || !isStr(d.factor) || d.level === undefined || d.minus === undefined) {
+          bad(`${at}'s "difference"`, 'an object with "factor", "level" and "minus"');
+        }
+      }
+    });
   }
 
   const responseShapes: unknown[] =
@@ -227,6 +280,13 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     if (c.filter !== undefined && !isObj(c.filter)) bad(`${at}'s "filter"`, 'an object of field values');
     if (c.correctOnly !== undefined && typeof c.correctOnly !== 'boolean') bad(`${at}'s "correctOnly"`, 'true or false');
     if (c.bin !== undefined && (!Number.isFinite(c.bin) || c.bin <= 0)) bad(`${at}'s "bin"`, 'a positive number');
+    if (c.pooled !== undefined && typeof c.pooled !== 'boolean') bad(`${at}'s "pooled"`, 'true or false');
+    if (c.description !== undefined && !isStr(c.description)) bad(`${at}'s "description"`, 'text');
+    if (c.xLabel !== undefined && !isStr(c.xLabel)) bad(`${at}'s "xLabel"`, 'text');
+    if (c.groups !== undefined
+      && (!Array.isArray(c.groups) || !c.groups.every(g => isObj(g) && g.value !== undefined))) {
+      bad(`${at}'s "groups"`, 'a list of { "value", "label" }');
+    }
     if (c.difference !== undefined) {
       const d = c.difference as unknown as Record<string, unknown>;
       if (!isObj(d) || !isStr(d.factor) || d.level === undefined || d.minus === undefined) {
@@ -372,6 +432,27 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
         err(`Phase "${phase.name}" has a "timeoutMs" of ${phase.timeoutMs}; it must be above zero.`);
       }
     }
+    if (phase.jitterMs !== undefined) {
+      if (phase.awaitsResponse) {
+        err(`Phase "${phase.name}" has "jitterMs" but awaits a response — only a timed phase has a duration to vary.`);
+      }
+      if (typeof phase.jitterMs === 'number' && phase.jitterMs < 0) {
+        err(`Phase "${phase.name}" has a negative "jitterMs".`);
+      }
+    }
+  }
+
+  // A fixed practice set swaps one pool for another, so both ends of the swap must exist —
+  // otherwise practice silently falls back to nothing at all.
+  if (def.practice?.from) {
+    const { factor, pool } = def.practice.from;
+    const target = def.factors.find(f => f.name === factor);
+    if (!target || !target.from) {
+      err(`"practice.from" names "${factor}", which is not a factor drawn from a pool.`);
+    }
+    const items = def.pools?.[pool];
+    if (!items) err(`"practice.from" uses pool "${pool}", which is not defined.`);
+    else if (items.length === 0) err(`"practice.from" uses pool "${pool}", which is empty.`);
   }
 
   if (def.trial.earlyFrom !== undefined) {
@@ -556,7 +637,8 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   }
   // trial_index is on every row's spine, which is what lets a chart bin by position in the
   // session without the definition storing it.
-  const derived = new Set(['participant', 'is_correct', 'confidence', 'trial_index']);
+  // "sequence" and "all" are computed by the aggregation itself rather than read off a row.
+  const derived = new Set(['participant', 'is_correct', 'confidence', 'trial_index', 'sequence', 'all']);
   const stored = def.store.map(s => s.replace(/\./g, '_'));
   const readable = (field: string) => stored.includes(field.replace(/\./g, '_')) || derived.has(field);
   for (const chart of def.dashboard.charts) {

@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { ExperimentDefinition, ResponseSpec, ResponseStep } from './schema';
 import {
-  buildTrials, EARLY_RESPONSE, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf, resolve, Trial,
+  buildTrials, EARLY_RESPONSE, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf, phaseDuration, resolve, Trial,
 } from './trials';
 import { DisplayView, SEED_KEY, ASSET_BASE_KEY } from './DisplayView';
 import { saveTrial } from './store';
@@ -139,30 +139,38 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     const rt = early || wasTimedOut ? null : Math.round(performance.now() - clock.current);
     const payload = payloadOf(definition, trial);
 
-    rows.current.push({
-      trial_index: trial.index,
-      is_practice: practice,
-      response: primary,
-      is_correct: correct,
-      reaction_time_ms: rt,
-      payload,
-      ...(Object.keys(extra).length ? { extra } : {}),
-    });
+    // An early press the definition does not record is not a trial at all: it shows "too
+    // early" and moves on, keeping nothing — as the hand-built experiments do.
+    const kept = !(early && definition.trial.recordEarly === false);
+    if (kept) {
+      rows.current.push({
+        trial_index: trial.index,
+        is_practice: practice,
+        response: primary,
+        is_correct: correct,
+        reaction_time_ms: rt,
+        payload,
+        ...(Object.keys(extra).length ? { extra } : {}),
+      });
+    }
 
     // Saved per trial rather than in a batch at the end, so a participant who closes the
     // tab halfway still contributes the trials they finished. Practice is written too,
-    // flagged, because a dropout pattern during practice is worth being able to see.
-    void saveTrial({
-      slug: definition.slug,
-      sessionId: sessionStorage.getItem(`${definition.slug}_session_id`) ?? 'unknown',
-      participantName: sessionStorage.getItem(`${definition.slug}_name`) ?? 'anonymous',
-      trialIndex: trial.index,
-      isPractice: practice,
-      response: primary,
-      isCorrect: correct,
-      reactionTimeMs: rt,
-      payload: { ...payload, ...extra },
-    }).then(ok => { if (!ok) onSaveFailure?.(); });
+    // flagged, because a dropout pattern during practice is worth being able to see —
+    // unless the definition says practice is not recorded.
+    if (kept && !(practice && definition.practice?.record === false)) {
+      void saveTrial({
+        slug: definition.slug,
+        sessionId: sessionStorage.getItem(`${definition.slug}_session_id`) ?? 'unknown',
+        participantName: sessionStorage.getItem(`${definition.slug}_name`) ?? 'anonymous',
+        trialIndex: trial.index,
+        isPractice: practice,
+        response: primary,
+        isCorrect: correct,
+        reactionTimeMs: rt,
+        payload: { ...payload, ...extra },
+      }).then(ok => { if (!ok) onSaveFailure?.(); });
+    }
 
     answers.current = {};
     timedOut.current = false;
@@ -192,7 +200,7 @@ export function Runner({ definition, language, practice = false, onComplete, onS
       if (phase.startsClock) clock.current = performance.now();
       return;
     }
-    const ms = Number(resolve(phase.durationMs, trial?.values ?? {}) ?? 0);
+    const ms = trial ? phaseDuration(phase, trial, phaseIdx) : 0;
     const timer = setTimeout(() => setPhaseIdx(i => i + 1), ms);
     return () => clearTimeout(timer);
   }, [phaseIdx, trialIdx, phase, feedback, iti, trial]);
@@ -251,6 +259,11 @@ export function Runner({ definition, language, practice = false, onComplete, onS
 
   const step = steps.find(s => s.phase === phase.name) ?? (inEarlyWindow ? steps[0] : undefined);
   const showResponse = (phase.awaitsResponse || inEarlyWindow) && !feedback && !iti;
+  // Between trials: blank, or whatever the definition keeps up. Under a feedback message:
+  // the feedback display when there is one, so a stimulus need not linger behind "Missed".
+  const shown = iti
+    ? definition.trial.itiDisplay
+    : (feedback?.message && definition.trial.feedback?.display) || phase.display;
 
   return (
     <main style={{ height: '100dvh' }} className="bg-[#0f172a] flex flex-col">
@@ -263,7 +276,7 @@ export function Runner({ definition, language, practice = false, onComplete, onS
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center gap-10 px-6">
-        {!iti && <DisplayView node={phase.display} values={values} />}
+        {shown && <DisplayView node={shown} values={values} />}
 
         {showResponse && step && (
           <ResponseView step={step} values={values} rtl={rtl} onAnswer={answer} />
@@ -307,6 +320,16 @@ function ResponseView({ step, values, rtl, onAnswer }: {
   // Never row-reverse: an ancestor dir="rtl" cancels it and you get the opposite order.
   const dir = { flexDirection: 'row' as const, direction: rtl ? ('rtl' as const) : ('ltr' as const) };
 
+  // Answered on pointer DOWN, as every hand-built experiment on this site is: a click fires on
+  // release, which adds the length of the tap to every reaction time taken on a phone. A
+  // keyboard "click" (Enter on a focused button, detail 0) still answers; the click that
+  // follows a pointer press does not, so one tap can never count twice — even when the next
+  // response step reuses the same button element.
+  const press = (act: () => void) => ({
+    onPointerDown: (e: React.PointerEvent) => { e.preventDefault(); act(); },
+    onClick: (e: React.MouseEvent) => { if (e.detail === 0) act(); },
+  });
+
   if (step.kind === 'choice') {
     const wide = step.layout === 'column';
     return (
@@ -316,7 +339,7 @@ function ResponseView({ step, values, rtl, onAnswer }: {
           const label = String(resolve(rtl && opt.labelHe ? opt.labelHe : opt.label, values) ?? '');
           const value = String(resolve(opt.value, values) ?? opt.value);
           return (
-            <button key={i} onClick={() => onAnswer(value)}
+            <button key={i} {...press(() => onAnswer(value))}
               className="min-w-20 min-h-20 px-6 py-4 rounded-2xl border-2 border-gray-700 hover:border-purple-400
                          text-gray-200 text-lg transition-colors touch-manipulation">
               {opt.display ? <DisplayView node={opt.display} values={values} /> : label}

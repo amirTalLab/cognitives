@@ -393,6 +393,78 @@ test.describe('definition runtime — timeouts and withheld responses', () => {
   });
 });
 
+test.describe('definition runtime — practice, saving and endings', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  test('practice ends on a practice-complete screen, and unrecorded practice saves nothing', async ({ page }) => {
+    const def = { ...speeded('e2ePractice', 'go'), practice: { count: 1, feedback: false, record: false } };
+    const saved = await runPreview(page, def);
+
+    // The one practice trial times out, and then the pause before the real block.
+    await expect(page.getByRole('heading', { name: 'Practice complete!' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('1 trials')).toBeVisible();
+    expect(saved).toHaveLength(0);
+
+    await page.getByRole('button', { name: 'Start' }).click();
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+    await expect.poll(() => saved.length).toBe(1);
+    expect(saved[0]).toMatchObject({ is_practice: false });
+  });
+
+  test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {
+    const saved = await runPreview(page, speeded('e2eDiscardEarly', 'go', {
+      phases: [
+        { name: 'wait', display: { kind: 'fixation' }, durationMs: 4000 },
+        { name: 'go', display: { kind: 'text', text: '{kind}' }, awaitsResponse: true, startsClock: true, timeoutMs: 700 },
+      ],
+      earlyFrom: 'wait',
+      recordEarly: false,
+    }));
+    await page.getByRole('button', { name: /Press/ }).click();
+    await expect(page.getByText('Too early')).toBeVisible();
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(500);
+    expect(saved).toHaveLength(0);
+  });
+
+  test('itiDisplay stays up between trials, and feedback.display replaces the stimulus under a message', async ({ page }) => {
+    const def = speeded('e2eScreens', 'go', {
+      itiMs: 2000,
+      itiDisplay: { kind: 'text', text: 'BETWEEN TRIALS' },
+      feedback: {
+        durationMs: 1500, inMain: true,
+        timeout: { en: 'Missed', he: 'פספוס' },
+        display: { kind: 'text', text: 'UNDER THE MESSAGE' },
+      },
+    });
+    await runPreview(page, { ...def, repetitions: 2 });
+
+    await expect(page.getByText('Missed')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('UNDER THE MESSAGE')).toBeVisible();
+    await expect(page.getByText('go', { exact: true })).toHaveCount(0);
+
+    await expect(page.getByText('BETWEEN TRIALS')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Missed')).toHaveCount(0);
+  });
+
+  test('a definition can make the name optional and end on a plain thank-you', async ({ page }) => {
+    const def = {
+      ...speeded('e2eEnding', 'nogo'),
+      nameOptional: true,
+      thanks: { title: { en: 'All done', he: 'סיימנו' }, showResults: false },
+    };
+    await page.addInitScript(([key, value]) => sessionStorage.setItem(key, value),
+      ['cognitives_preview_definitions', JSON.stringify({ [def.slug]: def })] as const);
+    await open(page, `/run/${def.slug}`);
+    await page.getByRole('button', { name: 'English' }).click();
+    // No name typed.
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    await expect(page.getByRole('heading', { name: 'All done' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/mean RT/i)).toHaveCount(0);
+  });
+});
+
 test.describe('Posner cueing — definition port', () => {
   test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
 
@@ -402,6 +474,47 @@ test.describe('Posner cueing — definition port', () => {
     await page.getByPlaceholder('Name').fill('E2E Tester');
     await page.getByRole('button', { name: 'Begin' }).click();
   }
+
+  test('eight practice trials, then the practice-complete screen, with nothing from practice saved', async ({ page }) => {
+    test.setTimeout(150_000);
+    const saved: Row[] = [];
+    await page.route('**/rest/v1/experiment_results**', async route => {
+      if (route.request().method() === 'POST') {
+        const body = route.request().postDataJSON();
+        saved.push(...(Array.isArray(body) ? body : [body]));
+      }
+      return route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
+    });
+    await begin(page);
+
+    // Answer each target as it appears; catch trials simply time out.
+    const done = page.getByRole('heading', { name: 'Practice complete!' });
+    const target = page.getByText('●', { exact: true });
+    const deadline = Date.now() + 100_000;
+    while (Date.now() < deadline && !(await done.isVisible().catch(() => false))) {
+      if (await target.isVisible().catch(() => false)) await page.keyboard.press('Space');
+      await page.waitForTimeout(50);
+    }
+
+    await expect(done).toBeVisible();
+    await expect(page.getByText('132 trials')).toBeVisible();
+    expect(saved).toHaveLength(0);
+
+    await page.getByRole('button', { name: 'Start' }).click();
+    await expect(page.getByText('1 / 132')).toBeVisible();
+  });
+
+  test('its dashboard shows the original stat cards', async ({ page }) => {
+    await page.addInitScript(() => sessionStorage.setItem('ss_teacher_authed', '1'));
+    await open(page, '/run/posnerCueing/teacher');
+    await page.getByRole('button', { name: 'Mock Data' }).click();
+    await expect(page.getByText(/15 participants/)).toBeVisible({ timeout: 15_000 });
+
+    for (const label of ['Avg Valid RT', 'Avg Invalid RT', 'Avg Validity Effect']) {
+      await expect(page.getByText(label, { exact: true })).toBeVisible();
+    }
+    await expect(page.getByText(/^\+\d+ms$/)).toBeVisible();
+  });
 
   test('the button is up from fixation, and pressing then is too early', async ({ page }) => {
     await begin(page);

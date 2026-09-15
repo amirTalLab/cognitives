@@ -138,6 +138,12 @@ Things that are easy to get wrong:
 - **Charts** can `filter` rows by factor values, use `correctOnly` for RT, plot a
   `difference` between two levels per participant (a validity or congruency effect), and
   `bin` a numeric `groupBy` such as `trial_index`.
+- **Matching an existing experiment exactly.** `jitterMs` adds a random 0–N ms to a timed
+  phase; `practice.from` swaps in a fixed practice set; `practice.record` and
+  `trial.recordEarly` control what is saved; `trial.itiDisplay` and `trial.feedback.display`
+  keep placeholders on screen; `nameOptional` and `thanks` shape the start and end screens.
+  On the dashboard: `stats` cards, and chart `groups` (order and labels), `description`,
+  `xLabel`, `groupBy: "sequence"` (each participant's nth trial of interest) and `pooled`.
 
 ---
 

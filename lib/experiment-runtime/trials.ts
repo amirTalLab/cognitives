@@ -141,7 +141,15 @@ export function buildTrials(
   const practice = opts.practice ?? false;
 
   const derived = def.factors.filter(f => f.derivedFrom);
-  const crossed = def.factors.filter(f => !f.counterbalance && !f.derivedFrom);
+  // A fixed practice set: the named factor draws every item of the practice pool instead of
+  // its own levels — the hand-picked practice trials an experiment was designed with, rather
+  // than a random handful of the main design.
+  const fixed = practice ? def.practice?.from : undefined;
+  const crossed = def.factors
+    .filter(f => !f.counterbalance && !f.derivedFrom)
+    .map(f => (fixed && f.name === fixed.factor
+      ? { ...f, levels: undefined, from: fixed.pool, sample: undefined }
+      : f));
   const balanced = def.factors.filter(f => f.counterbalance && !f.derivedFrom);
 
   let rows = cross(crossed, def.pools, rng);
@@ -241,6 +249,25 @@ export function feedbackMessage(
   if (outcome.timedOut) return fb.timeout ?? fb.incorrect ?? null;
   if (outcome.correct === false) return fb.incorrect ?? null;
   return null;
+}
+
+/**
+ * How long a timed phase lasts on this trial.
+ *
+ * With `jitterMs`, a whole number of milliseconds is added at random, seeded by the trial
+ * and the phase — so it is fixed for the life of that phase (a re-render cannot redraw it)
+ * and still differs from one trial to the next.
+ */
+export function phaseDuration(
+  phase: ExperimentDefinition['trial']['phases'][number],
+  trial: Pick<Trial, 'values' | 'seed'>,
+  phaseIndex: number,
+): number {
+  const base = Number(resolve(phase.durationMs, trial.values) ?? 0);
+  const jitter = Number(resolve(phase.jitterMs, trial.values) ?? 0);
+  if (!(jitter > 0)) return base;
+  const draw = seededRandom(trial.seed * 31 + phaseIndex + 1)();
+  return base + Math.floor(draw * (jitter + 1));
 }
 
 // ─── Scoring ──────────────────────────────────────────────────────────────────
