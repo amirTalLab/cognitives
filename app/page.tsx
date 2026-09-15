@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Beaker, Brain, BrainCog, BarChart2, FlaskConical, Shapes, Target, Search, Users, Type, Lock, LockOpen, Timer, GitFork, List, BookOpen, Lightbulb, Sparkles, Eye, FilePlus2, ArrowRight } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { verifyPassword } from '@/lib/auth';
+import { PASSWORD_KEY, setExperimentLock, storedPassword } from '@/lib/protected-writes';
 
 // `href` is set for experiments built as definitions, which all live under /run/{slug}
 // rather than having a route of their own. Without it a generated experiment gets a card
@@ -57,10 +58,14 @@ export default function HomePage() {
   const [pwError,  setPwError]  = useState(false);
   const [locks,    setLocks]    = useState<Record<string, boolean>>({});
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
+  const [lockError, setLockError] = useState<string | null>(null);
 
-  // Re-hydrate auth from session
+  // Re-hydrate auth from session. The password itself is needed, not just the flag:
+  // changing a lock goes through a database function that checks it, so a session that
+  // only remembers "logged in" would have every toggle refused. Such a session is asked
+  // for the password once more instead.
   useEffect(() => {
-    if (sessionStorage.getItem('ss_home_authed') === '1') {
+    if (sessionStorage.getItem('ss_home_authed') === '1' && storedPassword()) {
       setAuthed(true);
       loadLocks();
     }
@@ -83,15 +88,14 @@ export default function HomePage() {
     if (toggling[id]) return;
     const newValue = !locks[id];
     setToggling(t => ({ ...t, [id]: true }));
+    setLockError(null);
     setLocks(l => ({ ...l, [id]: newValue }));           // optimistic update
-    const sb = getSupabase();
-    if (sb) {
-      const { error } = await sb.from('experiment_locks').upsert({
-        experiment_id: id,
-        is_locked:     newValue,
-        updated_at:    new Date().toISOString(),
-      });
-      if (error) setLocks(l => ({ ...l, [id]: !newValue })); // revert on failure
+    // Through the password-checked database function: the public key cannot write the
+    // lock table, or any visitor could lock a class out of an experiment.
+    const result = await setExperimentLock(id, newValue);
+    if (!result.ok) {
+      setLocks(l => ({ ...l, [id]: !newValue }));         // revert on failure
+      setLockError(result.error ?? 'The lock could not be changed.');
     }
     setToggling(t => ({ ...t, [id]: false }));
   }
@@ -101,6 +105,8 @@ export default function HomePage() {
     const ok = await verifyPassword(pwInput);
     if (ok) {
       sessionStorage.setItem('ss_home_authed', '1');
+      // Kept for this tab so lock changes can be checked by the database.
+      sessionStorage.setItem(PASSWORD_KEY, pwInput);
       // Set session cookie so middleware skips lock checks for admin
       document.cookie = 'cognitives_admin=1; path=/; SameSite=Strict';
       setAuthed(true);
@@ -159,6 +165,13 @@ export default function HomePage() {
         <p className="text-sm text-muted mb-10 ml-10">
           ניסויי כיתה &nbsp;•&nbsp; Cognitive Processes Course Experiments
         </p>
+
+        {/* A refused lock change is undone on its card; this says why. */}
+        {lockError && (
+          <div role="alert" className="mb-6 p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 text-sm">
+            {lockError}
+          </div>
+        )}
 
         {/* Category rows */}
         <div className="divide-y divide-gray-800/60">

@@ -76,8 +76,8 @@ It runs the same stages as the web wizard and **stops for you at each decision**
 Then hand students the link, or the QR code on the teacher dashboard.
 
 **No Anthropic API key is needed for this path** — that is what the website uses and what
-this avoids. The two Supabase keys are needed only to *publish*; building and previewing
-work without them.
+this avoids. The two Supabase keys and the site password are needed only to *publish*;
+building and previewing work without them.
 
 Full walkthrough for someone starting from a fresh clone, written for a lecturer rather than
 a developer: **[docs/BUILD-AN-EXPERIMENT.md](docs/BUILD-AN-EXPERIMENT.md)**.

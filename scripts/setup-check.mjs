@@ -102,6 +102,40 @@ if (url && key) {
         ? 'A free Supabase project pauses when idle. Open its dashboard and resume it, then run this again.'
         : 'Check the URL in .env.local.');
   }
+
+  // Publishing goes through a password-checked database function. Probed with an empty
+  // password, which the function refuses before writing anything — the reply only says
+  // whether the function is installed.
+  if (canPublish) {
+    try {
+      const probe = await fetch(`${base}/rest/v1/rpc/publish_definition`, {
+        method: 'POST',
+        headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          p_password: '', p_slug: '__setup_probe__', p_title: '', p_title_he: '', p_category: '', p_definition: {},
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const reply = await probe.text();
+      if (/incorrect password/i.test(reply)) {
+        add('ok', 'Protected publishing', 'installed');
+      } else if (probe.status === 404 || /PGRST202|could not find the function/i.test(reply)) {
+        canPublish = false;
+        add('fail', 'Protected publishing', 'the database functions are missing',
+          'Run supabase/schemas/protect-writes-1-functions.sql in the Supabase SQL editor.');
+      } else {
+        add('warn', 'Protected publishing', `unexpected reply (HTTP ${probe.status})`,
+          'Run npm run exp:doctor for details.');
+      }
+    } catch {
+      // A connection problem was already reported above.
+    }
+  }
+
+  const sitePassword = process.env.COGNITIVES_PASSWORD || readVar('COGNITIVES_PASSWORD');
+  add(sitePassword ? 'ok' : 'warn', 'Site password',
+    sitePassword ? 'set' : 'not set — npm run exp:publish will ask for it',
+    'Optional: add COGNITIVES_PASSWORD=... to .env.local so publishing does not ask each time.');
 }
 
 // ── Report ────────────────────────────────────────────────────────────────────

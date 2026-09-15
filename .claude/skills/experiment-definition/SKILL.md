@@ -247,6 +247,11 @@ This writes to the shared Supabase project, so the experiment becomes reachable 
 the deployed site**, immediately, for everyone. It is a real action — do not run it to have
 a look at something. `npm run exp:unpublish -- <slug>` takes it back down.
 
+Publishing and unpublishing need the **site password**: the database only accepts them
+through functions that check it. With `COGNITIVES_PASSWORD` in `.env.local` they run without
+a prompt. Without it the command asks in an interactive terminal and refuses otherwise — if
+it refuses, ask the user to add the password to `.env.local`; never guess or invent one.
+
 The slug is the primary key and there is no ownership yet, so publishing a slug someone
 else published replaces theirs. Check `npm run exp:list` first if the slug is a common one.
 

@@ -8,6 +8,7 @@
 // Run supabase/schemas/experiment-results.sql once. Nothing after that.
 
 import { getSupabase } from '@/lib/supabase';
+import { describeWriteError, storedPassword } from '@/lib/protected-writes';
 import { ResultRow } from './aggregate';
 import type { ExperimentDefinition } from './schema';
 
@@ -19,19 +20,23 @@ const DEFINITIONS = 'experiment_definitions';
  *
  * Before this, a generated experiment lived only in sessionStorage — which meant a
  * homepage link to it worked for one person, in one tab, until they closed it.
+ *
+ * Through the password-checked database function rather than a direct upsert: the public
+ * key cannot write this table, or anyone could replace a published experiment. The
+ * password is the one the lecturer typed at /create's gate (lib/protected-writes.ts).
  */
 export async function publishDefinition(def: ExperimentDefinition): Promise<{ ok: boolean; error?: string }> {
   const sb = getSupabase();
   if (!sb) return { ok: false, error: 'Supabase is not configured.' };
 
-  const { error } = await sb.from(DEFINITIONS).upsert({
-    slug: def.slug,
-    title: def.title,
-    title_he: def.titleHe,
-    category: def.category,
-    definition: def,
-    is_published: true,
-    updated_at: new Date().toISOString(),
+  const { error } = await sb.rpc('publish_definition', {
+    p_password: storedPassword(),
+    p_slug: def.slug,
+    p_title: def.title,
+    p_title_he: def.titleHe,
+    p_category: def.category,
+    p_definition: def,
+    p_is_published: true,
   });
 
   if (error) {
@@ -40,7 +45,7 @@ export async function publishDefinition(def: ExperimentDefinition): Promise<{ ok
       ok: false,
       error: missing
         ? 'The experiment_definitions table does not exist yet. Run supabase/schemas/experiment-definitions.sql in the Supabase SQL editor, then publish again.'
-        : error.message,
+        : describeWriteError(error),
     };
   }
   return { ok: true };

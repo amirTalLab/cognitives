@@ -19,7 +19,12 @@ const base = [
   'logics', 'creativity', 'brms-emotion',
 ];
 const v2 = ['drm-v2', 'posner-v2', 'summary-stats-v2', 'visual-search-v2'];
-const pipeline = ['experiment-results', 'experiment-definitions', 'experiment-assets'];
+// The protect-writes pair last: they add the password-checked write functions and then
+// close direct writes on the definition and lock tables created above.
+const pipeline = [
+  'experiment-results', 'experiment-definitions', 'experiment-assets',
+  'protect-writes-1-functions', 'protect-writes-2-close',
+];
 
 /** Trailing verification SELECTs are noise here, and the policies need a guard. */
 function clean(sql) {

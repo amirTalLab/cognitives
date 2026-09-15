@@ -299,21 +299,71 @@ async function assets(file, folder) {
 
 // ── publish ──────────────────────────────────────────────────────────────────
 
+/**
+ * The site password, which the database requires for publishing and unpublishing.
+ *
+ * From COGNITIVES_PASSWORD (loaded from .env.local) when set, so Claude Code can publish
+ * without a prompt. Otherwise asked for in an interactive terminal with the typing hidden —
+ * and refused outright where there is no terminal to ask in, rather than hanging there.
+ */
+async function sitePassword() {
+  if (process.env.COGNITIVES_PASSWORD) return process.env.COGNITIVES_PASSWORD;
+  if (!process.stdin.isTTY) {
+    die('Publishing needs the site password.\n' +
+        '  Add COGNITIVES_PASSWORD=... to .env.local (it is never committed), or run this in a terminal to be asked for it.');
+  }
+
+  const { createInterface } = await import('node:readline');
+  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+  process.stdout.write('  Site password: ');
+  let hidden = true;
+  rl._writeToOutput = text => { if (!hidden) process.stdout.write(text); };
+  const answer = await new Promise(resolve => rl.question('', resolve));
+  hidden = false;
+  rl.close();
+  process.stdout.write('\n');
+  return answer;
+}
+
+/**
+ * Calls one of the password-checked database functions.
+ *
+ * The public key can read published definitions but not write them — otherwise anyone
+ * could replace a live experiment — so publishing goes through these instead of a plain
+ * insert. See supabase/schemas/protect-writes-1-functions.sql.
+ */
+async function protectedCall(fn, args) {
+  const { url, key } = supabase();
+  const res = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_password: await sitePassword(), ...args }),
+  });
+
+  const body = await res.text();
+  if (res.ok) return body ? JSON.parse(body) : null;
+  if (/incorrect password/i.test(body)) die('The site password was not accepted.');
+  if (res.status === 404 || /PGRST202|could not find the function/i.test(body)) {
+    die('The database has not been updated for protected publishing yet.\n' +
+        '  Run supabase/schemas/protect-writes-1-functions.sql in the Supabase SQL editor, then try again.');
+  }
+  if (/relation .*does not exist|could not find the table/i.test(body)) {
+    die('The experiment_definitions table does not exist yet.\n' +
+        '  Run supabase/schemas/experiment-definitions.sql in the Supabase SQL editor, then try again.');
+  }
+  die(`Supabase refused the request (${res.status}).\n  ${body.slice(0, 400)}`);
+}
+
 async function publish(file) {
   const definition = await check(file);
 
-  await rest('experiment_definitions', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({
-      slug: definition.slug,
-      title: definition.title,
-      title_he: definition.titleHe,
-      category: definition.category,
-      definition,
-      is_published: true,
-      updated_at: new Date().toISOString(),
-    }),
+  await protectedCall('publish_definition', {
+    p_slug: definition.slug,
+    p_title: definition.title,
+    p_title_he: definition.titleHe,
+    p_category: definition.category,
+    p_definition: definition,
+    p_is_published: true,
   });
 
   say(`${c.green('✓ published')} — live wherever this Supabase project is used, including the deployed site.\n`);
@@ -327,14 +377,13 @@ async function publish(file) {
 async function unpublish(slug) {
   if (!slug) die('Which slug? e.g. npm run exp:unpublish -- stroopDemo');
 
+  // Checked with a plain read first, so a mistyped slug is reported before the password is
+  // asked for.
   const rows = await rest(`experiment_definitions?slug=eq.${encodeURIComponent(slug)}&select=slug`);
   if (!rows?.length) die(`Nothing published under "${slug}". Run npm run exp:list to see what is.`);
 
-  await rest(`experiment_definitions?slug=eq.${encodeURIComponent(slug)}`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({ is_published: false, updated_at: new Date().toISOString() }),
-  });
+  const found = await protectedCall('set_definition_published', { p_slug: slug, p_is_published: false });
+  if (!found) die(`Nothing published under "${slug}". Run npm run exp:list to see what is.`);
 
   // The row is kept rather than deleted: results already collected reference the slug, and
   // re-publishing should not mean rebuilding the definition.

@@ -387,3 +387,39 @@ test('an empty language is flagged, since those participants would read nothing'
   await page.getByLabel('English instructions').fill('');
   await expect(page.getByText(/One language is empty/)).toBeVisible();
 });
+
+// ── Publishing goes through the password check ──────────────────────────────
+//
+// The public key can no longer write published definitions, so publishing is a call to a
+// database function that checks the site password first. What matters on this side is that
+// the password the lecturer typed at the gate goes with it.
+
+test('publishing sends the definition to the password-checked function, with the typed password', async ({ page }) => {
+  await serverNotInMock(page);
+  const databaseOff = { value: false };
+  page.on('console', msg => {
+    if (msg.text().includes('Supabase credentials not configured')) databaseOff.value = true;
+  });
+  await openRefine(page);
+
+  // Registered after openCreate's catch-all /rest/v1/ route, or that route would win.
+  const sent: Record<string, unknown>[] = [];
+  await page.route('**/api/create/publish', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }),
+  }));
+  await page.route('**/rest/v1/rpc/publish_definition', route => {
+    sent.push(route.request().postDataJSON());
+    return route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.getByRole('button', { name: 'Finish & publish' }).click();
+  await expect(page.getByText(/Published\.|Supabase is not configured/)).toBeVisible();
+  if (!sent.length && databaseOff.value) {
+    test.info().annotations.push({ type: 'note', description: 'Supabase is not configured on this server, so no request could be checked.' });
+    return;
+  }
+
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ p_password: 'placeholder', p_slug: DEFINITION.slug, p_is_published: true });
+  expect((sent[0].p_definition as { slug: string }).slug).toBe(DEFINITION.slug);
+});

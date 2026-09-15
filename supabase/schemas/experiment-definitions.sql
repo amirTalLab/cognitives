@@ -22,9 +22,10 @@ CREATE TABLE IF NOT EXISTS experiment_definitions (
 
 ALTER TABLE experiment_definitions ENABLE ROW LEVEL SECURITY;
 
--- Read by anyone (the runtime needs it to run an experiment), written through the same
--- anon key as the rest of the site. When accounts arrive, the write policy narrows to the
--- owning lecturer and an owner_id column joins this table.
+-- Read by anyone (the runtime needs it to run an experiment). The write policies below are
+-- what the table was first created with; protect-writes-2-close.sql removes them, after
+-- which the only way to write is publish_definition() from protect-writes-1-functions.sql,
+-- which checks the site password. When accounts arrive, that check becomes ownership.
 DROP POLICY IF EXISTS "allow select" ON experiment_definitions;
 CREATE POLICY "allow select" ON experiment_definitions FOR SELECT USING (true);
 DROP POLICY IF EXISTS "allow insert" ON experiment_definitions;

@@ -76,6 +76,16 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
 ```
 
+Publishing also needs the **site password** — the database only accepts a published
+experiment through a function that checks it. `npm run exp:publish` asks for it each time;
+to skip the question (and to let Claude Code publish for you), add it to the same file:
+
+```
+COGNITIVES_PASSWORD=the-site-password
+```
+
+`.env.local` is never committed, so the password stays on your machine.
+
 Nothing else in that file matters for this. **You never need an Anthropic API key** — that
 is what the website uses and what this avoids.
 
