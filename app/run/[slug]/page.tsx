@@ -73,7 +73,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
             </button>
           </div>
 
-          <p className="text-gray-300 leading-relaxed mb-6" dir={rtl ? 'rtl' : 'ltr'}>
+          {/* pre-line keeps the paragraphs a lecturer types in /create's instructions box. */}
+          <p className="text-gray-300 leading-relaxed mb-6 whitespace-pre-line" dir={rtl ? 'rtl' : 'ltr'}>
             {rtl ? def.instructions.he : def.instructions.en}
           </p>
 

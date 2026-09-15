@@ -14,14 +14,14 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Sparkles, Upload, FileText, Check, AlertTriangle, XCircle, Loader2, Home,
-  Send, ArrowLeft, FlaskConical, ExternalLink, RefreshCw,
-  Trash2, Play, Database, Terminal, Image as ImageIcon, History,
+  Send, ArrowLeft, FlaskConical, RefreshCw,
+  Play, Database, Terminal, Image as ImageIcon, History,
 } from 'lucide-react';
 import { verifyPassword } from '@/lib/auth';
 import { AssetManifest, ExperimentDefinition } from '@/lib/experiment-runtime/schema';
 import { uploadAssets } from '@/lib/experiment-runtime/assets';
 import { ValidationIssue } from '@/lib/experiment-runtime/validate';
-import { putPreview, clearPreview } from '@/lib/experiment-runtime/preview-store';
+import { putPreview } from '@/lib/experiment-runtime/preview-store';
 import { publishDefinition } from '@/lib/experiment-runtime/store';
 import {
   AnalyzeResponse, Candidate, ChatMessage, ChatResponse, Feasibility,
@@ -616,40 +616,19 @@ export default function CreateProjectPage() {
 
   const stagePreview = () => run('Staging files…', () => stageFiles(files, spec!.slug));
 
-  const discardPreview = () => run('Removing staged files…', async () => {
-    await fetch('/api/create/stage', {
-      method: 'DELETE',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ slug: spec!.slug }),
-    });
-
-    clearPreview(spec!.slug);
-    setDefinition(null);
-    const lines = ['Preview removed.'];
-
-    // Discarding used to leave the table behind, so abandoned experiments accumulated in
-    // the live database. Dropping is only ever attempted when the table is empty — a
-    // table with rows in it is somebody's data, and no cleanup is worth risking that.
-    if (canCreateTables || mock) {
-      try {
-        const res = await fetch('/api/create/schema', {
-          method: 'DELETE',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ slug: spec!.slug }),
-        });
-        const r = await res.json() as { result?: string };
-        if (r.result === 'dropped') lines.push('Its empty results table was dropped too.');
-        else if (r.result === 'kept-has-rows') lines.push('Its results table already has data, so it was left in place.');
-      } catch {
-        lines.push('Could not check the results table — remove it by hand if it was created.');
-      }
-    }
-
-    setStaged(false);
-    setCompileState(null);
-    setFinishResult(null);
-    setStageResult(lines.join(' '));
-  });
+  /**
+   * A hand edit to what participants read on the landing page.
+   *
+   * No API call: the definition is edited in place, so it is free, and it flows through
+   * everything that already reads `definition` — the preview store, the saved draft, a
+   * later refine and Finish — with nothing else to keep in sync.
+   */
+  function updateInstructions(lang: 'en' | 'he', text: string) {
+    if (!definition) return;
+    const next = { ...definition, instructions: { ...definition.instructions, [lang]: text } };
+    setDefinition(next);
+    putPreview(next);
+  }
 
   function updateSpecField(key: string, value: string) {
     setSpec(s => s && ({ ...s, fields: s.fields.map(f => f.key === key ? { ...f, value } : f) }));
@@ -1186,18 +1165,13 @@ export default function CreateProjectPage() {
                   </div>
                 )}
                 <div className="flex gap-3 flex-wrap ml-auto">
+                  {/* Reload only. "New tab" could not see an unpublished definition (it lives
+                      in this tab's sessionStorage), and "Discard" threw away the paid-for
+                      experiment in one unconfirmed click — Start over from spec covers that. */}
                   {staged && (
-                    <>
-                      <a href={previewUrl} target="_blank" rel="noreferrer" className={BTN}>
-                        <ExternalLink className="w-4 h-4 inline mr-1.5 -mt-0.5" />New tab
-                      </a>
-                      <button onClick={() => setPreviewNonce(n => n + 1)} className={BTN}>
-                        <RefreshCw className="w-4 h-4 inline mr-1.5 -mt-0.5" />Reload
-                      </button>
-                      <button onClick={discardPreview} disabled={!!busy} className={BTN}>
-                        <Trash2 className="w-4 h-4 inline mr-1.5 -mt-0.5" />Discard
-                      </button>
-                    </>
+                    <button onClick={() => setPreviewNonce(n => n + 1)} className={BTN}>
+                      <RefreshCw className="w-4 h-4 inline mr-1.5 -mt-0.5" />Reload
+                    </button>
                   )}
                 </div>
               </div>
@@ -1243,6 +1217,49 @@ export default function CreateProjectPage() {
                 </p>
               )}
             </div>
+
+            {/* Instructions — edited by hand, not through Refine. Wording is the lecturer's
+                call and needs no model: a paid round-trip to change a sentence is waste. */}
+            {definition && (
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
+                <div className="flex items-start gap-3 flex-wrap mb-4">
+                  <div className="flex-1 min-w-64">
+                    <h2 className="font-semibold text-gray-200 mb-1">Instructions</h2>
+                    <p className="text-sm text-gray-400">
+                      What participants read before they start. Edit the text directly — this is free, no AI is
+                      involved. Press Update preview to see it in the experiment above.
+                    </p>
+                  </div>
+                  <button onClick={() => { setPreviewTab('experiment'); setPreviewNonce(n => n + 1); }}
+                    disabled={!!busy} className={`${BTN} ml-auto`}>
+                    <RefreshCw className="w-4 h-4 inline mr-1.5 -mt-0.5" />Update preview
+                  </button>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {([['en', 'English', 'ltr'], ['he', 'עברית', 'rtl']] as const).map(([lang, label, dir]) => (
+                    <label key={lang} className="flex flex-col gap-1.5">
+                      <span className="text-xs text-gray-500">{label}</span>
+                      {/* Disabled mid-call: a refine reply replaces the whole definition and
+                          would silently throw away whatever was typed while it ran. */}
+                      <textarea value={definition.instructions[lang]} dir={dir} rows={6} disabled={!!busy}
+                        aria-label={lang === 'en' ? 'English instructions' : 'Hebrew instructions'}
+                        onChange={e => updateInstructions(lang, e.target.value)}
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-sm text-gray-200 outline-none focus:border-purple-400 disabled:opacity-50 resize-y" />
+                    </label>
+                  ))}
+                </div>
+                {(!definition.instructions.en.trim() || !definition.instructions.he.trim()) && (
+                  <p className="text-xs text-amber-400 mt-3">
+                    One language is empty — participants who choose it will see no instructions at all.
+                  </p>
+                )}
+                {finishResult && (
+                  <p className="text-xs text-amber-400 mt-3">
+                    Already published — press Finish &amp; publish again so students see the change.
+                  </p>
+                )}
+              </div>
+            )}
 
             {notes && (
               <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">

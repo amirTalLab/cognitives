@@ -242,3 +242,86 @@ test('the challenge is dropped once the call finishes', async ({ page }) => {
 
   expect(await closeAndReportDialog(page), 'the guard must come down with the spinner').toBe(false);
 });
+
+// ── Editing the instructions by hand ──────────────────────────────────────────
+//
+// Kept in this file for the same one-worker reason as above: a second /create spec would
+// race this one for the dev server's compile. The draft fixture is also exactly what these
+// need — a generated definition on the Refine stage, reached without paying for one.
+
+/** Puts the wizard on Refine holding the fixture definition. */
+async function openRefine(page: Page) {
+  await openCreate(page, draft());
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByRole('heading', { name: 'Instructions' })).toBeVisible();
+}
+
+test('the instruction boxes start with what was generated', async ({ page }) => {
+  const def = JSON.parse(readFileSync('experiments/memoryScanning.json', 'utf8')) as
+    { instructions: { en: string; he: string } };
+  await openRefine(page);
+
+  await expect(page.getByLabel('English instructions')).toHaveValue(def.instructions.en);
+  await expect(page.getByLabel('Hebrew instructions')).toHaveValue(def.instructions.he);
+});
+
+test('edited instructions reach the running experiment, in both languages, with no API call', async ({ page }) => {
+  // Any call to a metered route would mean this was not the free path it claims to be.
+  const apiCalls: string[] = [];
+  page.on('request', r => { if (r.url().includes('/api/create/')) apiCalls.push(r.url()); });
+
+  await openRefine(page);
+  // Two paragraphs, to prove the landing page keeps the break rather than running them together.
+  await page.getByLabel('English instructions').fill('Remember the letters.\nThen answer quickly.');
+  await page.getByLabel('Hebrew instructions').fill('זכרו את האותיות.');
+  await page.getByRole('button', { name: 'Update preview' }).click();
+
+  const frame = page.frameLocator('iframe[title*="Preview"]');
+  // The landing page opens in Hebrew.
+  await expect(frame.getByText('זכרו את האותיות.')).toBeVisible({ timeout: 30_000 });
+  await frame.getByRole('button', { name: 'English' }).click();
+  const english = frame.getByText(/Remember the letters\./);
+  await expect(english).toBeVisible();
+  expect(await english.evaluate(el => (el as HTMLElement).innerText)).toContain('letters.\nThen');
+
+  expect(apiCalls.filter(u => !u.includes('/api/create/status')), 'editing must not call the API').toEqual([]);
+});
+
+test('edited instructions survive a refresh with the rest of the draft', async ({ page }) => {
+  await openRefine(page);
+  await page.getByLabel('English instructions').fill('Edited before the refresh.');
+
+  await expect.poll(async () =>
+    await page.evaluate(k => localStorage.getItem(k as string), DRAFT_KEY),
+  ).toContain('Edited before the refresh.');
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByLabel('English instructions')).toHaveValue('Edited before the refresh.');
+});
+
+test('publishing sends the edited instructions, not the generated ones', async ({ page }) => {
+  await openRefine(page);
+  await page.getByLabel('Hebrew instructions').fill('הוראות שנערכו ביד.');
+
+  // Captured and refused, so nothing reaches the database.
+  let published = '';
+  await page.route('**/api/create/publish', route => {
+    published = route.request().postData() ?? '';
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: 'stopped for the test' }),
+    });
+  });
+  await page.getByRole('button', { name: 'Finish & publish' }).click();
+  await expect(page.getByText(/stopped for the test/)).toBeVisible();
+
+  expect(published).toContain('הוראות שנערכו ביד.');
+});
+
+test('an empty language is flagged, since those participants would read nothing', async ({ page }) => {
+  await openRefine(page);
+  await expect(page.getByText(/One language is empty/)).toBeHidden();
+  await page.getByLabel('English instructions').fill('');
+  await expect(page.getByText(/One language is empty/)).toBeVisible();
+});
