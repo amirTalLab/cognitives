@@ -31,13 +31,19 @@ export async function publishDefinition(
   const sb = getSupabase();
   if (!sb) return { ok: false, error: 'Supabase is not configured.' };
 
+  // The revision is attached when a definition is LOADED, not authored in it. Sending it
+  // back would store a stale version number inside the definition itself — and restoring
+  // that revision later would carry a number that means nothing.
+  const toPublish: ExperimentDefinition = { ...def };
+  delete toPublish.revision;
+
   const { data, error } = await sb.rpc('publish_definition', {
     p_password: storedPassword(),
     p_slug: def.slug,
     p_title: def.title,
     p_title_he: def.titleHe,
     p_category: def.category,
-    p_definition: def,
+    p_definition: toPublish,
     p_is_published: true,
   });
 
