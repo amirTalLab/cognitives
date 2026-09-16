@@ -252,6 +252,12 @@ through functions that check it. With `COGNITIVES_PASSWORD` in `.env.local` they
 a prompt. Without it the command asks in an interactive terminal and refuses otherwise — if
 it refuses, ask the user to add the password to `.env.local`; never guess or invent one.
 
+Every publish is a **version**: the first is v1, and each later publish adds one. The whole
+definition is kept, so `npm run exp:history -- <slug>` lists them and
+`npm run exp:restore -- <slug> <n>` puts an earlier one back (as a new version — the history
+is never rewritten). Each saved trial records the version it ran under, so the teacher
+dashboard can tell results collected before a change from results after it.
+
 The slug is the primary key and there is no ownership yet, so publishing a slug someone
 else published replaces theirs. Check `npm run exp:list` first if the slug is a common one.
 

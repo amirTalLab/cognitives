@@ -215,6 +215,8 @@ You will rarely type these yourself — Claude runs them — but they are here i
 | `npm run exp:publish -- experiments/SLUG.json` | Make it live for students |
 | `npm run exp:unpublish -- SLUG` | Take it back down |
 | `npm run exp:list` | What is currently published |
+| `npm run exp:history -- SLUG` | Every published version of one experiment |
+| `npm run exp:restore -- SLUG 2` | Put version 2 back live (kept as a new version) |
 | `npm run exp:doctor` | Is the database healthy? |
 
 ---

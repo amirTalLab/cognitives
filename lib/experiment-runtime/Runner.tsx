@@ -169,6 +169,9 @@ export function Runner({ definition, language, practice = false, onComplete, onS
         isCorrect: correct,
         reactionTimeMs: rt,
         payload: { ...payload, ...extra },
+        // Which published version this run used, so a later refine cannot quietly mix its
+        // results with these. Undefined for a built-in or a preview.
+        definitionRevision: definition.revision ?? null,
       }).then(ok => { if (!ok) onSaveFailure?.(); });
     }
 

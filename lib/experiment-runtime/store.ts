@@ -25,11 +25,13 @@ const DEFINITIONS = 'experiment_definitions';
  * key cannot write this table, or anyone could replace a published experiment. The
  * password is the one the lecturer typed at /create's gate (lib/protected-writes.ts).
  */
-export async function publishDefinition(def: ExperimentDefinition): Promise<{ ok: boolean; error?: string }> {
+export async function publishDefinition(
+  def: ExperimentDefinition,
+): Promise<{ ok: boolean; error?: string; revision?: number }> {
   const sb = getSupabase();
   if (!sb) return { ok: false, error: 'Supabase is not configured.' };
 
-  const { error } = await sb.rpc('publish_definition', {
+  const { data, error } = await sb.rpc('publish_definition', {
     p_password: storedPassword(),
     p_slug: def.slug,
     p_title: def.title,
@@ -48,23 +50,43 @@ export async function publishDefinition(def: ExperimentDefinition): Promise<{ ok
         : describeWriteError(error),
     };
   }
-  return { ok: true };
+  // The function answers with the version it wrote. A database from before revisions
+  // existed answers with nothing, which simply leaves the version unknown.
+  return { ok: true, revision: typeof data === 'number' ? data : undefined };
 }
 
-/** Loads a published definition. Returns null when it is absent or not yet published. */
+/**
+ * Loads a published definition. Returns null when it is absent or not yet published.
+ *
+ * The row's revision is carried on the definition, so every trial run from it can be saved
+ * with the version it ran under. A database from before revisions exist answers without the
+ * column, which simply leaves the revision undefined.
+ */
 export async function loadDefinition(slug: string): Promise<ExperimentDefinition | null> {
   const sb = getSupabase();
   if (!sb) return null;
 
-  const { data, error } = await sb
+  const read = (columns: string) => sb
     .from(DEFINITIONS)
-    .select('definition')
+    .select(columns)
     .eq('slug', slug)
     .eq('is_published', true)
     .maybeSingle();
 
+  let { data, error } = await read('definition, revision');
+
+  // A database that has not run definition-revisions.sql has no such column, and asking for
+  // it fails the whole read. An experiment that exists must never look missing to a student
+  // over a column that only labels its version, so the version is simply dropped.
+  if (error && /revision/i.test(error.message)) {
+    ({ data, error } = await read('definition'));
+  }
+
   if (error || !data) return null;
-  return (data as { definition: ExperimentDefinition }).definition;
+  const row = data as unknown as { definition: ExperimentDefinition; revision?: number };
+  return typeof row.revision === 'number'
+    ? { ...row.definition, revision: row.revision }
+    : row.definition;
 }
 
 export interface SaveArgs {
@@ -78,6 +100,8 @@ export interface SaveArgs {
   /** Null when there was no timed response: a timeout, or an answer given too early. */
   reactionTimeMs: number | null;
   payload: Record<string, unknown>;
+  /** Which published version of the experiment this trial ran under, when it has one. */
+  definitionRevision?: number | null;
 }
 
 /**
@@ -91,7 +115,7 @@ export async function saveTrial(args: SaveArgs): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
 
-  const { error } = await sb.from(TABLE).insert({
+  const row: Record<string, unknown> = {
     experiment_slug: args.slug,
     session_id: args.sessionId,
     participant_name: args.participantName,
@@ -101,8 +125,23 @@ export async function saveTrial(args: SaveArgs): Promise<boolean> {
     is_correct: args.isCorrect,
     reaction_time_ms: args.reactionTimeMs,
     payload: args.payload,
-  });
-  return !error;
+  };
+  if (typeof args.definitionRevision === 'number') {
+    row.definition_revision = args.definitionRevision;
+  }
+
+  const { error } = await sb.from(TABLE).insert(row);
+  if (!error) return true;
+
+  // A database that has not run definition-revisions.sql has no such column. Losing a
+  // class's data over a column that only labels it would be the wrong trade, so the trial
+  // is saved without the label instead.
+  if ('definition_revision' in row && /definition_revision/i.test(error.message)) {
+    delete row.definition_revision;
+    const retry = await sb.from(TABLE).insert(row);
+    return !retry.error;
+  }
+  return false;
 }
 
 /**

@@ -23,7 +23,9 @@ const v2 = ['drm-v2', 'posner-v2', 'summary-stats-v2', 'visual-search-v2'];
 // close direct writes on the definition and lock tables created above.
 const pipeline = [
   'experiment-results', 'experiment-definitions', 'experiment-assets',
-  'protect-writes-1-functions', 'protect-writes-2-close',
+  // definition-revisions redefines publish_definition, so it has to follow the file that
+  // first creates it and the password check it calls.
+  'protect-writes-1-functions', 'definition-revisions', 'protect-writes-2-close',
 ];
 
 /** Trailing verification SELECTs are noise here, and the policies need a guard. */

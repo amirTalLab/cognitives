@@ -162,9 +162,21 @@ export function Dashboard({ definition, fetchRows }: {
   const [authed, setAuthed] = useState(false);
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState(false);
-  const [rows, setRows] = useState<ResultRow[]>([]);
+  const [allRows, setAllRows] = useState<ResultRow[]>([]);
   const [useMock, setUseMock] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Results carry the published version they ran under. When several are present, mixing
+  // them in one chart can look like an effect that is really an edit, so they can be
+  // narrowed to the newest — shown, never done silently.
+  const [newestOnly, setNewestOnly] = useState(false);
+
+  const revisions = [...new Set(
+    allRows.map(r => r.definition_revision).filter((v): v is number => typeof v === 'number'),
+  )].sort((a, b) => a - b);
+  const newestRevision = revisions.length ? revisions[revisions.length - 1] : null;
+  const rows = newestOnly && newestRevision !== null
+    ? allRows.filter(r => r.definition_revision === newestRevision)
+    : allRows;
 
   useEffect(() => {
     if (sessionStorage.getItem('ss_teacher_authed') === '1') setAuthed(true);
@@ -179,13 +191,13 @@ export function Dashboard({ definition, fetchRows }: {
 
   const load = useCallback(async () => {
     const id = ++loadId.current;
-    if (useMock) { setRows(generateMockRows(definition)); return; }
+    if (useMock) { setAllRows(generateMockRows(definition)); return; }
     setLoading(true);
     try {
       const fetched = await fetchRows();
-      if (id === loadId.current) setRows(fetched);
+      if (id === loadId.current) setAllRows(fetched);
     } catch {
-      if (id === loadId.current) setRows([]);
+      if (id === loadId.current) setAllRows([]);
     }
     if (id === loadId.current) setLoading(false);
   }, [useMock, definition, fetchRows]);
@@ -254,10 +266,23 @@ export function Dashboard({ definition, fetchRows }: {
                   mock data
                 </span>
               )}
+              {revisions.length > 1 && (
+                <span className="ml-2 text-xs px-2 py-0.5 rounded-full border border-amber-400 bg-amber-500/20 text-amber-400">
+                  {revisions.length} versions
+                </span>
+              )}
             </p>
           </div>
           {/* ml-auto keeps these right-aligned when they wrap under a long title. */}
           <div className="flex gap-3 flex-wrap ml-auto">
+            {revisions.length > 1 && (
+              <button onClick={() => setNewestOnly(v => !v)}
+                className={newestOnly
+                  ? 'px-4 py-2 text-sm rounded-lg border bg-amber-500/20 border-amber-400 text-amber-400'
+                  : BTN}>
+                {newestOnly ? `Version ${newestRevision} only` : 'All versions'}
+              </button>
+            )}
             <button onClick={() => setUseMock(m => !m)}
               className={useMock
                 ? 'px-4 py-2 text-sm rounded-lg border bg-amber-500/20 border-amber-400 text-amber-400'
@@ -273,6 +298,16 @@ export function Dashboard({ definition, fetchRows }: {
         {definition.correctMeans && (
           <p className="text-xs text-gray-500 mb-4">
             This task has no correct answer — &ldquo;accuracy&rdquo; here means {definition.correctMeans.toLowerCase()}.
+          </p>
+        )}
+
+        {/* Said out loud rather than filtered away: a difference between two versions of the
+            experiment can read as an effect of the experiment. */}
+        {revisions.length > 1 && !newestOnly && (
+          <p className="text-xs text-amber-400/90 mb-4">
+            These results come from {revisions.length} published versions of this experiment
+            (v{revisions[0]}–v{newestRevision}). A change between versions can look like a result —
+            switch to &ldquo;Version {newestRevision} only&rdquo; to see just the newest.
           </p>
         )}
 

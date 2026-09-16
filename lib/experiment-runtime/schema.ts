@@ -358,6 +358,16 @@ export interface ExperimentDefinition {
   /** Bilingual instructions shown on the landing page. Hebrew is the default language. */
   instructions: { en: string; he: string };
 
+  /**
+   * Which published version this is — 1 for the first publish, then up by one each time.
+   *
+   * Set by the store when a definition is loaded from the database, never written by hand
+   * and never part of a definition file. Every trial is saved with the revision it ran
+   * under, so a dashboard can tell results collected before a change from results after it.
+   * Absent on a built-in or a preview, which have no published history.
+   */
+  revision?: number;
+
   /** Let a participant start without typing a name. A name is required by default. */
   nameOptional?: boolean;
 

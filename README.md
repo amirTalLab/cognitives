@@ -132,6 +132,7 @@ toggles. Individual experiments are reachable directly at `/<slug>`
 | `npm run exp:setup` | Is this machine ready to build experiments? |
 | `npm run exp:check -- experiments/<slug>.json` | Validate a definition and describe what it builds |
 | `npm run exp:publish` / `exp:unpublish` / `exp:list` | Publish, retract, list |
+| `npm run exp:history -- <slug>` / `exp:restore -- <slug> <n>` | Every published version of one, and going back to an earlier one |
 | `npm run exp:doctor` / `exp:verify` | Database health / live schema matches the setup file |
 
 ## Project layout

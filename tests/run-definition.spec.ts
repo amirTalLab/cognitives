@@ -588,3 +588,60 @@ test.describe('Posner cueing — definition port', () => {
     await expect(page.locator('.recharts-wrapper')).toHaveCount(3);
   });
 });
+
+// ── Results from more than one published version ────────────────────────────
+//
+// Refining a published experiment creates a new version, and results collected before and
+// after it land in the same dashboard. A change between versions — different timings, an
+// extra condition — can read as an effect of the experiment, so the dashboard has to say so
+// and be able to narrow to the newest. Saying it is the point: silently filtering would
+// hide data the lecturer collected.
+
+test.describe('definition runtime — teacher dashboard across versions', () => {
+  /** Rows as the database returns them: three from version 1, three from version 2. */
+  const rowsAcrossVersions = [1, 1, 1, 2, 2, 2].map((revision, i) => ({
+    id: i + 1,
+    experiment_slug: 'stroopClassic',
+    session_id: `s${revision}`,
+    participant_name: revision === 1 ? 'Before' : 'After',
+    trial_index: i,
+    is_practice: false,
+    response: 'red',
+    is_correct: true,
+    reaction_time_ms: 500 + i * 10,
+    definition_revision: revision,
+    created_at: new Date(Date.UTC(2026, 0, revision, 12, i)).toISOString(),
+    payload: { congruency: i % 2 === 0 ? 'congruent' : 'incongruent' },
+  }));
+
+  async function openWithRows(page: Page, rows: unknown[]) {
+    await isolateFromDatabase(page);
+    // Registered after the isolation route so it wins for this table.
+    await page.route('**/rest/v1/experiment_results**', route => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(rows),
+    }));
+    await page.addInitScript(() => sessionStorage.setItem('ss_teacher_authed', '1'));
+    await open(page, '/run/stroopClassic/teacher');
+  }
+
+  test('says when results span versions, and can narrow to the newest', async ({ page }) => {
+    await openWithRows(page, rowsAcrossVersions);
+
+    await expect(page.getByText('2 versions')).toBeVisible();
+    await expect(page.getByText(/come from 2 published versions/)).toBeVisible();
+    await expect(page.getByText(/2 participants · 6 trials/)).toBeVisible();
+
+    await page.getByRole('button', { name: 'All versions' }).click();
+    await expect(page.getByRole('button', { name: 'Version 2 only' })).toBeVisible();
+    await expect(page.getByText(/1 participants · 3 trials/)).toBeVisible();
+    await expect(page.getByText(/come from 2 published versions/)).toHaveCount(0);
+  });
+
+  test('a single version says nothing and offers no filter', async ({ page }) => {
+    await openWithRows(page, rowsAcrossVersions.filter(r => r.definition_revision === 2));
+
+    await expect(page.getByText(/1 participants · 3 trials/)).toBeVisible();
+    await expect(page.getByText(/published versions/)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'All versions' })).toHaveCount(0);
+  });
+});

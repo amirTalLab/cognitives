@@ -19,6 +19,11 @@ export interface ResultRow {
   is_correct: boolean | null;
   /** Null when nothing was timed: a timeout, or a press that came too early. */
   reaction_time_ms: number | null;
+  /**
+   * Which published version of the experiment this trial ran under. Null or absent for
+   * trials collected before revisions existed, or from a built-in experiment.
+   */
+  definition_revision?: number | null;
   [key: string]: unknown;
 }
 

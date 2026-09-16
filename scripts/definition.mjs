@@ -411,7 +411,7 @@ const EXPECTED_TABLES = [
   'testing_effect_results', 'logics_results',
   'creativity_aut_results', 'creativity_circles_results', 'creativity_rat_results',
   'brms_emotion_results',
-  'experiment_definitions', 'experiment_results',
+  'experiment_definitions', 'experiment_definition_revisions', 'experiment_results',
 ];
 
 async function doctor() {
@@ -458,9 +458,16 @@ async function doctor() {
 // ── list ─────────────────────────────────────────────────────────────────────
 
 async function list() {
-  const rows = await rest(
-    'experiment_definitions?select=slug,title,category,is_published,updated_at&order=updated_at.desc',
-  );
+  // revision is asked for separately: a database that has not run definition-revisions.sql
+  // does not have the column, and one missing column should not break the listing.
+  let rows = await rest(
+    'experiment_definitions?select=slug,title,category,is_published,updated_at,revision&order=updated_at.desc',
+  ).catch(() => null);
+  if (!rows) {
+    rows = await rest(
+      'experiment_definitions?select=slug,title,category,is_published,updated_at&order=updated_at.desc',
+    );
+  }
 
   if (!rows.length) {
     say(`\n${c.dim('Nothing published yet.')}\n`);
@@ -471,9 +478,56 @@ async function list() {
   for (const row of rows) {
     const mark = row.is_published ? c.green('●') : c.dim('○');
     const when = new Date(row.updated_at).toISOString().slice(0, 10);
-    say(`  ${mark} ${row.slug.padEnd(24)} ${c.dim(`${(row.category ?? '').padEnd(14)} ${when}`)}  ${row.title ?? ''}`);
+    const rev = row.revision ? `v${row.revision}`.padEnd(5) : '     ';
+    say(`  ${mark} ${row.slug.padEnd(24)} ${c.dim(`${rev} ${(row.category ?? '').padEnd(14)} ${when}`)}  ${row.title ?? ''}`);
   }
-  say(`\n  ${c.dim('● published · ○ unpublished')}\n`);
+  say(`\n  ${c.dim('● published · ○ unpublished · vN = published version')}\n`);
+}
+
+// ── history / restore ────────────────────────────────────────────────────────
+
+/**
+ * Every published version of one experiment.
+ *
+ * Publishing replaces what students run, so the history is the only way back from an edit
+ * that turned out wrong — and the only record of which version a set of results came from.
+ */
+async function history(slug) {
+  if (!slug) die('Which slug? e.g. npm run exp:history -- stroopDemo');
+
+  const rows = await rest(
+    `experiment_definition_revisions?slug=eq.${encodeURIComponent(slug)}` +
+    '&select=revision,created_at,title,restored_from&order=revision.desc',
+  ).catch(() => null);
+
+  if (!rows) {
+    die('This database has no version history yet.\n' +
+        '  Run supabase/schemas/definition-revisions.sql in the Supabase SQL editor, then try again.');
+  }
+  if (!rows.length) die(`Nothing published under "${slug}". Run npm run exp:list to see what is.`);
+
+  const live = await rest(`experiment_definitions?slug=eq.${encodeURIComponent(slug)}&select=revision`);
+  const current = live?.[0]?.revision;
+
+  say('');
+  for (const row of rows) {
+    const mark = row.revision === current ? c.green('●') : c.dim('○');
+    const when = new Date(row.created_at).toISOString().slice(0, 16).replace('T', ' ');
+    const from = row.restored_from ? c.dim(` — restored revision ${row.restored_from}`) : '';
+    say(`  ${mark} ${`v${row.revision}`.padEnd(5)} ${c.dim(when)}  ${row.title ?? ''}${from}`);
+  }
+  say(`\n  ${c.dim('● live · go back with npm run exp:restore -- <slug> <revision>')}\n`);
+}
+
+/** Puts an earlier version back. Appends it as a new revision, so nothing is lost. */
+async function restore(slug, revision) {
+  if (!slug || !revision) die('Which slug and revision? e.g. npm run exp:restore -- stroopDemo 2');
+  const wanted = Number(revision);
+  if (!Number.isInteger(wanted) || wanted < 1) die(`"${revision}" is not a revision number.`);
+
+  const made = await protectedCall('restore_definition_revision', { p_slug: slug, p_revision: wanted });
+  say(`\n${c.green('✓')} /run/${slug} is back to revision ${wanted}, live as revision ${made}.`);
+  say(`${c.dim('  The history keeps every version, this restore included.')}\n`);
 }
 
 // ── Entry ────────────────────────────────────────────────────────────────────
@@ -487,6 +541,8 @@ const USAGE = `
     npm run exp:assets    -- experiments/<slug>.json ./imgs  upload stimulus images, record them
     npm run exp:publish   -- experiments/<slug>.json         check, then make it live at /run/<slug>
     npm run exp:list                                         what is published
+    npm run exp:history   -- <slug>                          every published version of one
+    npm run exp:restore   -- <slug> <revision>               put an earlier version back live
     npm run exp:doctor                                       is the database set up?
     npm run exp:unpublish -- <slug>                          take one down
 `;
@@ -498,6 +554,8 @@ try {
     case 'publish':   await publish(arg); break;
     case 'unpublish': await unpublish(arg); break;
     case 'list':      await list(); break;
+    case 'history':   await history(arg); break;
+    case 'restore':   await restore(arg, arg2); break;
     case 'doctor':    await doctor(); break;
     default:
       say(USAGE);

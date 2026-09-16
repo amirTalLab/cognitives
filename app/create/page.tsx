@@ -535,7 +535,7 @@ export default function CreateProjectPage() {
 
       const saved = await publishDefinition(definition);
       lines.push(saved.ok
-        ? `Published. "${definition.title}" now runs at /run/${definition.slug}, and its dashboard at /run/${definition.slug}/teacher.`
+        ? `Published${saved.revision ? ` as version ${saved.revision}` : ''}. "${definition.title}" now runs at /run/${definition.slug}, and its dashboard at /run/${definition.slug}/teacher.`
         : `Not published — ${saved.error}`);
       if (!saved.ok) { setFinishResult(lines.join('\n')); return; }
 
