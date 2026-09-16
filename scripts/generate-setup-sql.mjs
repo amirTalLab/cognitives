@@ -80,7 +80,7 @@ INSERT INTO experiment_locks (experiment_id, is_locked) VALUES
   ('CompositeFace', false), ('wordSuperiority', false), ('srt', false),
   ('twoStepTask', false), ('serialOrder', false), ('testingEffect', false),
   ('logics', false), ('creativity', false), ('bRMS', false),
-  ('boubaKikiDemo', false), ('flankerLetterTask', false)
+  ('boubaKikiDemo', false), ('flanker', false)
 ON CONFLICT (experiment_id) DO NOTHING;
 `);
 

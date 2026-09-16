@@ -31,13 +31,16 @@ const EXPERIMENTS: Exp[] = [
   { id: 'creativity',      title: 'Creativity Battery',     titleHe: 'סוללת יצירתיות',       icon: Sparkles,  color: 'text-emerald-400' },
   { id: 'bRMS',             title: 'bRMS Emotion',           titleHe: 'bRMS רגש',              icon: Eye,       color: 'text-purple-400'  },
   { id: 'boubaKikiDemo', title: 'Bouba / Kiki shape–sound mapping', titleHe: 'אפקט בובה-קיקי', icon: Shapes, color: 'text-purple-400' },
-  { id: 'flankerLetterTask', title: 'Flanker Letter Identification: Effects of Noise Letters', titleHe: 'משימת זיהוי אות מוקפת ברעש (אפקט הפלנקר)', icon: Shapes, color: 'text-purple-400', href: '/run/flankerLetterTask' },
+  // The card used to point at /run/flankerLetterTask, which exists nowhere — not published,
+  // not built in — so it showed students "No experiment named". It now runs the built-in
+  // Eriksen flanker; publishing a definition under this slug replaces it.
+  { id: 'flanker', title: 'Flanker Letter Identification: Effects of Noise Letters', titleHe: 'משימת זיהוי אות מוקפת ברעש (אפקט הפלנקר)', icon: Shapes, color: 'text-purple-400', href: '/run/flanker' },
   { id: 'lexicalDecisionPairs', title: 'Word Pair Lexical Decision (Yes/No Task)', titleHe: 'משימת החלטה לקסיקלית בזוגות מילים (כן/לא)', icon: Shapes, color: 'text-purple-400', href: '/run/lexicalDecisionPairs' },
 ];
 
 const CATEGORIES = [
   { name: 'PERCEPTION',        nameHe: 'תפיסה',         ids: ['summaryStats', 'CompositeFace', 'wordSuperiority'] },
-  { name: 'ATTENTION',         nameHe: 'קשב',           ids: ['visualSearch', 'posnerCueing', 'flankerLetterTask'] },
+  { name: 'ATTENTION',         nameHe: 'קשב',           ids: ['visualSearch', 'posnerCueing', 'flanker'] },
   { name: 'LANGUAGE',          nameHe: 'שפה',           ids: ['bouba-kiki', 'boubaKikiDemo', 'lexicalDecisionPairs'] },
   { name: 'EXECUTIVE CONTROL', nameHe: 'בקרה ניהולית', ids: ['stroop'] },
   { name: 'IMAGINATION',       nameHe: 'דמיון',         ids: ['mentalRep'] },

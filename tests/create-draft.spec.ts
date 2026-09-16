@@ -25,7 +25,7 @@ const PREVIEW_KEY = 'cognitives_preview_definitions';
 // runtime would refuse to render. Playwright runs from the project root.
 const DEFINITION = JSON.parse(
   readFileSync('experiments/memoryScanning.json', 'utf8'),
-) as { slug: string; title: string; titleHe: string };
+) as { slug: string; title: string; titleHe: string; instructions: { en: string; he: string } };
 
 /** Matches the run page's heading, which shows the Hebrew title unless English is chosen. */
 const TITLE_RE = new RegExp(
@@ -386,6 +386,56 @@ test('an empty language is flagged, since those participants would read nothing'
   await expect(page.getByText(/One language is empty/)).toBeHidden();
   await page.getByLabel('English instructions').fill('');
   await expect(page.getByText(/One language is empty/)).toBeVisible();
+});
+
+// ── Editing something already published ─────────────────────────────────────
+//
+// An experiment stops being finished once it can be changed: the builder lists what is live
+// and opens it on the same Refine screen a new experiment ends on. Nothing is generated and
+// nothing is paid for, which is the whole point — so the test also proves no metered route
+// is called.
+
+test('a published experiment opens for editing on Refine, with no API call', async ({ page }) => {
+  const apiCalls: string[] = [];
+  page.on('request', r => {
+    const url = r.url();
+    if (url.includes('/api/create/') && !url.includes('/status')) apiCalls.push(url);
+  });
+
+  await serverNotInMock(page);
+  // Broad first, specific second: the later route wins, so the definitions table is served
+  // by the second one while everything else still reads empty.
+  await page.route('**/rest/v1/**', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/rest/v1/experiment_definitions*', route => {
+    const url = route.request().url();
+    // maybeSingle() asks for one object; the listing asks for an array.
+    const body = url.includes('slug=eq.')
+      ? JSON.stringify({ definition: DEFINITION, revision: 4 })
+      : JSON.stringify([{
+          slug: DEFINITION.slug, title: DEFINITION.title, category: 'MEMORY',
+          updated_at: new Date().toISOString(), revision: 4,
+        }]);
+    return route.fulfill({ status: 200, contentType: 'application/json', body });
+  });
+  await page.addInitScript(() => {
+    sessionStorage.setItem('ss_home_authed', '1');
+    sessionStorage.setItem('ss_create_key', 'placeholder');
+  });
+
+  await page.goto('/create');
+  await expect(page.getByRole('heading', { name: 'Or edit one that is already live' })).toBeVisible();
+  await expect(page.getByText(`/run/${DEFINITION.slug} · version 4 · MEMORY`)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  // The Refine screen, holding the live experiment — and saying what publishing again does.
+  await expect(page.getByRole('heading', { name: 'Refine' })).toBeVisible();
+  await expect(page.getByText(/version 4\. Publishing again makes version 5/)).toBeVisible();
+  await expect(page.getByLabel('English instructions')).toHaveValue(DEFINITION.instructions.en);
+  await expect(page.getByRole('heading', { name: 'Preview' })).toBeVisible();
+
+  expect(apiCalls, 'opening a published experiment must not call a metered route').toEqual([]);
 });
 
 // ── Publishing goes through the password check ──────────────────────────────

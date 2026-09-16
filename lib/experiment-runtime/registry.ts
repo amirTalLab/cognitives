@@ -57,18 +57,23 @@ export async function getDefinition(slug: string): Promise<ExperimentDefinition 
   const local = await loadLocal(slug);
   if (local) return local;
 
-  const builtIn = BUILT_IN.find(d => d.slug === slug);
-  if (builtIn) return builtIn;
-
+  // Then what is PUBLISHED, ahead of the built-in of the same slug. A built-in is a
+  // starting point shipped with the code; a published definition is what a lecturer
+  // deliberately made live, possibly by refining that very built-in. If the built-in won,
+  // editing a ported experiment would appear to work and change nothing for students.
+  //
   // A throw here — not an error response, an unreachable host — used to reject all the way
   // out of this function. The page awaits it with .then() alone, so nothing ever set the
   // stage and the participant was left on a blank screen with no message. That is the
   // exact shape of a paused Supabase project, which this site has already had once.
   try {
-    return await loadDefinition(slug);
+    const published = await loadDefinition(slug);
+    if (published) return published;
   } catch {
-    return null;
+    // Unreachable database: fall through to the built-in, which is better than nothing.
   }
+
+  return BUILT_IN.find(d => d.slug === slug) ?? null;
 }
 
 export async function listDefinitions(): Promise<ExperimentDefinition[]> {

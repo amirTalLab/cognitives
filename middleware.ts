@@ -7,7 +7,7 @@ const EXPERIMENT_SLUGS = new Set([
   'creativity',
   'bRMS',
   'boubaKikiDemo',
-  'flankerLetterTask',
+  'flanker',
   'lexicalDecisionPairs',
 ]);
 
@@ -95,7 +95,7 @@ export const config = {
     // Definition experiments live under /run/{slug}. Registering one as a bare
     // '/{slug}/:path*' matches a route that does not exist, so middleware never runs and
     // the lock toggle silently does nothing — which is what happened to flankerLetterTask.
-    '/run/flankerLetterTask/:path*',
+    '/run/flanker/:path*',
     '/run/lexicalDecisionPairs/:path*',
     // The definition port of posnerCueing shares its slug, so the one lock covers both
     // versions — locking Posner cannot leave the /run copy open to students.

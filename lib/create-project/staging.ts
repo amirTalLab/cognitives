@@ -27,6 +27,24 @@ export function toKebab(slug: string): string {
 
 export class StagingError extends Error {}
 
+/**
+ * Checks a slug that will only ever be DATA — a published definition.
+ *
+ * The rules below exist because generated code writes files into the repo, and a slug that
+ * collides with an existing experiment would overwrite it. A definition writes no files: it
+ * is a row, served at /run/{slug}. Holding it to the file rules would forbid exactly the
+ * thing this pipeline is for — editing an experiment that already exists here, such as the
+ * ported posnerCueing, and republishing it.
+ */
+export function validateDefinitionSlug(slug: string): string {
+  if (!slug || !/^[a-zA-Z][a-zA-Z0-9-]*$/.test(slug)) {
+    throw new StagingError(
+      `"${slug}" is not a usable URL slug. Use letters, digits and hyphens, starting with a letter.`,
+    );
+  }
+  return slug;
+}
+
 /** Rejects a slug that would collide with an existing route or escape its directory. */
 export function validateSlug(slug: string): string {
   if (!slug || !/^[a-zA-Z][a-zA-Z0-9-]*$/.test(slug)) {

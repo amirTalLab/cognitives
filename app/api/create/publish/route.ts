@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ExperimentDefinition } from '@/lib/experiment-runtime/schema';
 import { validate } from '@/lib/experiment-runtime/validate';
-import { validateSlug, StagingError } from '@/lib/create-project/staging';
+import { validateDefinitionSlug, StagingError } from '@/lib/create-project/staging';
 import { errorResponse } from '../_shared';
 
 export const runtime = 'nodejs';
@@ -20,7 +20,10 @@ export async function POST(req: NextRequest) {
     if (!definition?.slug) {
       return NextResponse.json({ error: 'There is no experiment to publish.' }, { status: 400 });
     }
-    validateSlug(definition.slug);
+    // The definition rules, not the file-writing ones: publishing writes a row, never a
+    // file, so a slug that names an experiment already in this repo is allowed — that is
+    // how a ported experiment gets edited and republished.
+    validateDefinitionSlug(definition.slug);
 
     const errors = validate(definition).filter(i => i.severity === 'error');
     if (errors.length > 0) {

@@ -35,6 +35,13 @@ There are two front ends onto the same pipeline, producing the same artifact:
 | Setup | none | clone + `npm install`, once |
 | Best for | a one-off | iterating, or several experiments |
 
+**An experiment is never finished.** Both front ends can change one that is already live:
+`/create` lists what is published and opens it on the same Refine screen, and the terminal
+edits its `experiments/<slug>.json` and publishes again. Every publish is a numbered version
+— `npm run exp:history -- <slug>` lists them, `exp:restore` puts one back — and every saved
+trial records the version it ran under, so the dashboard can separate results collected
+before a change from results after it.
+
 ### From a terminal
 
 ```bash

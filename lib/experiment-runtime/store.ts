@@ -89,6 +89,46 @@ export async function loadDefinition(slug: string): Promise<ExperimentDefinition
     : row.definition;
 }
 
+/** One published experiment, as the builder lists them for editing. */
+export interface PublishedSummary {
+  slug: string;
+  title: string;
+  category: string;
+  revision?: number;
+  updatedAt: string;
+}
+
+/**
+ * Every published experiment, newest change first.
+ *
+ * This is what makes a published experiment editable: the builder lists these, loads one
+ * back into Refine, and republishes it as a new version. Reading is open to the public key
+ * — it is the same data the runtime already serves to participants.
+ */
+export async function listPublished(): Promise<PublishedSummary[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+
+  const read = (columns: string) => sb
+    .from(DEFINITIONS)
+    .select(columns)
+    .eq('is_published', true)
+    .order('updated_at', { ascending: false });
+
+  let { data, error } = await read('slug, title, category, updated_at, revision');
+  // A database without the revision column still lists fine; the version is simply unknown.
+  if (error && /revision/i.test(error.message)) ({ data, error } = await read('slug, title, category, updated_at'));
+  if (error || !data) return [];
+
+  return (data as unknown as Record<string, unknown>[]).map(row => ({
+    slug: String(row.slug),
+    title: String(row.title ?? row.slug),
+    category: String(row.category ?? ''),
+    revision: typeof row.revision === 'number' ? row.revision : undefined,
+    updatedAt: String(row.updated_at ?? ''),
+  }));
+}
+
 export interface SaveArgs {
   slug: string;
   sessionId: string;

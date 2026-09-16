@@ -22,11 +22,13 @@ import { AssetManifest, ExperimentDefinition } from '@/lib/experiment-runtime/sc
 import { uploadAssets } from '@/lib/experiment-runtime/assets';
 import { ValidationIssue } from '@/lib/experiment-runtime/validate';
 import { putPreview } from '@/lib/experiment-runtime/preview-store';
-import { publishDefinition } from '@/lib/experiment-runtime/store';
+import {
+  listPublished, loadDefinition, publishDefinition, PublishedSummary,
+} from '@/lib/experiment-runtime/store';
 import {
   AnalyzeResponse, Candidate, ChatMessage, ChatResponse, Feasibility,
   GeneratedFile, GenerateResponse, Spec, Stage, Usage, UsageEntry, estimateCost,
-  blankSpec, SPEC_PLACEHOLDERS,
+  blankSpec, specFromDefinition, SPEC_PLACEHOLDERS,
 } from '@/lib/create-project/types';
 import {
   CreateDraft, DraftState, clearDraft, describeDraft, readDraft, worthSaving, writeDraft,
@@ -166,6 +168,10 @@ export default function CreateProjectPage() {
   // Unfinished work found in localStorage on load. Offered, never applied automatically —
   // silently dropping someone into a stale half-finished state is its own kind of broken.
   const [restorable, setRestorable] = useState<CreateDraft | null>(null);
+  // Experiments already live at /run. Editing one is the same Refine screen a new
+  // experiment ends on, so an experiment is never finished — it can be changed next term.
+  const [published, setPublished] = useState<PublishedSummary[]>([]);
+  const [openingPublished, setOpeningPublished] = useState<string | null>(null);
 
   /** Records what a stage actually cost, so the running total is measured, not guessed. */
   const meter = useCallback((stage: string, model: 'fast' | 'strong', u?: Usage) => {
@@ -208,6 +214,49 @@ export default function CreateProjectPage() {
   // Every stage here is a paid call, so losing the tab used to mean paying to get back to
   // where you already were. The draft is written on every change and offered on the next
   // visit.
+
+  // What is already live, so it can be edited rather than rebuilt. Read-only and free, so
+  // it is fetched as soon as the page opens rather than behind a button.
+  useEffect(() => {
+    if (!authed) return;
+    listPublished().then(setPublished).catch(() => setPublished([]));
+  }, [authed]);
+
+  /**
+   * Opens a published experiment on the Refine screen, exactly where a new one ends up.
+   *
+   * Nothing is generated and nothing is paid for: the definition is read back, previewed
+   * from sessionStorage like any other, and refining it from here republishes it as the
+   * next version. The spec is rebuilt from the definition, since the wizard carries one.
+   */
+  const openPublished = (summary: PublishedSummary) => run('Opening the published experiment…', async () => {
+    setOpeningPublished(summary.slug);
+    try {
+      const loaded = await loadDefinition(summary.slug);
+      if (!loaded) throw new Error(`"${summary.slug}" could not be loaded. It may have been unpublished.`);
+
+      setSpec(specFromDefinition(loaded));
+      setDefinition(loaded);
+      setIssues([]);
+      setProblems([]);
+      setFiles([]);
+      setMessages([]);
+      setNotes((loaded.simplifications ?? []).map(s => `${s.what} — ${s.why}`).join('\n'));
+      setFinishResult(null);
+      putPreview(loaded);
+      setStaged(true);
+      setPreviewNonce(n => n + 1);
+      setCompileState({
+        ok: true,
+        message: loaded.revision
+          ? `Live at /run/${loaded.slug}, version ${loaded.revision}. Publishing again makes version ${loaded.revision + 1}.`
+          : `Live at /run/${loaded.slug}.`,
+      });
+      setStage('refine');
+    } finally {
+      setOpeningPublished(null);
+    }
+  });
 
   useEffect(() => {
     if (!authed) return;
@@ -894,6 +943,37 @@ export default function CreateProjectPage() {
                 Find experiments
               </button>
             </div>
+
+            {/* Editing something already live. Above the terminal note because it is the
+                cheaper answer to "I want to change an experiment": nothing is generated,
+                nothing is paid for, and the change goes out as a new version. */}
+            {published.length > 0 && (
+              <div className="mt-6 pt-5 border-t border-gray-800">
+                <h3 className="font-semibold text-gray-200 mb-1">Or edit one that is already live</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Opens it on the Refine screen. Free — no stage is run again. Publishing afterwards
+                  makes a new version, and the old one can always be restored.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {published.map(exp => (
+                    <div key={exp.slug}
+                      className="flex items-center gap-3 flex-wrap px-4 py-3 rounded-xl border border-gray-800 bg-gray-950/40">
+                      <div className="min-w-48 flex-1">
+                        <p className="text-sm text-gray-200">{exp.title}</p>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          /run/{exp.slug}
+                          {exp.revision ? ` · version ${exp.revision}` : ''}
+                          {exp.category ? ` · ${exp.category}` : ''}
+                        </p>
+                      </div>
+                      <button onClick={() => openPublished(exp)} disabled={!!busy} className={BTN}>
+                        {openingPublished === exp.slug ? 'Opening…' : 'Edit'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* The same pipeline, run from a terminal on the Claude subscription instead
                 of the metered API. Surfaced here because this page is where someone

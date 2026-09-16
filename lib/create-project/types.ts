@@ -1,3 +1,5 @@
+import type { ExperimentDefinition } from '@/lib/experiment-runtime/schema';
+
 // Shared types for the "Create New Project" pipeline (paper PDF -> experiment code).
 //
 // These mirror the two Claude Code skills that this feature ports into the app:
@@ -146,6 +148,52 @@ export function blankSpec(): Spec {
       field('charts', 'Teacher dashboard charts'),
       field('stimuli', 'Stimuli & assets'),
     ],
+  };
+}
+
+/**
+ * A spec describing an experiment that already exists.
+ *
+ * Refining works on the definition, but the wizard still carries a spec alongside it — it
+ * names the experiment, and "Start over from spec" reads it. Loading a published experiment
+ * back in therefore needs one, and the only honest source is the definition itself. Every
+ * field is marked 'inferred': it was read back off the built experiment, not taken from a
+ * paper.
+ */
+export function specFromDefinition(def: ExperimentDefinition): Spec {
+  const phases = def.trial.phases
+    .map(p => `${p.name}${p.awaitsResponse ? ' (response)' : typeof p.durationMs === 'number' ? ` ${p.durationMs}ms` : ''}`)
+    .join(' → ');
+
+  const factors = def.factors
+    .map(f => `${f.name}: ${f.levels ? f.levels.join(', ') : f.from ? `from ${f.from}` : 'derived'}`)
+    .join('; ');
+
+  const responses = Array.isArray(def.trial.response) ? def.trial.response : [def.trial.response];
+
+  const spec = blankSpec();
+  const set = (key: string, value: string) => {
+    const field = spec.fields.find(f => f.key === key);
+    if (field) field.value = value;
+  };
+
+  set('design', `Loaded from the published experiment "${def.title}". ${factors ? `Factors — ${factors}.` : ''}`.trim());
+  set('conditions', factors);
+  set('trialStructure', phases);
+  set('trialCounts', `${def.repetitions} repetition(s) of the full cross${def.practice ? `, ${def.practice.count} practice trials` : ''}`);
+  set('response', responses.map(r => r.kind).join(', '));
+  set('dv', def.trial.correct.kind === 'none' ? 'Choice proportion (no correct answer)' : 'Accuracy and reaction time');
+  set('charts', def.dashboard.charts.map(c => c.title).join('; '));
+
+  return {
+    ...spec,
+    slug: def.slug,
+    title: def.title,
+    titleHe: def.titleHe,
+    category: def.category,
+    buildTarget: 'definition',
+    buildTargetReason: 'Loaded from a published experiment, which is already a definition.',
+    simplifications: def.simplifications,
   };
 }
 
