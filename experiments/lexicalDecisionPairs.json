@@ -1,0 +1,544 @@
+{
+  "mock": {
+    "effects": [
+      {
+        "level": "associated",
+        "factor": "pairType",
+        "rtDeltaMs": -85,
+        "accuracyDelta": 0.03
+      },
+      {
+        "level": "unassociated",
+        "factor": "pairType",
+        "rtDeltaMs": 0,
+        "accuracyDelta": 0
+      },
+      {
+        "level": "word-nonword",
+        "factor": "pairType",
+        "rtDeltaMs": 147,
+        "accuracyDelta": -0.206
+      },
+      {
+        "level": "nonword-word",
+        "factor": "pairType",
+        "rtDeltaMs": -36,
+        "accuracyDelta": -0.05
+      },
+      {
+        "level": "nonword-nonword",
+        "factor": "pairType",
+        "rtDeltaMs": -56,
+        "accuracyDelta": 0.044
+      }
+    ],
+    "baseRtMs": 940,
+    "baseAccuracy": 0.93,
+    "participants": 24
+  },
+  "slug": "lexicalDecisionPairs",
+  "store": [
+    "pairType",
+    "slot",
+    "topString",
+    "bottomString",
+    "expectedResponse"
+  ],
+  "title": "Word Pair Lexical Decision (Yes/No Task)",
+  "trial": {
+    "itiMs": 500,
+    "phases": [
+      {
+        "name": "ready",
+        "display": {
+          "font": "mono",
+          "kind": "text",
+          "size": 28,
+          "text": "READY",
+          "color": "#9ca3af"
+        },
+        "durationMs": 500
+      },
+      {
+        "name": "foreperiod",
+        "display": {
+          "kind": "fixation",
+          "symbol": "□"
+        },
+        "durationMs": 1000
+      },
+      {
+        "name": "stimulus",
+        "display": {
+          "kind": "stack",
+          "items": [
+            {
+              "font": "sans",
+              "kind": "text",
+              "size": 48,
+              "text": "{topString}",
+              "color": "#f3f4f6"
+            },
+            {
+              "font": "sans",
+              "kind": "text",
+              "size": 48,
+              "text": "{bottomString}",
+              "color": "#f3f4f6"
+            }
+          ]
+        },
+        "startsClock": true,
+        "awaitsResponse": true
+      }
+    ],
+    "correct": {
+      "kind": "mapping",
+      "expect": {
+        "associated": "yes",
+        "nonword-word": "no",
+        "unassociated": "yes",
+        "word-nonword": "no",
+        "nonword-nonword": "no"
+      },
+      "factor": "pairType"
+    },
+    "response": {
+      "kind": "choice",
+      "layout": "row",
+      "options": [
+        {
+          "key": "f",
+          "label": "No",
+          "value": "no",
+          "labelHe": "לא"
+        },
+        {
+          "key": "j",
+          "label": "Yes",
+          "value": "yes",
+          "labelHe": "כן"
+        }
+      ]
+    }
+  },
+  "exclude": [
+    {
+      "slot": 11,
+      "pairType": "associated"
+    },
+    {
+      "slot": 12,
+      "pairType": "associated"
+    },
+    {
+      "slot": 13,
+      "pairType": "associated"
+    },
+    {
+      "slot": 14,
+      "pairType": "associated"
+    },
+    {
+      "slot": 15,
+      "pairType": "associated"
+    },
+    {
+      "slot": 11,
+      "pairType": "unassociated"
+    },
+    {
+      "slot": 12,
+      "pairType": "unassociated"
+    },
+    {
+      "slot": 13,
+      "pairType": "unassociated"
+    },
+    {
+      "slot": 14,
+      "pairType": "unassociated"
+    },
+    {
+      "slot": 15,
+      "pairType": "unassociated"
+    },
+    {
+      "slot": 11,
+      "pairType": "word-nonword"
+    },
+    {
+      "slot": 12,
+      "pairType": "word-nonword"
+    },
+    {
+      "slot": 13,
+      "pairType": "word-nonword"
+    },
+    {
+      "slot": 14,
+      "pairType": "word-nonword"
+    },
+    {
+      "slot": 15,
+      "pairType": "word-nonword"
+    },
+    {
+      "slot": 11,
+      "pairType": "nonword-word"
+    },
+    {
+      "slot": 12,
+      "pairType": "nonword-word"
+    },
+    {
+      "slot": 13,
+      "pairType": "nonword-word"
+    },
+    {
+      "slot": 14,
+      "pairType": "nonword-word"
+    },
+    {
+      "slot": 15,
+      "pairType": "nonword-word"
+    },
+    {
+      "slot": 11,
+      "pairType": "nonword-nonword"
+    },
+    {
+      "slot": 12,
+      "pairType": "nonword-nonword"
+    },
+    {
+      "slot": 13,
+      "pairType": "nonword-nonword"
+    },
+    {
+      "slot": 14,
+      "pairType": "nonword-nonword"
+    },
+    {
+      "slot": 15,
+      "pairType": "nonword-nonword"
+    }
+  ],
+  "factors": [
+    {
+      "name": "pairType",
+      "levels": [
+        "associated",
+        "unassociated",
+        "word-nonword",
+        "nonword-word",
+        "nonword-nonword"
+      ]
+    },
+    {
+      "name": "slot",
+      "levels": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "topString",
+      "mapping": {
+        "associated|1": "BREAD",
+        "associated|2": "NURSE",
+        "associated|3": "TABLE",
+        "associated|4": "KING",
+        "associated|5": "SALT",
+        "associated|6": "NEEDLE",
+        "associated|7": "BLACK",
+        "associated|8": "CAT",
+        "associated|9": "KNIFE",
+        "associated|10": "DAY",
+        "associated|11": "MOON",
+        "associated|12": "LOCK",
+        "associated|13": "SHOE",
+        "associated|14": "RAIN",
+        "associated|15": "MUSIC",
+        "nonword-word|1": "TABER",
+        "nonword-word|2": "BRIME",
+        "nonword-word|3": "DAKE",
+        "nonword-word|4": "NORT",
+        "nonword-word|5": "SPADLE",
+        "nonword-word|6": "SIVEL",
+        "nonword-word|7": "TUNCH",
+        "nonword-word|8": "VAMPER",
+        "nonword-word|9": "RILLOW",
+        "unassociated|1": "BREAD",
+        "unassociated|2": "NURSE",
+        "unassociated|3": "TABLE",
+        "unassociated|4": "KING",
+        "unassociated|5": "SALT",
+        "unassociated|6": "NEEDLE",
+        "unassociated|7": "BLACK",
+        "unassociated|8": "CAT",
+        "unassociated|9": "KNIFE",
+        "word-nonword|1": "TABLE",
+        "word-nonword|2": "DOCTOR",
+        "word-nonword|3": "QUEEN",
+        "word-nonword|4": "BREAD",
+        "word-nonword|5": "KNIFE",
+        "word-nonword|6": "MUSIC",
+        "word-nonword|7": "CLOUD",
+        "word-nonword|8": "NIGHT",
+        "word-nonword|9": "PEPPER",
+        "nonword-word|10": "BANDLE",
+        "nonword-word|11": "PLONE",
+        "nonword-word|12": "FRINK",
+        "nonword-word|13": "TROOM",
+        "nonword-word|14": "BLIVE",
+        "nonword-word|15": "PRALL",
+        "unassociated|10": "DAY",
+        "unassociated|11": "MOON",
+        "unassociated|12": "LOCK",
+        "unassociated|13": "SHOE",
+        "unassociated|14": "RAIN",
+        "unassociated|15": "CLOUD",
+        "word-nonword|10": "SHOE",
+        "word-nonword|11": "MOON",
+        "word-nonword|12": "STAR",
+        "word-nonword|13": "SONG",
+        "word-nonword|14": "CHAIR",
+        "word-nonword|15": "KING",
+        "nonword-nonword|1": "MARB",
+        "nonword-nonword|2": "CHOIL",
+        "nonword-nonword|3": "BRIME",
+        "nonword-nonword|4": "DAKE",
+        "nonword-nonword|5": "SPADLE",
+        "nonword-nonword|6": "CHERM",
+        "nonword-nonword|7": "SNURK",
+        "nonword-nonword|8": "GLORT",
+        "nonword-nonword|9": "TUNCH",
+        "nonword-nonword|10": "RILLOW",
+        "nonword-nonword|11": "CHOIL",
+        "nonword-nonword|12": "GLORT",
+        "nonword-nonword|13": "BANDLE",
+        "nonword-nonword|14": "SIVEL",
+        "nonword-nonword|15": "NORT"
+      },
+      "derivedFrom": [
+        "pairType",
+        "slot"
+      ]
+    },
+    {
+      "name": "bottomString",
+      "mapping": {
+        "associated|1": "BUTTER",
+        "associated|2": "DOCTOR",
+        "associated|3": "CHAIR",
+        "associated|4": "QUEEN",
+        "associated|5": "PEPPER",
+        "associated|6": "THREAD",
+        "associated|7": "WHITE",
+        "associated|8": "DOG",
+        "associated|9": "FORK",
+        "associated|10": "NIGHT",
+        "associated|11": "STAR",
+        "associated|12": "KEY",
+        "associated|13": "SOCK",
+        "associated|14": "CLOUD",
+        "associated|15": "SONG",
+        "nonword-word|1": "CHAIR",
+        "nonword-word|2": "DOCTOR",
+        "nonword-word|3": "QUEEN",
+        "nonword-word|4": "BREAD",
+        "nonword-word|5": "KNIFE",
+        "nonword-word|6": "MUSIC",
+        "nonword-word|7": "CLOUD",
+        "nonword-word|8": "NIGHT",
+        "nonword-word|9": "PEPPER",
+        "unassociated|1": "DOCTOR",
+        "unassociated|2": "BUTTER",
+        "unassociated|3": "QUEEN",
+        "unassociated|4": "CHAIR",
+        "unassociated|5": "THREAD",
+        "unassociated|6": "PEPPER",
+        "unassociated|7": "FORK",
+        "unassociated|8": "KEY",
+        "unassociated|9": "DOG",
+        "word-nonword|1": "PLONE",
+        "word-nonword|2": "MARB",
+        "word-nonword|3": "CHOIL",
+        "word-nonword|4": "FRINK",
+        "word-nonword|5": "TROOM",
+        "word-nonword|6": "CHERM",
+        "word-nonword|7": "BLIVE",
+        "word-nonword|8": "SNURK",
+        "word-nonword|9": "PRALL",
+        "nonword-word|10": "SHOE",
+        "nonword-word|11": "MOON",
+        "nonword-word|12": "STAR",
+        "nonword-word|13": "SONG",
+        "nonword-word|14": "TABLE",
+        "nonword-word|15": "KING",
+        "unassociated|10": "SOCK",
+        "unassociated|11": "SONG",
+        "unassociated|12": "NIGHT",
+        "unassociated|13": "STAR",
+        "unassociated|14": "MUSIC",
+        "unassociated|15": "KNIFE",
+        "word-nonword|10": "GLORT",
+        "word-nonword|11": "SPADLE",
+        "word-nonword|12": "TABER",
+        "word-nonword|13": "BRIME",
+        "word-nonword|14": "DAKE",
+        "word-nonword|15": "NORT",
+        "nonword-nonword|1": "TABER",
+        "nonword-nonword|2": "PLONE",
+        "nonword-nonword|3": "FRINK",
+        "nonword-nonword|4": "NORT",
+        "nonword-nonword|5": "TROOM",
+        "nonword-nonword|6": "BLIVE",
+        "nonword-nonword|7": "PRALL",
+        "nonword-nonword|8": "SIVEL",
+        "nonword-nonword|9": "VAMPER",
+        "nonword-nonword|10": "BANDLE",
+        "nonword-nonword|11": "MARB",
+        "nonword-nonword|12": "SNURK",
+        "nonword-nonword|13": "VAMPER",
+        "nonword-nonword|14": "TUNCH",
+        "nonword-nonword|15": "DAKE"
+      },
+      "derivedFrom": [
+        "pairType",
+        "slot"
+      ]
+    },
+    {
+      "name": "expectedResponse",
+      "mapping": {
+        "associated": "yes",
+        "nonword-word": "no",
+        "unassociated": "yes",
+        "word-nonword": "no",
+        "nonword-nonword": "no"
+      },
+      "derivedFrom": [
+        "pairType"
+      ]
+    }
+  ],
+  "titleHe": "משימת החלטה לקסיקלית בזוגות מילים (כן/לא)",
+  "version": 1,
+  "category": "LANGUAGE",
+  "practice": {
+    "count": 11,
+    "feedback": true
+  },
+  "dashboard": {
+    "charts": [
+      {
+        "kind": "bar",
+        "title": "Mean RT by stimulus pair type (correct trials)",
+        "yLabel": "Mean RT (ms)",
+        "groupBy": "pairType",
+        "measure": "meanRt",
+        "errorBars": true,
+        "description": "Grey bars are Meyer & Schvaneveldt's own results for these same five conditions.",
+        "original": {
+          "source": "Meyer & Schvaneveldt (1971), Exp. I, Table 1 — mean RT of correct responses",
+          "label": "Meyer & Schvaneveldt (1971)",
+          "values": {
+            "associated": 855,
+            "unassociated": 940,
+            "word-nonword": 1087,
+            "nonword-word": 904,
+            "nonword-nonword": 884
+          }
+        }
+      },
+      {
+        "kind": "bar",
+        "title": "Accuracy by stimulus pair type (100% − error rate)",
+        "yLabel": "Accuracy (%)",
+        "groupBy": "pairType",
+        "measure": "accuracy",
+        "errorBars": true
+      },
+      {
+        "kind": "bar",
+        "title": "Proportion of 'yes' responses by pair type",
+        "yLabel": "'Yes' responses (%)",
+        "groupBy": "pairType",
+        "measure": "proportion",
+        "errorBars": true,
+        "ofResponse": "yes",
+        "referenceLine": 50
+      },
+      {
+        "kind": "bar",
+        "title": "Mean RT per participant (speed–accuracy check)",
+        "yLabel": "Mean RT (ms)",
+        "groupBy": "participant",
+        "measure": "meanRt",
+        "errorBars": false
+      },
+      {
+        "kind": "bar",
+        "title": "Accuracy per participant",
+        "yLabel": "Accuracy (%)",
+        "groupBy": "participant",
+        "measure": "accuracy",
+        "errorBars": false
+      }
+    ]
+  },
+  "repetitions": 1,
+  "instructions": {
+    "en": "On each trial two letter strings appear, one directly above the other. Decide whether *both* strings are real English words.\n\nIf both are real words, press \"Yes\" (key J).\nIf either one (or both) is not a real word, press \"No\" (key F).\n\nYour response ends the display, so answer as quickly as you can while staying accurate. Each trial starts with the warning word READY followed by a fixation box.\n\nA short practice block with feedback comes first.",
+    "he": "בכל ניסיון יוצגו שתי מחרוזות אותיות, אחת מעל השנייה. עליך להחליט האם *שתי* המחרוזות הן מילים אמיתיות באנגלית.\n\nאם שתי המחרוזות הן מילים – לחץ/י על \"כן\" (מקש J).\nאם אחת מהן (או שתיהן) אינה מילה אמיתית – לחץ/י על \"לא\" (מקש F).\n\nהתגובה מסיימת את הצגת הגירוי, לכן השתדל/י להגיב מהר ככל האפשר אך גם בדיוק מרבי. לפני כל ניסיון תופיע המילה READY ולאחריה ריבוע קיבוע.\n\nתחילה יוצג תרגול קצר עם משוב."
+  },
+  "simplifications": [
+    {
+      "why": "The original normed word lists are not reproduced in the paper; crossing pair type with 15 item slots keeps the design fully text-based with no assets.",
+      "what": "Stimulus items are a curated illustrative set (associated pairs, recombined unassociated pairs, and word/nonword combinations) rather than the paper's association-norm-derived items."
+    },
+    {
+      "why": "The derived-factor mapping must be complete, while the exclusions yield exactly 10 trials in each of the five pair types = 50 test trials, the length requested by the lecturer.",
+      "what": "The item mapping defines strings for all 5 x 15 = 75 pairType x slot cells, but slots 11–15 of every condition are excluded from the trial list, and the paper's unequal condition proportions are replaced by an equal 10-per-type design."
+    },
+    {
+      "why": "The runtime's response phase waits for input rather than timing out. Students typically respond in ~1 s, so removing the cutoff affects only a handful of very slow trials.",
+      "what": "No 3000 ms response deadline; the stimulus stays on screen until the participant responds."
+    },
+    {
+      "why": "Feedback content depends on the response, which a timed display phase cannot express; practice feedback suffices for learning the mapping, and omitting test feedback avoids strategic slowing.",
+      "what": "Trial-by-trial accuracy feedback is given in the practice block only (11 trials), not in the 50 test trials."
+    },
+    {
+      "why": "The renderer shuffles the crossed trial list; with 50 trials over 5 types, occasional runs of the same type have a negligible effect on condition means.",
+      "what": "Trial order is fully randomized with no constraint on consecutive repeats of the same pair type."
+    },
+    {
+      "why": "The paper reports a brief warning signal without specifying its duration; 500 ms is a standard value and was confirmed by the lecturer.",
+      "what": "The 'READY' warning signal is fixed at 500 ms."
+    },
+    {
+      "why": "Requested by the lecturer to keep the response display minimal and uncluttered during the timed task.",
+      "what": "Response buttons are labelled only \"כן\" / \"לא\" (\"Yes\" / \"No\"), with the full decision rule stated in the instructions instead of on the buttons."
+    },
+    {
+      "why": "Requested by the lecturer, who asked for a different typeface for the stimuli; letter-string legibility is unaffected.",
+      "what": "The two letter strings are displayed in a sans-serif typeface rather than monospace (the READY warning remains monospace)."
+    }
+  ]
+}
