@@ -199,6 +199,7 @@ Points worth care, because they are where definitions usually go wrong:
 - When the cross produces a cell the task cannot answer — comparing a number with itself, a "same" trial built from two different items — list it in "exclude" rather than scoring it arbitrarily or inventing an extra response for it.
 - Every "{reference}" must name a factor you defined, or a field of a pool item.
 - Fill in "mock" with the effect the paper reports. It is what lets a lecturer demonstrate the result with no participants, so the numbers should reproduce the published finding.
+- When the paper REPORTS figures for what a chart plots, add "original" to that chart: { "source": "Author (year), Exp. N", "values": { "<group>": <number> } }, one number per group in the chart's own units (ms for meanRt, percent for accuracy and proportion). The dashboard draws it beside the class's own bars, which is how a class sees whether they got what the study got. Include it ONLY for figures the paper actually states — never estimate, never carry a number over from a different measure or condition. A paper that reports no usable figures simply gets no "original".
 - Prefer inline SVG shapes and text: they need nothing sourced and scale to any screen. Use an "image" display ONLY for files listed at the end of the message as uploaded — you cannot create image files, and a src naming anything else renders as a broken picture. The "assets" field is set by the app, not by you.
 
 === BEGIN SCHEMA (TypeScript) ===

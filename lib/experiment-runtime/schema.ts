@@ -323,6 +323,25 @@ export interface ChartSpec {
   description?: string;
   /** Label for the x axis. */
   xLabel?: string;
+  /**
+   * What the original study reported, drawn beside the class's own data.
+   *
+   * A class of thirty is noisy, and the question a lecturer actually wants on screen is
+   * "did we get what they got?". `values` is one number per group, in the same units as
+   * `measure` — milliseconds for meanRt, percent for accuracy and proportion — keyed by the
+   * group's value (or its label from `groups`).
+   *
+   * Only ever numbers a paper REPORTS. An experiment described from memory, or a paper that
+   * gives no figures, simply has none: the chart then shows the class's data alone, which
+   * is honest, where an invented comparison would not be.
+   */
+  original?: {
+    /** Where the numbers come from, shown under the chart — e.g. "Stroop (1935), Exp. 2". */
+    source: string;
+    /** Legend name for the series. Defaults to "Original study". */
+    label?: string;
+    values: Record<string, number>;
+  };
 }
 
 /**

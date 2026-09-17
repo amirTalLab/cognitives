@@ -19,7 +19,10 @@ import {
 } from 'recharts';
 import { verifyPassword } from '@/lib/auth';
 import type { ExperimentDefinition, ChartSpec } from './schema';
-import { aggregate, generateMockRows, measureLabel, ResultRow, seriesNames, statValue } from './aggregate';
+import {
+  aggregate, generateMockRows, measureLabel, ORIGINAL_KEY, ResultRow, seriesNames, statValue,
+  unmatchedOriginals, withOriginal,
+} from './aggregate';
 
 const BTN = 'px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 transition-colors';
 const SERIES_COLORS = ['#a78bfa', '#38bdf8', '#fbbf24', '#34d399', '#f472b6'];
@@ -60,21 +63,44 @@ const MAX_GROUPS = 40;
 function ChartView({ chart, def, rows, revealed }: {
   chart: ChartSpec; def: ExperimentDefinition; rows: ResultRow[]; revealed: boolean;
 }) {
-  const all = aggregate(chart, rows);
+  const all = withOriginal(chart, aggregate(chart, rows));
   const data = all.length > MAX_GROUPS ? all.slice(0, MAX_GROUPS) : all;
   const omitted = all.length - data.length;
   const series = seriesNames(chart, rows);
   const label = measureLabel(chart, def);
   const percentage = chart.measure === 'accuracy' || chart.measure === 'proportion';
 
+  // The paper's own numbers, drawn beside the class's. Only where the chart carries them,
+  // and only on the two shapes where a second series reads as a comparison.
+  const originalLabel = chart.original?.label ?? 'Original study';
+  const showOriginal = !!chart.original && (chart.kind === 'bar' || chart.kind === 'histogram' || chart.kind === 'line');
+  const missed = unmatchedOriginals(chart, all);
+
   // Named rather than silent: a truncated chart that does not say so is a misread waiting
   // to happen, and the fix is usually to group by a condition instead of a per-item field.
-  const note = omitted > 0 ? (
-    <p className="text-xs text-amber-400/80 mb-2">
-      Showing the first {MAX_GROUPS} of {all.length} groups — &ldquo;{chart.groupBy}&rdquo; has too many
-      distinct values to plot. Group by a condition for a chart a class can read.
-    </p>
-  ) : null;
+  const note = (
+    <>
+      {omitted > 0 && (
+        <p className="text-xs text-amber-400/80 mb-2">
+          Showing the first {MAX_GROUPS} of {all.length} groups — &ldquo;{chart.groupBy}&rdquo; has too many
+          distinct values to plot. Group by a condition for a chart a class can read.
+        </p>
+      )}
+      {chart.original && !showOriginal && (
+        <p className="text-xs text-amber-400/80 mb-2">
+          This chart carries the original study&rsquo;s numbers, but a {chart.kind} chart has nowhere to
+          put them. Use a bar or line chart to compare against {chart.original.source}.
+        </p>
+      )}
+      {missed.length > 0 && (
+        <p className="text-xs text-amber-400/80 mb-2">
+          The original study has {missed.length === 1 ? 'a figure' : 'figures'} for{' '}
+          {missed.map(m => `"${m}"`).join(', ')}, which {missed.length === 1 ? 'is' : 'are'} not a group on
+          this chart, so {missed.length === 1 ? 'it is' : 'they are'} not drawn.
+        </p>
+      )}
+    </>
+  );
 
   const axes = (
     <>
@@ -105,8 +131,16 @@ function ChartView({ chart, def, rows, revealed }: {
                   stroke={SERIES_COLORS[i % SERIES_COLORS.length]} strokeWidth={2} dot={{ r: 4 }} />
               ))
             : <Line type="monotone" dataKey="value" name={label} stroke="#a78bfa" strokeWidth={2} dot={{ r: 4 }} />)}
+          {/* Dashed and muted: the paper's reported course, not something measured here. */}
+          {revealed && showOriginal && (
+            <Line type="monotone" dataKey={ORIGINAL_KEY} name={originalLabel} stroke="#6b7280"
+              strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3 }} connectNulls />
+          )}
         </LineChart>
       </ResponsiveContainer>
+      {chart.original && (
+        <p className="text-xs text-gray-600 mt-2">{originalLabel}: {chart.original.source}</p>
+      )}
       </>
     );
   }
@@ -147,8 +181,16 @@ function ChartView({ chart, def, rows, revealed }: {
               )}
             </Bar>
           ))}
+        {/* The paper's own figures, in a muted colour: the class's data is the subject of
+            the chart, and this is what it is being compared against. */}
+        {revealed && showOriginal && (
+          <Bar dataKey={ORIGINAL_KEY} name={originalLabel} fill="#6b7280" />
+        )}
       </BarChart>
     </ResponsiveContainer>
+    {chart.original && (
+      <p className="text-xs text-gray-600 mt-2">{originalLabel}: {chart.original.source}</p>
+    )}
     </>
   );
 }

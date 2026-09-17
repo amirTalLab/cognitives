@@ -589,6 +589,67 @@ test.describe('Posner cueing — definition port', () => {
   });
 });
 
+// ── The original study, beside the class's own data ─────────────────────────
+//
+// A class of thirty is noisy, so the question a lecturer wants on screen is "did we get what
+// they got?". A chart can carry the figures a paper reported, drawn as a second series. The
+// fixture below invents its own numbers on purpose: no shipped experiment should carry a
+// figure nobody published.
+
+test.describe('definition runtime — the original study beside the class', () => {
+  const withOriginalChart = {
+    version: 1, slug: 'e2eOriginal', title: 'Comparison demo', titleHe: 'השוואה', category: 'EXECUTIVE CONTROL',
+    instructions: { en: 'Press a key.', he: 'לחצו.' },
+    factors: [{ name: 'congruency', levels: ['congruent', 'incongruent'] }],
+    repetitions: 1,
+    trial: {
+      phases: [{ name: 'go', display: { kind: 'text', text: '{congruency}' }, awaitsResponse: true, startsClock: true }],
+      response: { kind: 'choice', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] },
+      correct: { kind: 'matchesFactor', factor: 'congruency' },
+    },
+    store: ['congruency'],
+    dashboard: {
+      charts: [{
+        title: 'RT by congruency', kind: 'bar', groupBy: 'congruency', measure: 'meanRt',
+        original: { source: 'Illustrative (1935), Exp. 2', values: { congruent: 650, incongruent: 850 } },
+      }],
+    },
+  };
+
+  const rows = [
+    ['congruent', 700], ['incongruent', 920], ['congruent', 720], ['incongruent', 900],
+  ].map(([congruency, rt], i) => ({
+    id: i + 1, experiment_slug: 'e2eOriginal', session_id: `s${i % 2}`, participant_name: `P${i % 2}`,
+    trial_index: i, is_practice: false, response: 'a', is_correct: true, reaction_time_ms: rt,
+    created_at: new Date(Date.UTC(2026, 0, 1, 12, i)).toISOString(), payload: { congruency },
+  }));
+
+  test('the paper\'s reported figures are drawn as a second series, with the citation', async ({ page }) => {
+    await isolateFromDatabase(page);
+    await page.route('**/rest/v1/experiment_results**', route => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(rows),
+    }));
+    await page.addInitScript(def => {
+      sessionStorage.setItem('ss_teacher_authed', '1');
+      sessionStorage.setItem('cognitives_preview_definitions', JSON.stringify({ e2eOriginal: def }));
+    }, withOriginalChart);
+
+    await open(page, '/run/e2eOriginal/teacher');
+    await expect(page.getByText(/2 participants · 4 trials/)).toBeVisible();
+
+    // The citation is on screen whether or not the chart is revealed: it says what the
+    // comparison is, which the lecturer needs before showing it to a room.
+    await expect(page.getByText('Original study: Illustrative (1935), Exp. 2')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Reveal' }).click();
+    // Both series in the legend: the class's measure, and the study.
+    await expect(page.locator('.recharts-legend-item-text', { hasText: 'Original study' })).toBeVisible();
+    await expect(page.locator('.recharts-legend-item-text', { hasText: 'RT (ms)' })).toBeVisible();
+    // Two bars per group — the class's and the paper's — across two groups.
+    await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(4);
+  });
+});
+
 // ── Results from more than one published version ────────────────────────────
 //
 // Refining a published experiment creates a new version, and results collected before and

@@ -308,6 +308,52 @@ function groupLabel(chart: ChartSpec, group: string): string {
   return chart.groups?.find(g => String(g.value) === group)?.label ?? group;
 }
 
+/**
+ * What the original study reported for one group, or undefined when it reported nothing.
+ *
+ * Looked up by the group's own value and by the label `groups` may have renamed it to, so a
+ * definition can write either — "exo_invalid" or "Exogenous" — and neither silently misses.
+ */
+export function originalValue(chart: ChartSpec, group: string): number | undefined {
+  const values = chart.original?.values;
+  if (!values) return undefined;
+  if (typeof values[group] === 'number') return values[group];
+
+  // `group` here is already the label, so map it back to the value it was renamed from.
+  const named = chart.groups?.find(g => (g.label ?? String(g.value)) === group);
+  const underlying = named ? String(named.value) : undefined;
+  return underlying !== undefined && typeof values[underlying] === 'number' ? values[underlying] : undefined;
+}
+
+/** The key the original series is plotted under. Never a group's own name. */
+export const ORIGINAL_KEY = '__original';
+
+/**
+ * Chart points with the original study's numbers attached, ready to plot beside the class.
+ *
+ * Kept out of aggregate() on purpose: aggregate answers "what did this class do", and the
+ * paper's reported figures are not data anyone collected here.
+ */
+export function withOriginal(chart: ChartSpec, points: ChartPoint[]): ChartPoint[] {
+  if (!chart.original) return points;
+  return points.map(p => {
+    const value = originalValue(chart, p.group);
+    return value === undefined ? p : { ...p, [ORIGINAL_KEY]: value };
+  });
+}
+
+/** Groups the original names that no chart point matches — a typo plots nothing at all. */
+export function unmatchedOriginals(chart: ChartSpec, points: ChartPoint[]): string[] {
+  if (!chart.original) return [];
+  const plotted = new Set<string>();
+  for (const p of points) {
+    plotted.add(p.group);
+    const named = chart.groups?.find(g => (g.label ?? String(g.value)) === p.group);
+    if (named) plotted.add(String(named.value));
+  }
+  return Object.keys(chart.original.values).filter(name => !plotted.has(name));
+}
+
 type StatSpec = NonNullable<ExperimentDefinition['dashboard']['stats']>[number];
 
 /**

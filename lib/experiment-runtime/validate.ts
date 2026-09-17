@@ -287,6 +287,14 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
       && (!Array.isArray(c.groups) || !c.groups.every(g => isObj(g) && g.value !== undefined))) {
       bad(`${at}'s "groups"`, 'a list of { "value", "label" }');
     }
+    if (c.original !== undefined) {
+      const o = c.original as unknown as Record<string, unknown>;
+      if (!isObj(o) || !isStr(o.source) || !isObj(o.values)) {
+        bad(`${at}'s "original"`, 'an object with "source" and "values"');
+      } else if (!Object.values(o.values as Record<string, unknown>).every(v => Number.isFinite(v))) {
+        bad(`${at}'s "original.values"`, 'one number per group');
+      }
+    }
     if (c.difference !== undefined) {
       const d = c.difference as unknown as Record<string, unknown>;
       if (!isObj(d) || !isStr(d.factor) || d.level === undefined || d.minus === undefined) {
@@ -653,6 +661,24 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     }
     if (chart.difference && !readable(chart.difference.factor)) {
       warn(`Chart "${chart.title}" takes a difference over "${chart.difference.factor}", which is not in the stored fields, so it would show nothing.`);
+    }
+    // The original study's figures are keyed by group. A name that matches no level of the
+    // grouping factor draws nothing at all, and a comparison that silently is not there is
+    // worse than none — the class reads the class's own bar as agreeing with the paper.
+    if (chart.original) {
+      const levels = def.factors.find(f => f.name === chart.groupBy)?.levels?.map(String);
+      const labels = chart.groups?.map(g => (g.label ?? String(g.value))) ?? [];
+      const known = new Set([...(levels ?? []), ...labels, ...(chart.groups?.map(g => String(g.value)) ?? [])]);
+      if (known.size > 0) {
+        for (const name of Object.keys(chart.original.values)) {
+          if (!known.has(name)) {
+            warn(`Chart "${chart.title}" has an original figure for "${name}", which is not one of its groups (${[...known].join(', ')}), so it would not be drawn.`);
+          }
+        }
+      }
+      if (chart.kind !== 'bar' && chart.kind !== 'histogram' && chart.kind !== 'line') {
+        warn(`Chart "${chart.title}" carries the original study's numbers, but a ${chart.kind} chart cannot draw them. Use a bar or line chart.`);
+      }
     }
   }
 

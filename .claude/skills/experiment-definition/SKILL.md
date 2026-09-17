@@ -138,6 +138,11 @@ Things that are easy to get wrong:
 - **Charts** can `filter` rows by factor values, use `correctOnly` for RT, plot a
   `difference` between two levels per participant (a validity or congruency effect), and
   `bin` a numeric `groupBy` such as `trial_index`.
+- **`original`** puts the paper's reported numbers beside the class's own bars:
+  `{ "source": "Stroop (1935), Exp. 2", "values": { "congruent": 700, "incongruent": 850 } }`,
+  one number per group in the chart's units. Only figures the paper actually states — a
+  number you estimated is worse than no comparison at all, because a class will believe it.
+  Experiments described from memory usually have none, and that is fine.
 - **Matching an existing experiment exactly.** `jitterMs` adds a random 0–N ms to a timed
   phase; `practice.from` swaps in a fixed practice set; `practice.record` and
   `trial.recordEarly` control what is saved; `trial.itiDisplay` and `trial.feedback.display`
