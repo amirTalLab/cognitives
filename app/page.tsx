@@ -3,10 +3,11 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Beaker, Brain, BrainCog, BarChart2, FlaskConical, Shapes, Target, Search, Users, Type, Lock, LockOpen, Timer, GitFork, List, BookOpen, Lightbulb, Sparkles, Eye, FilePlus2, ArrowRight } from 'lucide-react';
+import { Beaker, Brain, BrainCog, BarChart2, FlaskConical, Shapes, Target, Search, Users, Type, Lock, LockOpen, Timer, GitFork, List, BookOpen, Lightbulb, Sparkles, Eye, FilePlus2, ArrowRight, QrCode } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { verifyPassword } from '@/lib/auth';
 import { PASSWORD_KEY, setExperimentLock, storedPassword } from '@/lib/protected-writes';
+import { ExperimentQr } from '@/components/ExperimentQr';
 
 // `href` is set for experiments built as definitions, which all live under /run/{slug}
 // rather than having a route of their own. Without it a generated experiment gets a card
@@ -62,6 +63,9 @@ export default function HomePage() {
   const [locks,    setLocks]    = useState<Record<string, boolean>>({});
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
   const [lockError, setLockError] = useState<string | null>(null);
+  // Which experiment's QR code is on screen. Here rather than on the teacher dashboard:
+  // projecting the link should not mean projecting the class's results as well.
+  const [qrFor, setQrFor] = useState<{ path: string; title: string } | null>(null);
 
   // Re-hydrate auth from session. The password itself is needed, not just the flag:
   // changing a lock goes through a database function that checks it, so a session that
@@ -213,6 +217,17 @@ export default function HomePage() {
                         <BarChart2 className="w-3 h-3 text-gray-600 hover:text-purple-400" />
                       </button>
 
+                      {/* QR code — next to the dashboard icon, since both are lecturer
+                          tools. Projecting the link no longer means opening a dashboard in
+                          front of the class. */}
+                      <button
+                        onClick={() => setQrFor({ path: exp.href ?? `/${id}`, title: exp.title })}
+                        title={`QR code for students — ${exp.title}`}
+                        className="absolute top-1.5 left-7 p-1 rounded hover:bg-gray-700/60 transition-colors"
+                      >
+                        <QrCode className="w-3 h-3 text-gray-600 hover:text-purple-400" />
+                      </button>
+
                       {/* Lock toggle — top-right corner */}
                       <button
                         onClick={() => toggleLock(id)}
@@ -251,6 +266,10 @@ export default function HomePage() {
             </div>
           ))}
         </div>
+
+        {qrFor && (
+          <ExperimentQr path={qrFor.path} title={qrFor.title} onClose={() => setQrFor(null)} />
+        )}
 
         {/* Create New Project — the paper → experiment pipeline */}
         <motion.button

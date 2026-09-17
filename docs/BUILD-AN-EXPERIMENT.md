@@ -178,8 +178,9 @@ the link. No deploy, no waiting.
 
 ## Giving it to students
 
-Send them the `/run/YOUR-SLUG` link, or open the teacher dashboard and use the **Student QR**
-button for a code they can scan from a projector.
+Send them the `/run/YOUR-SLUG` link, or project a QR code: on the homepage, every experiment
+card has a QR icon that opens a code students can scan. The homepage is behind the password,
+so nothing of yours is on screen while they scan.
 
 Results appear on **`/run/YOUR-SLUG/teacher`** (the site password gets you in). **Refresh**
 reloads, **Download CSV** gets the data for SPSS or R.

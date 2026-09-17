@@ -80,7 +80,8 @@ It runs the same stages as the web wizard and **stops for you at each decision**
 6. **Publish** — `npm run exp:publish` makes it live at `/run/<slug>` immediately, for
    anyone with the link. `exp:unpublish` takes it back down.
 
-Then hand students the link, or the QR code on the teacher dashboard.
+Then hand students the link, or project the QR code — every experiment on the homepage has
+one, behind the password, so the class never has to see a dashboard to get the link.
 
 **No Anthropic API key is needed for this path** — that is what the website uses and what
 this avoids. The two Supabase keys and the site password are needed only to *publish*;
