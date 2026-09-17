@@ -649,6 +649,27 @@ test.describe('definition runtime — the original study beside the class', () =
   });
 });
 
+// A real experiment carrying real figures, as opposed to the fixture above: Sternberg's
+// line drawn beside a class's, on a chart that is ALREADY split into two series by
+// probeType. Three lines is the busiest this gets, and it is the combination a definition
+// file relies on, so it is checked against the shipped definition rather than a stand-in.
+test('a built-in experiment renders the paper\'s figures beside two existing series', async ({ page }) => {
+  await isolateFromDatabase(page);
+  await page.addInitScript(() => sessionStorage.setItem('ss_teacher_authed', '1'));
+  await open(page, '/run/memoryScanning/teacher');
+
+  await expect(page.getByText(/No data yet/i)).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Mock Data' }).click();
+  await expect(page.getByText(/[1-9]\d* participants/)).toBeVisible({ timeout: 15_000 });
+
+  await expect(page.getByText(/Sternberg \(1966\), Exp\. 2 — computed from the reported regression/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Reveal' }).first().click();
+  // The class's two series, plus the paper's — named, so a silent drop would fail here.
+  await expect(page.locator('.recharts-legend-item-text', { hasText: 'Sternberg (1966)' }).first()).toBeVisible();
+  await expect(page.locator('.recharts-legend-item-text', { hasText: 'present' }).first()).toBeVisible();
+});
+
 // ── Results from more than one published version ────────────────────────────
 //
 // Refining a published experiment creates a new version, and results collected before and

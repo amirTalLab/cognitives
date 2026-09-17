@@ -63,6 +63,27 @@ test('a renamed group is still matched, by its label or by the value it was rena
   assert.equal(originalValue(byLabel, 'Congruent'), 640);
 });
 
+test('a multi-series chart still gets the comparison, once per group', () => {
+  // memoryScanning splits its RT line by probeType AND carries Sternberg's figures, a
+  // combination nothing else covered. The paper reports one number per set size, not one
+  // per series, so it attaches to the group and is drawn once beside both lines.
+  const seriesRows = [
+    { session_id: 'a', participant_name: 'A', trial_index: 0, is_practice: false, response: 'present', is_correct: true, reaction_time_ms: 500, setSize: '2', probeType: 'present' },
+    { session_id: 'a', participant_name: 'A', trial_index: 1, is_practice: false, response: 'absent', is_correct: true, reaction_time_ms: 560, setSize: '2', probeType: 'absent' },
+    { session_id: 'a', participant_name: 'A', trial_index: 2, is_practice: false, response: 'present', is_correct: true, reaction_time_ms: 640, setSize: '6', probeType: 'present' },
+    { session_id: 'a', participant_name: 'A', trial_index: 3, is_practice: false, response: 'absent', is_correct: true, reaction_time_ms: 700, setSize: '6', probeType: 'absent' },
+  ];
+  const sternberg = {
+    title: 'RT by set size', kind: 'line', groupBy: 'setSize', measure: 'meanRt', seriesBy: 'probeType',
+    original: { source: 'Sternberg (1966)', values: { 2: 446, 6: 599 } },
+  };
+  const points = withOriginal(sternberg, aggregate(sternberg, seriesRows));
+  assert.deepEqual(points.map(p => [p.group, p[ORIGINAL_KEY]]), [['2', 446], ['6', 599]]);
+  // The per-series values are untouched by the comparison.
+  assert.deepEqual(points.map(p => [p.present, p.absent]), [[500, 560], [640, 700]]);
+  assert.deepEqual(unmatchedOriginals(sternberg, points), []);
+});
+
 test('a chart with no figures is left exactly as it was', () => {
   const plain = chart();
   const points = aggregate(plain, rows);

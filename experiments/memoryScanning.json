@@ -94,7 +94,13 @@
         "measure": "meanRt",
         "seriesBy": "probeType",
         "yLabel": "Mean RT (ms)",
-        "errorBars": true
+        "errorBars": true,
+        "description": "The grey dashed line is Sternberg's own result, computed from the regression he reports.",
+        "original": {
+          "source": "Sternberg (1966), Exp. 2 — computed from the reported regression, RT = 369.4 + 38.3s",
+          "label": "Sternberg (1966)",
+          "values": { "1": 408, "2": 446, "4": 523, "6": 599 }
+        }
       },
       {
         "title": "Accuracy by set size",

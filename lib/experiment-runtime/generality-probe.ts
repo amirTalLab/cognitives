@@ -254,7 +254,22 @@ export const SEMANTIC_PRIMING: ExperimentDefinition = {
   },
   store: ['pair.prime', 'pair.target', 'pair.related'],
   dashboard: {
-    charts: [{ title: 'RT by relatedness', kind: 'bar', groupBy: 'pair.related', measure: 'meanRt', yLabel: 'RT (ms)', errorBars: true }],
+    charts: [{
+      title: 'RT by relatedness', kind: 'bar', groupBy: 'pair.related', measure: 'meanRt',
+      yLabel: 'RT (ms)', errorBars: true,
+      // Transcribed from Table 1 of the paper: 855 msec for pairs of associated words,
+      // 940 for unassociated, an 85 msec advantage the text states directly. Keyed by the
+      // stringified boolean, which is what `pair.related` groups by.
+      //
+      // Their baseline sits far above a modern class's: this was a yes-no lexical decision
+      // on English pairs in 1971, read off a tachistoscope, and both strings had to be
+      // judged. The citation says so, because the gap between the two sets of bars is a
+      // difference in apparatus and task, not in the effect.
+      original: {
+        source: 'Meyer & Schvaneveldt (1971), Exp. I — English word pairs, yes-no task',
+        values: { true: 855, false: 940 },
+      },
+    }],
   },
 };
 
