@@ -616,32 +616,31 @@ test.describe('definition runtime — the original study beside the class', () =
     },
   };
 
-  const rows = [
-    ['congruent', 700], ['incongruent', 920], ['congruent', 720], ['incongruent', 900],
-  ].map(([congruency, rt], i) => ({
-    id: i + 1, experiment_slug: 'e2eOriginal', session_id: `s${i % 2}`, participant_name: `P${i % 2}`,
-    trial_index: i, is_practice: false, response: 'a', is_correct: true, reaction_time_ms: rt,
-    created_at: new Date(Date.UTC(2026, 0, 1, 12, i)).toISOString(), payload: { congruency },
-  }));
-
+  // Driven by Mock Data, like every other dashboard test here. The first version of this
+  // test served rows through a mocked REST route, which passed locally and failed in CI:
+  // with no Supabase credentials the client is never built, so no request is made and the
+  // stub never lands. Mock rows are generated from the definition itself, so this renders
+  // the same way with or without a database.
   test('the paper\'s reported figures are drawn as a second series, with the citation', async ({ page }) => {
     await isolateFromDatabase(page);
-    await page.route('**/rest/v1/experiment_results**', route => route.fulfill({
-      status: 200, contentType: 'application/json', body: JSON.stringify(rows),
-    }));
     await page.addInitScript(def => {
       sessionStorage.setItem('ss_teacher_authed', '1');
       sessionStorage.setItem('cognitives_preview_definitions', JSON.stringify({ e2eOriginal: def }));
     }, withOriginalChart);
 
     await open(page, '/run/e2eOriginal/teacher');
-    await expect(page.getByText(/2 participants · 4 trials/)).toBeVisible();
+    // Let the first (empty) read settle before switching mock data on. Where credentials
+    // exist the fetch is real and where they do not it is a stub, but either way a read
+    // that resolves after the click replaces the mock rows with an empty set.
+    await expect(page.getByText(/No data yet/i)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'Mock Data' }).click();
+    await expect(page.getByText(/[1-9]\d* participants/)).toBeVisible({ timeout: 15_000 });
 
     // The citation is on screen whether or not the chart is revealed: it says what the
     // comparison is, which the lecturer needs before showing it to a room.
     await expect(page.getByText('Original study: Illustrative (1935), Exp. 2')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Reveal' }).click();
+    await page.getByRole('button', { name: 'Reveal' }).first().click();
     // Both series in the legend: the class's measure, and the study.
     await expect(page.locator('.recharts-legend-item-text', { hasText: 'Original study' })).toBeVisible();
     await expect(page.locator('.recharts-legend-item-text', { hasText: 'RT (ms)' })).toBeVisible();
