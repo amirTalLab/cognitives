@@ -125,17 +125,18 @@ function ChartView({ chart, def, rows, revealed }: {
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data}>
           {axes}
+          {/* Drawn first and always, like the bars: dashed and muted, because it is the
+              paper's reported course rather than anything measured in this room. */}
+          {showOriginal && (
+            <Line type="monotone" dataKey={ORIGINAL_KEY} name={originalLabel} stroke="#6b7280"
+              strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3 }} connectNulls />
+          )}
           {revealed && (series.length
             ? series.map((s, i) => (
                 <Line key={s} type="monotone" dataKey={s} name={s}
                   stroke={SERIES_COLORS[i % SERIES_COLORS.length]} strokeWidth={2} dot={{ r: 4 }} />
               ))
             : <Line type="monotone" dataKey="value" name={label} stroke="#a78bfa" strokeWidth={2} dot={{ r: 4 }} />)}
-          {/* Dashed and muted: the paper's reported course, not something measured here. */}
-          {revealed && showOriginal && (
-            <Line type="monotone" dataKey={ORIGINAL_KEY} name={originalLabel} stroke="#6b7280"
-              strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3 }} connectNulls />
-          )}
         </LineChart>
       </ResponsiveContainer>
       {chart.original && (
@@ -166,6 +167,12 @@ function ChartView({ chart, def, rows, revealed }: {
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data}>
         {axes}
+        {/* First child, so it draws on the LEFT of each group, and never gated on Reveal:
+            the published result is what the class reads and predicts from, and their own
+            data is what appears beside it when the lecturer reveals. */}
+        {showOriginal && (
+          <Bar dataKey={ORIGINAL_KEY} name={originalLabel} fill="#6b7280" />
+        )}
         {revealed && (series.length
           ? series.map((s, i) => (
               <Bar key={s} dataKey={s} name={s} fill={SERIES_COLORS[i % SERIES_COLORS.length]}>
@@ -181,11 +188,6 @@ function ChartView({ chart, def, rows, revealed }: {
               )}
             </Bar>
           ))}
-        {/* The paper's own figures, in a muted colour: the class's data is the subject of
-            the chart, and this is what it is being compared against. */}
-        {revealed && showOriginal && (
-          <Bar dataKey={ORIGINAL_KEY} name={originalLabel} fill="#6b7280" />
-        )}
       </BarChart>
     </ResponsiveContainer>
     {chart.original && (

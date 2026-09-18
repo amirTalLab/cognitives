@@ -640,6 +640,13 @@ test.describe('definition runtime — the original study beside the class', () =
     // comparison is, which the lecturer needs before showing it to a room.
     await expect(page.getByText('Original study: Illustrative (1935), Exp. 2')).toBeVisible();
 
+    // BEFORE revealing: the published result is already on screen, and the class's is not.
+    // This is the whole point of the arrangement — a room reads the original, predicts, and
+    // then their own data appears beside it. One bar per group, the paper's.
+    await expect(page.locator('.recharts-legend-item-text', { hasText: 'Original study' })).toBeVisible();
+    await expect(page.locator('.recharts-legend-item-text', { hasText: 'RT (ms)' })).toHaveCount(0);
+    await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(2);
+
     await page.getByRole('button', { name: 'Reveal' }).first().click();
     // Both series in the legend: the class's measure, and the study.
     await expect(page.locator('.recharts-legend-item-text', { hasText: 'Original study' })).toBeVisible();
