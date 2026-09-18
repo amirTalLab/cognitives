@@ -472,7 +472,19 @@
         "yLabel": "Accuracy (%)",
         "groupBy": "pairType",
         "measure": "accuracy",
-        "errorBars": true
+        "errorBars": true,
+        "description": "Grey bars are the paper's own error rates, subtracted from 100 to match this chart.",
+        "original": {
+          "source": "Meyer & Schvaneveldt (1971), Exp. I, Table 1 — 100% − their mean error rates (6.3, 8.7, 27.6, 7.8, 2.6)",
+          "label": "Meyer & Schvaneveldt (1971)",
+          "values": {
+            "associated": 93.7,
+            "unassociated": 91.3,
+            "word-nonword": 72.4,
+            "nonword-word": 92.2,
+            "nonword-nonword": 97.4
+          }
+        }
       },
       {
         "kind": "bar",
@@ -482,7 +494,19 @@
         "measure": "proportion",
         "errorBars": true,
         "ofResponse": "yes",
-        "referenceLine": 50
+        "referenceLine": 50,
+        "description": "Grey bars follow from the paper's error rates: with only two responses, a wrong answer is the other one.",
+        "original": {
+          "source": "Meyer & Schvaneveldt (1971), Exp. I, Table 1 — implied by their error rates, since only \"yes\" and \"no\" were available",
+          "label": "Meyer & Schvaneveldt (1971)",
+          "values": {
+            "associated": 93.7,
+            "unassociated": 91.3,
+            "word-nonword": 27.6,
+            "nonword-word": 7.8,
+            "nonword-nonword": 2.6
+          }
+        }
       },
       {
         "kind": "bar",
