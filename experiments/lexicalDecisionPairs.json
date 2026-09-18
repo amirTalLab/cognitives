@@ -514,7 +514,9 @@
         "yLabel": "Mean RT (ms)",
         "groupBy": "participant",
         "measure": "meanRt",
-        "errorBars": false
+        "errorBars": false,
+        "referenceLine": 934,
+        "description": "The dashed line is Meyer & Schvaneveldt's overall level, 934 ms — the average of their five condition means, weighted equally to match this experiment's ten trials per condition. There are no grey bars here because the paper reports no per-person figures."
       },
       {
         "kind": "bar",
@@ -522,7 +524,9 @@
         "yLabel": "Accuracy (%)",
         "groupBy": "participant",
         "measure": "accuracy",
-        "errorBars": false
+        "errorBars": false,
+        "referenceLine": 89.4,
+        "description": "The dashed line is Meyer & Schvaneveldt's overall accuracy, 89.4% — 100% minus the equally weighted average of their five error rates. No grey bars: the paper reports no per-person figures."
       }
     ]
   },
