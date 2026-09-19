@@ -53,6 +53,15 @@ test('the code closes on Escape, because it is opened in front of a room', async
   await expect(page.locator('canvas[data-qr]')).toHaveCount(0);
 });
 
+// The migration's first cutover. A card silently pointing back at a hand-built page is
+// exactly how a port gets built and then never used, so where this one goes is pinned.
+test('the Spatial Cueing card runs the ported experiment, not the hand-built page', async ({ page }) => {
+  await asLecturer(page);
+
+  await page.getByRole('button', { name: 'QR code for students — Spatial Cueing' }).click();
+  await expect(page.getByText(/\/run\/posnerCueing$/)).toBeVisible();
+});
+
 test('teacher dashboards no longer carry a QR button', async ({ page }) => {
   await page.route('**/rest/v1/**', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
