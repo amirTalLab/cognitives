@@ -3,6 +3,25 @@ import { test, expect, Page } from '@playwright/test';
 const PRACTICE_TRIALS = 5;
 const REAL_TRIALS = 36;
 
+/**
+ * Keeps the run off the real database.
+ *
+ * This spec had no isolation and wrote every trial to the live stroop_results table: 888
+ * rows under "Playwright Tester", one full 41-trial run per test, on every CI push. Reads
+ * come back empty and writes are swallowed, so the participant flow is exercised exactly
+ * as before — it just stops depositing test data in a table a lecturer reads.
+ */
+async function isolateFromDatabase(page: Page) {
+  await page.route('**/rest/v1/**', route => {
+    const method = route.request().method();
+    return route.fulfill({
+      status: method === 'POST' ? 201 : 200,
+      contentType: 'application/json',
+      body: method === 'POST' ? '[]' : '[]',
+    });
+  });
+}
+
 // Font colors from types/stroop.ts COLORS, as computed rgb() strings,
 // mapped to the keyboard shortcut for that color.
 const RGB_TO_KEY: Record<string, string> = {
@@ -25,6 +44,9 @@ async function answerTrialCorrectly(page: Page): Promise<void> {
   // Inter-trial blank is 500ms; wait it out so the next read sees a fresh trial.
   await page.waitForTimeout(650);
 }
+
+// Before every navigation, or the run deposits its trials in the real table.
+test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
 
 test('full Stroop participant flow: landing → practice → 36 trials → thanks', async ({ page }) => {
   // 5 practice (must be correct) + 36 real trials + transitions ≈ 30-40s.
