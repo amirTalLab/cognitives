@@ -365,6 +365,79 @@ export function statValue(stat: StatSpec, rows: ResultRow[]): number | null {
   return point ? point.value : null;
 }
 
+/** One point of an `xy` chart: a participant, placed by two different measures. */
+export interface XYPoint {
+  group: string;
+  series: string;
+  x: number;
+  y: number;
+}
+
+/**
+ * Points for a chart whose axes measure two different things.
+ *
+ * Both axes are computed WITHIN one participant (or whatever `groupBy` names), so a point
+ * is that person's own congruent RT against their own incongruent RT. A participant with
+ * nothing to measure on either axis is dropped rather than placed at zero: the hand-built
+ * Stroop dashboard put non-words — which can never be congruent — on the x = 0 line, where
+ * they read as impossibly fast rather than as absent.
+ */
+export function aggregateXY(chart: ChartSpec, allRows: ResultRow[]): XYPoint[] {
+  if (!chart.axes) return [];
+  const rows = chart.filter || chart.correctOnly ? allRows.filter(r => included(chart, r)) : allRows;
+
+  const key = chart.groupBy.replace(/\./g, '_');
+  const seriesKey = chart.seriesBy?.replace(/\./g, '_');
+  const NO_SERIES = ' ';
+  const groupValue = (r: ResultRow) =>
+    chart.groupBy === 'participant' ? String(r.participant_name) : String(r[key]);
+
+  // Keyed by group then series, exactly as aggregate() buckets, so one pass builds every
+  // point rather than re-filtering the rows per axis per participant.
+  const buckets = new Map<string, Map<string, ResultRow[]>>();
+  for (const row of rows) {
+    const group = groupValue(row);
+    if (group === 'undefined') continue;
+    const series = seriesKey ? String(row[seriesKey]) : NO_SERIES;
+    if (series === 'undefined') continue;
+    let bySeries = buckets.get(group);
+    if (!bySeries) { bySeries = new Map(); buckets.set(group, bySeries); }
+    const list = bySeries.get(series);
+    if (list) list.push(row);
+    else bySeries.set(series, [row]);
+  }
+
+  /** One axis's value over a participant's rows, or undefined when it has none to measure. */
+  const axisValue = (axis: NonNullable<ChartSpec['axes']>['x'], cell: ResultRow[]) => {
+    const narrowed = cell.filter(r => included(
+      { ...chart, filter: axis.filter, correctOnly: axis.correctOnly ?? chart.correctOnly },
+      r,
+    ));
+    if (narrowed.length === 0) return undefined;
+    // meanRt over rows that were never timed has nothing to report either.
+    if (axis.measure === 'meanRt' && !narrowed.some(r => typeof r.reaction_time_ms === 'number')) {
+      return undefined;
+    }
+    return measureOf({ ...chart, measure: axis.measure, ofResponse: axis.ofResponse }, narrowed);
+  };
+
+  const points: XYPoint[] = [];
+  for (const [group, bySeries] of buckets) {
+    for (const [series, cell] of bySeries) {
+      const x = axisValue(chart.axes.x, cell);
+      const y = axisValue(chart.axes.y, cell);
+      if (x === undefined || y === undefined) continue;
+      points.push({
+        group,
+        series: series === NO_SERIES ? '' : series,
+        x: Math.round(x * 10) / 10,
+        y: Math.round(y * 10) / 10,
+      });
+    }
+  }
+  return points;
+}
+
 /** Series names for a multi-series chart, in a stable order. */
 export function seriesNames(chart: ChartSpec, rows: ResultRow[]): string[] {
   if (!chart.seriesBy) return [];

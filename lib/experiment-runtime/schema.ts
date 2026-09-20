@@ -270,9 +270,33 @@ export interface AssetManifest {
  * a bar chart with SEM error bars computed from per-participant means, so the definition
  * only has to say what to aggregate.
  */
+/**
+ * One axis of an `xy` chart: the same measure vocabulary a chart uses, narrowed to the
+ * trials that axis is about.
+ *
+ * `filter` and `correctOnly` here are ON TOP of the chart's own, so a chart can say "correct
+ * trials only" once and each axis then name its own condition.
+ */
+export interface AxisSpec {
+  measure: 'accuracy' | 'meanRt' | 'proportion' | 'count';
+  /** Required by `measure: 'proportion'` — which response value to count. */
+  ofResponse?: string;
+  /** Only rows whose stored fields match, as on a chart. */
+  filter?: Record<string, string | number | boolean | (string | number | boolean)[]>;
+  /** Only correctly answered trials, for this axis. */
+  correctOnly?: boolean;
+  /** Axis label. */
+  label?: string;
+}
+
 export interface ChartSpec {
   title: string;
-  kind: 'bar' | 'line' | 'scatter' | 'histogram';
+  /**
+   * `xy` is a scatter positioned by TWO measures — one participant per point, placed by
+   * (say) their congruent RT against their incongruent RT, or their speed against their
+   * accuracy. Every other kind plots one value per group.
+   */
+  kind: 'bar' | 'line' | 'scatter' | 'histogram' | 'xy';
   /** What goes on the x axis — a factor name, or 'participant'. */
   groupBy: string;
   /**
@@ -323,6 +347,14 @@ export interface ChartSpec {
   description?: string;
   /** Label for the x axis. */
   xLabel?: string;
+  /**
+   * Required by `kind: 'xy'`: what each axis measures.
+   *
+   * A point is emitted only where BOTH axes have something to measure. A participant with
+   * no trials on one side is left out rather than plotted at zero — a zero here reads as a
+   * real, impossibly fast score rather than as missing data.
+   */
+  axes?: { x: AxisSpec; y: AxisSpec };
   /**
    * What the original study reported, drawn beside the class's own data.
    *

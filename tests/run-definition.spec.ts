@@ -243,11 +243,39 @@ test.describe('definition runtime — teacher dashboard', () => {
     await expect(page.getByRole('button', { name: 'Hide' }).first()).toBeVisible();
   });
 
+  // The Stroop port's dashboard is the first to use two-measure scatters, where a point is
+  // one participant placed by two different measures. Computing them right is covered by
+  // unit tests; this is that they actually draw.
+  test('the Stroop port draws its three charts, including the two-measure scatters', async ({ page }) => {
+    await asTeacher(page, 'stroop');
+    await page.getByRole('button', { name: 'Mock Data' }).click();
+    await expect(page.getByText(/[1-9]\d* participants/)).toBeVisible({ timeout: 15_000 });
+
+    await expect(page.getByText('Reaction Time by Language Group')).toBeVisible();
+    await expect(page.getByText('Individual Subject Averages')).toBeVisible();
+    await expect(page.getByText('Speed-Accuracy Tradeoff')).toBeVisible();
+
+    // Reveal them all, re-querying each time: revealing one re-renders the cards, which
+    // detaches any handles collected up front.
+    for (let i = 0; i < 5; i++) {
+      const reveal = page.getByRole('button', { name: 'Reveal' });
+      if (await reveal.count() === 0) break;
+      await reveal.first().click();
+    }
+    // Counted rather than checked for visibility: a series with no value in a group — the
+    // congruent bar for non-words — renders as a zero-height rect, which is not "visible".
+    expect(await page.locator('.recharts-bar-rectangle').count()).toBeGreaterThan(0);
+    expect(await page.locator('.recharts-scatter-symbol').count()).toBeGreaterThan(0);
+
+    // Non-words carry their own condition, so the bar chart shows it as its own series.
+    await expect(page.locator('.recharts-legend-item-text', { hasText: 'baseline' }).first()).toBeVisible();
+  });
+
   test('every built-in experiment has a dashboard that renders with mock data', async ({ page }) => {
     // Cheap breadth: a definition whose charts reference a factor that does not exist would
     // otherwise only surface when a lecturer opened it in front of a class.
     test.setTimeout(180_000);
-    for (const slug of ['stroopClassic', 'flanker', 'posnerClassic', 'boubaKiki', 'visualSearch', 'navonPrecedence', 'posnerCueing']) {
+    for (const slug of ['stroopClassic', 'flanker', 'posnerClassic', 'boubaKiki', 'visualSearch', 'navonPrecedence', 'posnerCueing', 'stroop']) {
       await asTeacher(page, slug);
       const mock = page.getByRole('button', { name: 'Mock Data' });
       if (!(await mock.isVisible().catch(() => false))) continue;

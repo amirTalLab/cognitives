@@ -290,6 +290,29 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
       && (!Array.isArray(c.groups) || !c.groups.every(g => isObj(g) && g.value !== undefined))) {
       bad(`${at}'s "groups"`, 'a list of { "value", "label" }');
     }
+    if (c.kind === 'xy') {
+      const axes = c.axes as unknown as { x?: unknown; y?: unknown } | undefined;
+      const sides: [string, Record<string, unknown> | undefined][] = [
+        ['x', axes?.x as Record<string, unknown> | undefined],
+        ['y', axes?.y as Record<string, unknown> | undefined],
+      ];
+      if (!isObj(axes) || sides.some(([, axis]) => !isObj(axis))) {
+        bad(`${at}'s "axes"`, 'an object with "x" and "y", each naming a measure');
+      } else {
+        for (const [side, axis] of sides) {
+          const a = axis as Record<string, unknown>;
+          if (!isStr(a.measure)) bad(`${at}'s "axes.${side}.measure"`, 'a measure name');
+          if (a.measure === 'proportion' && !isStr(a.ofResponse)) {
+            bad(`${at}'s "axes.${side}"`, 'an "ofResponse" — a proportion has to be of some response');
+          }
+          if (a.filter !== undefined && !isObj(a.filter)) {
+            bad(`${at}'s "axes.${side}.filter"`, 'an object of field values');
+          }
+        }
+      }
+    } else if (c.axes !== undefined) {
+      bad(`${at}'s "axes"`, `only set on an "xy" chart, not a "${String(c.kind)}" one`);
+    }
     if (c.original !== undefined) {
       const o = c.original as unknown as Record<string, unknown>;
       if (!isObj(o) || !isStr(o.source) || !isObj(o.values)) {

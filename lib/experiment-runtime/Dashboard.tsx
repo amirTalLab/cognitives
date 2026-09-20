@@ -20,8 +20,8 @@ import {
 import { verifyPassword } from '@/lib/auth';
 import type { ExperimentDefinition, ChartSpec } from './schema';
 import {
-  aggregate, generateMockRows, measureLabel, ORIGINAL_KEY, ResultRow, seriesNames, statValue,
-  unmatchedOriginals, withOriginal,
+  aggregate, aggregateXY, generateMockRows, measureLabel, ORIGINAL_KEY, ResultRow, seriesNames,
+  statValue, unmatchedOriginals, withOriginal,
 } from './aggregate';
 
 const BTN = 'px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600 transition-colors';
@@ -142,6 +142,40 @@ function ChartView({ chart, def, rows, revealed }: {
       {chart.original && (
         <p className="text-xs text-gray-600 mt-2">{originalLabel}: {chart.original.source}</p>
       )}
+      </>
+    );
+  }
+
+  // Two measures, one point per participant: speed against accuracy, or one condition
+  // against another. Its own axes, because every other kind puts a group on x.
+  if (chart.kind === 'xy') {
+    const points = aggregateXY(chart, rows);
+    const seriesList = [...new Set(points.map(p => p.series))].sort();
+    const xText = chart.axes?.x.label ?? chart.xLabel ?? '';
+    const yText = chart.axes?.y.label ?? chart.yLabel ?? '';
+    return (
+      <>
+      {note}
+      <ResponsiveContainer width="100%" height={380}>
+        <ScatterChart margin={{ top: 8, right: 24, bottom: 28, left: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis type="number" dataKey="x" stroke="#9ca3af" domain={['auto', 'auto']}
+            label={{ value: xText, position: 'insideBottom', offset: -10, fill: '#9ca3af' }} />
+          <YAxis type="number" dataKey="y" stroke="#9ca3af" domain={['auto', 'auto']}
+            label={{ value: yText, angle: -90, position: 'insideLeft', fill: '#9ca3af' }} />
+          <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151' }}
+            cursor={{ strokeDasharray: '3 3' }} />
+          <Legend verticalAlign="top" />
+          {chart.referenceLine !== undefined && (
+            <ReferenceLine y={chart.referenceLine} stroke="#6b7280" strokeDasharray="6 4" />
+          )}
+          {revealed && seriesList.map((s, i) => (
+            <Scatter key={s || 'all'} name={s || 'Participants'}
+              data={points.filter(p => p.series === s)}
+              fill={SERIES_COLORS[i % SERIES_COLORS.length]} />
+          ))}
+        </ScatterChart>
+      </ResponsiveContainer>
       </>
     );
   }
