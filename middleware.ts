@@ -97,6 +97,10 @@ export const config = {
     // the lock toggle silently does nothing — which is what happened to flankerLetterTask.
     '/run/flanker/:path*',
     '/run/lexicalDecisionPairs/:path*',
+    // Ported experiments keep their slug, so one lock covers the hand-built route and the
+    // port. Both entries stay while app/{slug}/ is still on disk and still reachable —
+    // dropping the bare one would leave the old link open to a student who still has it.
+    '/run/stroop/:path*',
     // The definition port of posnerCueing shares its slug, so the one lock covers both
     // versions — locking Posner cannot leave the /run copy open to students.
     '/run/posnerCueing/:path*',

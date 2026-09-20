@@ -525,6 +525,35 @@ test.describe('definition runtime — practice, saving and endings', () => {
     expect(saved).toHaveLength(0);
   });
 
+  // The Stroop port in a real browser. Its practice will not advance on a wrong answer, so
+  // the only way through is to read the ink colour off the screen and press that key —
+  // which is also the strongest check that the stimulus is coloured by the definition.
+  test('the Stroop port runs: practice is answered by ink colour, not by the word', async ({ page }) => {
+    const RGB_TO_KEY: Record<string, string> = {
+      'rgb(244, 63, 94)': 'r',   // #f43f5e
+      'rgb(52, 211, 153)': 'g',  // #34d399
+      'rgb(251, 191, 36)': 'y',  // #fbbf24
+    };
+
+    await open(page, '/run/stroop');
+    await page.getByRole('button', { name: 'English' }).click();
+    await page.getByPlaceholder(/שם|Name/).fill('E2E Tester');
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    for (let i = 0; i < 5; i++) {
+      const word = page.locator('div.select-none').first();
+      await expect(word).toBeVisible({ timeout: 10_000 });
+      const rgb = await word.evaluate(el => getComputedStyle(el).color);
+      const key = RGB_TO_KEY[rgb];
+      expect(key, `practice trial ${i + 1} had an unexpected ink colour: ${rgb}`).toBeTruthy();
+      await page.keyboard.press(key);
+      await page.getByRole('button', { name: 'Next', exact: true }).click();
+    }
+
+    await expect(page.getByRole('heading', { name: 'Practice complete!' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('36 trials')).toBeVisible();
+  });
+
   test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {
     const saved = await runPreview(page, speeded('e2eDiscardEarly', 'go', {
       phases: [
