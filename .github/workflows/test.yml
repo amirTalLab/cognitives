@@ -88,7 +88,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # 24, not 20 like the other jobs: these suites import the runtime's .ts modules
+          # directly and resolve them with module.registerHooks, so they need Node's type
+          # stripping. On 20 the whole job fails before a single test runs.
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
