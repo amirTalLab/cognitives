@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm run *)",
+      "PowerShell(npx tsc*)",
+      "PowerShell(npx playwright test*)",
+      "PowerShell(npx eslint*)",
+      "PowerShell(git *)",
+      "PowerShell(node scripts/*)",
+      "PowerShell(node --test *)",
+      "PowerShell(Get-NetTCPConnection*)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Select-String *)",
+      "PowerShell(Invoke-RestMethod *)",
+      "PowerShell(Invoke-WebRequest *)",
+      "Bash(npm run *)",
+      "Bash(npx tsc*)",
+      "Bash(npx playwright test*)",
+      "Bash(git *)",
+      "Bash(node scripts/*)",
+      "Bash(node --test *)",
+      "Bash(pdftotext *)",
+      "Bash(pdfinfo *)"
+    ]
+  }
+}

@@ -76,6 +76,27 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+  # The offline suites — the trials engine, the validator, the registration rules. No
+  # browser, no database, no keys, and they run in seconds. They were never wired into CI,
+  # which is how a lock-routing bug reached main green: the rule that caught it lives here,
+  # and nothing on the server was running it.
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run offline suites
+        run: npm run test:offline
+
   typecheck:
     runs-on: ubuntu-latest
     steps:
