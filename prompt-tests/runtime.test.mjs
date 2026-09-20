@@ -167,11 +167,24 @@ for (const slug of runSlugs) {
       `"${slug}" lives at /run/${slug} but has no '/run/${slug}/:path*' matcher entry — ` +
       'middleware never runs for it and locking silently fails',
     );
-    assert.ok(
-      !new RegExp(`'/${slug}/:path\\*'`).test(matcher),
-      `"${slug}" is matched as '/${slug}/:path*', a route that does not exist. ` +
-      `It should be '/run/${slug}/:path*'`,
-    );
+    // A bare '/{slug}/:path*' entry is only wrong when nothing serves that URL — the
+    // flankerLetterTask bug above. Mid-migration it is REQUIRED: the hand-built page is
+    // still on disk and still reachable, so dropping its matcher would leave the old link
+    // unlocked while the card points at the port. Both routes, one lock.
+    const handBuilt = existsSync(join(process.cwd(), 'app', slug, 'page.tsx'));
+    if (!handBuilt) {
+      assert.ok(
+        !new RegExp(`'/${slug}/:path\\*'`).test(matcher),
+        `"${slug}" is matched as '/${slug}/:path*', a route that does not exist. ` +
+        `It should be '/run/${slug}/:path*'`,
+      );
+    } else {
+      assert.ok(
+        new RegExp(`'/${slug}/:path\\*'`).test(matcher),
+        `"${slug}" is ported to /run/${slug} but app/${slug}/ still serves the old URL, ` +
+        `so '/${slug}/:path*' must stay in the matcher or that URL cannot be locked`,
+      );
+    }
   });
 }
 
@@ -488,4 +501,48 @@ test('dotted store keys are flattened for the payload', () => {
 test('storing a field that does not exist does not crash', () => {
   const def = design({ store: ['a', 'nonexistent'] });
   assert.doesNotThrow(() => payloadOf(def, buildTrials(def, {})[0]));
+});
+
+// ── F. Practice that teaches the mapping ──────────────────────────────────────
+//
+// Stroop's practice does not sample the design — it drills which colour is which key, and
+// will not move on until the answer is right. The runner implements that; these pin the
+// rules that stop it being asked for where it cannot work.
+
+test('retrying until correct is accepted on a task that has a correct answer', () => {
+  const def = design({ practice: { count: 2, feedback: true, retryUntilCorrect: true } });
+  assert.deepEqual(validate(def).filter(i => i.severity === 'error'), []);
+  assert.deepEqual(validate(def).filter(i => /retr/i.test(i.message)), []);
+});
+
+test('retrying until correct is refused where nothing is correct, since practice could never end', () => {
+  const def = design({
+    practice: { count: 2, feedback: true, retryUntilCorrect: true },
+    trial: { ...design().trial, correct: { kind: 'none' } },
+  });
+  const errors = validate(def).filter(i => i.severity === 'error');
+  assert.ok(
+    errors.some(i => /never finish/i.test(i.message)),
+    `expected an error about practice never finishing, got: ${errors.map(e => e.message).join(' | ')}`,
+  );
+});
+
+test('retrying with no feedback warns, since nothing tells the participant what was right', () => {
+  const def = design({ practice: { count: 2, feedback: false, retryUntilCorrect: true } });
+  const messages = validate(def).map(i => i.message);
+  assert.ok(
+    messages.some(m => /no clue what the right answer/i.test(m)),
+    `expected a warning about missing feedback, got: ${messages.join(' | ')}`,
+  );
+});
+
+test('a malformed retryUntilCorrect is an error, never thrown', () => {
+  for (const value of ['yes', 1, {}]) {
+    const def = design({ practice: { count: 2, feedback: true, retryUntilCorrect: value } });
+    assert.doesNotThrow(() => validate(def));
+    assert.ok(
+      validate(def).some(i => i.severity === 'error'),
+      `accepted retryUntilCorrect: ${JSON.stringify(value)}`,
+    );
+  }
 });

@@ -453,6 +453,50 @@ test.describe('definition runtime — practice, saving and endings', () => {
     }
   });
 
+  // Practice that drills the response mapping rather than sampling the design — Stroop's,
+  // where a wrong answer keeps the same trial up with the right key marked. The runner must
+  // not settle, save or advance on that answer, and must never do this in the main block.
+  test('practice can retry until correct, marking the right option and keeping the trial', async ({ page }) => {
+    const def = {
+      version: 1, slug: 'e2eRetry', title: 'Retry practice', titleHe: 'תרגול', category: 'EXECUTIVE CONTROL',
+      instructions: { en: 'Press the colour of the word.', he: 'לחצו על הצבע.' },
+      factors: [{ name: 'colour', levels: ['red'] }],
+      repetitions: 1,
+      practice: { count: 1, feedback: true, retryUntilCorrect: true, record: false },
+      trial: {
+        phases: [{ name: 'go', display: { kind: 'text', text: '{colour}' }, awaitsResponse: true, startsClock: true }],
+        response: {
+          kind: 'choice', layout: 'row',
+          options: [{ value: 'red', label: 'RED' }, { value: 'blue', label: 'BLUE' }],
+        },
+        correct: { kind: 'matchesFactor', factor: 'colour' },
+      },
+      store: ['colour'],
+      dashboard: { charts: [{ title: 'RT', kind: 'bar', groupBy: 'colour', measure: 'meanRt' }] },
+    };
+    const saved = await runPreview(page, def);
+
+    await expect(page.getByText('Practice · 1 / 1')).toBeVisible({ timeout: 10_000 });
+
+    // Wrong answer: the trial does NOT advance, and the correct option is marked.
+    await page.getByRole('button', { name: 'BLUE' }).click();
+    await expect(page.getByRole('button', { name: 'RED' })).toHaveClass(/border-emerald-400/);
+    await expect(page.getByText('Practice · 1 / 1')).toBeVisible();
+    await expect(page.getByText('red', { exact: true })).toBeVisible();
+    // Still waiting on an answer, so no feedback overlay and no Next button. Exact, because
+    // the dev server's own "Next.js Dev Tools" button otherwise matches a substring search.
+    await expect(page.getByRole('button', { name: 'Next', exact: true })).toHaveCount(0);
+
+    // The right answer settles it the usual way.
+    await page.getByRole('button', { name: 'RED' }).click();
+    await expect(page.getByText('Correct')).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Practice complete!' })).toBeVisible({ timeout: 10_000 });
+
+    // Retried practice is still practice: nothing reached the database.
+    expect(saved).toHaveLength(0);
+  });
+
   test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {
     const saved = await runPreview(page, speeded('e2eDiscardEarly', 'go', {
       phases: [

@@ -70,6 +70,10 @@ export function Runner({ definition, language, practice = false, onComplete, onS
   const answers = useRef<Record<string, string>>({});
   // Set when the first response phase ran out, so the row records no reaction time.
   const timedOut = useRef(false);
+  // The correct option, marked while practice waits for a retry. Null at every other moment,
+  // so a main-block trial can never reveal its own answer.
+  const [retryHint, setRetryHint] = useState<string | null>(null);
+
   // One row and one advance per trial, however it ends. A click landing in the same instant
   // as a timeout, or a key pressed while a feedback message is up, would otherwise record
   // the trial twice or skip the next one entirely.
@@ -119,12 +123,34 @@ export function Runner({ definition, language, practice = false, onComplete, onS
 
   const finishTrial = useCallback((early = false) => {
     if (settled.current) return;
-    settled.current = true;
 
     const given = answers.current;
     const first = steps[0];
     const primary = early ? EARLY_RESPONSE : (given[first.phase] ?? '');
     const correct = early ? false : isCorrect(definition, trial, primary);
+
+    // Practice that teaches the response mapping rather than sampling the design: a wrong
+    // answer keeps this same trial on screen with the right option marked, and the clock
+    // restarts so the time recorded is of the attempt that succeeded. Nothing is settled,
+    // saved or advanced — deliberately before `settled`, which is what ends a trial.
+    //
+    // Practice only, and never on a timeout or an early press: a main block that refused to
+    // advance would trap a participant who cannot find the answer.
+    if (
+      practice
+      && definition.practice?.retryUntilCorrect
+      && correct === false
+      && !early
+      && !timedOut.current
+    ) {
+      answers.current = {};
+      setRetryHint(correctOption(definition, trial, steps[0]));
+      clock.current = performance.now();
+      return;
+    }
+
+    settled.current = true;
+    setRetryHint(null);
     const wasTimedOut = !early && timedOut.current;
 
     const extra: Record<string, string> = {};
@@ -282,7 +308,7 @@ export function Runner({ definition, language, practice = false, onComplete, onS
         {shown && <DisplayView node={shown} values={values} />}
 
         {showResponse && step && (
-          <ResponseView step={step} values={values} rtl={rtl} onAnswer={answer} />
+          <ResponseView step={step} values={values} rtl={rtl} onAnswer={answer} highlight={retryHint} />
         )}
 
         {feedback && feedback.message && (
@@ -314,11 +340,33 @@ export function Runner({ definition, language, practice = false, onComplete, onS
 
 // ─── Responses ────────────────────────────────────────────────────────────────
 
-function ResponseView({ step, values, rtl, onAnswer }: {
+/**
+ * The option that would answer this trial correctly, or null when none does.
+ *
+ * Found by asking the definition's own rule about each option rather than re-deriving the
+ * expected value here, so a mapping rule and a matchesFactor rule are both handled by the
+ * one piece of code that already knows how they differ.
+ */
+function correctOption(
+  definition: ExperimentDefinition,
+  trial: Trial,
+  step: ResponseStep | undefined,
+): string | null {
+  if (!step || step.kind !== 'choice') return null;
+  for (const opt of step.options) {
+    const value = String(resolve(opt.value, trial.values) ?? opt.value);
+    if (isCorrect(definition, trial, value) === true) return value;
+  }
+  return null;
+}
+
+function ResponseView({ step, values, rtl, onAnswer, highlight }: {
   step: ResponseStep;
   values: Record<string, unknown>;
   rtl: boolean;
   onAnswer: (value: string) => void;
+  /** Marks the correct option while practice waits for it to be pressed. */
+  highlight?: string | null;
 }) {
   // Never row-reverse: an ancestor dir="rtl" cancels it and you get the opposite order.
   const dir = { flexDirection: 'row' as const, direction: rtl ? ('rtl' as const) : ('ltr' as const) };
@@ -341,10 +389,15 @@ function ResponseView({ step, values, rtl, onAnswer }: {
         {step.options.map((opt, i) => {
           const label = String(resolve(rtl && opt.labelHe ? opt.labelHe : opt.label, values) ?? '');
           const value = String(resolve(opt.value, values) ?? opt.value);
+          // Marked, not disabled: the participant still has to press it themselves, which is
+          // the point of practice that teaches the mapping.
+          const marked = highlight != null && highlight === value;
           return (
             <button key={i} {...press(() => onAnswer(value))}
-              className="min-w-20 min-h-20 px-6 py-4 rounded-2xl border-2 border-gray-700 hover:border-purple-400
-                         text-gray-200 text-lg transition-colors touch-manipulation">
+              className={`min-w-20 min-h-20 px-6 py-4 rounded-2xl border-2 text-gray-200 text-lg
+                         transition-colors touch-manipulation ${marked
+                           ? 'border-emerald-400 bg-emerald-400/10'
+                           : 'border-gray-700 hover:border-purple-400'}`}>
               {opt.display ? <DisplayView node={opt.display} values={values} /> : label}
               {opt.key && <span className="block text-xs text-gray-600 mt-1">{opt.key.toUpperCase()}</span>}
             </button>

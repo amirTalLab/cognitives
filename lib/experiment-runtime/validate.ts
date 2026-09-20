@@ -236,6 +236,9 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     else {
       if (!Number.isFinite(pr.count)) bad('"practice.count"', 'a number');
       if (pr.record !== undefined && typeof pr.record !== 'boolean') bad('"practice.record"', 'true or false');
+      if (pr.retryUntilCorrect !== undefined && typeof pr.retryUntilCorrect !== 'boolean') {
+        bad('"practice.retryUntilCorrect"', 'true or false');
+      }
       const from = pr.from as Record<string, unknown> | undefined;
       if (from !== undefined && (!isObj(from) || !isStr(from.factor) || !isStr(from.pool))) {
         bad('"practice.from"', 'an object with "factor" and "pool"');
@@ -387,6 +390,15 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
 
   if (def.practice && def.practice.count > total) {
     warn(`Practice is ${def.practice.count} trials but the design only has ${total}.`);
+  }
+
+  // Retrying until correct needs a notion of correct. On a preference task there is none,
+  // so the trial could never be answered "right" and practice would never end.
+  if (def.practice?.retryUntilCorrect && def.trial.correct.kind === 'none') {
+    err('Practice is set to retry until correct, but this task has no correct answer ("correct" is "none"), so practice could never finish.');
+  }
+  if (def.practice?.retryUntilCorrect && def.practice.feedback !== true) {
+    warn('Practice retries until correct but has no feedback, so a participant is given no clue what the right answer was.');
   }
 
   // ── Phases and responses ───────────────────────────────────────────────────

@@ -441,6 +441,19 @@ export interface ExperimentDefinition {
      * invalid, one catch — the way the original experiment was designed.
      */
     from?: { factor: string; pool: string };
+    /**
+     * Whether a wrong practice answer keeps the same trial on screen until it is answered
+     * correctly, rather than moving on.
+     *
+     * For experiments that use practice to TEACH the response mapping — which colour is
+     * which key — rather than to sample the design. The hand-built Stroop works this way:
+     * an error highlights the correct button and the trial waits. The clock restarts on
+     * each attempt, so the recorded time is of the successful attempt.
+     *
+     * Practice only. A main block that refused to advance would deadlock a participant who
+     * cannot find the right answer, and would bias the data toward people who can.
+     */
+    retryUntilCorrect?: boolean;
   };
 
   trial: {
