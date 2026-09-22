@@ -17,7 +17,8 @@ type Exp = { id: string; title: string; titleHe: string; icon: React.ElementType
 const EXPERIMENTS: Exp[] = [
   { id: 'summaryStats',    title: 'Ensemble Perception',     titleHe: 'תפיסת מכלול',        icon: BarChart2, color: 'text-orange-400'  },
   { id: 'CompositeFace',   title: 'Composite Face Task',     titleHe: 'משימת פנים מורכבות', icon: Users,     color: 'text-pink-400'    },
-  { id: 'wordSuperiority', title: 'Word Superiority Effect', titleHe: 'אפקט עליונות המילה', icon: Type,      color: 'text-teal-400'    },
+  // Ported. app/wordSuperiority/ still serves its own table at /wordSuperiority/teacher.
+  { id: 'wordSuperiority', title: 'Word Superiority Effect', titleHe: 'אפקט עליונות המילה', icon: Type,      color: 'text-teal-400', href: '/run/wordSuperiority' },
   { id: 'visualSearch',    title: 'Visual Search',           titleHe: 'חיפוש חזותי',        icon: Search,    color: 'text-rose-400'    },
   // Ported to the definition runtime. The hand-built pages are still on disk and still
   // serve the 46 rows in posner_results at /posnerCueing/teacher; this card points at the

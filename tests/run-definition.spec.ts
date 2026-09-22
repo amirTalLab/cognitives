@@ -275,7 +275,7 @@ test.describe('definition runtime — teacher dashboard', () => {
     // Cheap breadth: a definition whose charts reference a factor that does not exist would
     // otherwise only surface when a lecturer opened it in front of a class.
     test.setTimeout(180_000);
-    for (const slug of ['stroopClassic', 'flanker', 'posnerClassic', 'boubaKiki', 'visualSearch', 'navonPrecedence', 'posnerCueing', 'stroop']) {
+    for (const slug of ['stroopClassic', 'flanker', 'posnerClassic', 'boubaKiki', 'visualSearch', 'navonPrecedence', 'posnerCueing', 'stroop', 'wordSuperiority']) {
       await asTeacher(page, slug);
       const mock = page.getByRole('button', { name: 'Mock Data' });
       if (!(await mock.isVisible().catch(() => false))) continue;
@@ -552,6 +552,35 @@ test.describe('definition runtime — practice, saving and endings', () => {
 
     await expect(page.getByRole('heading', { name: 'Practice complete!' })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('36 trials')).toBeVisible();
+  });
+
+  // The word-superiority port: a 150ms flash, then a mask of # that must replace it, then
+  // two letters. The flash is the whole experiment — if an animation swallowed it, or the
+  // mask failed to cover it, the task would measure something else entirely.
+  test('the word superiority port flashes a string and masks it', async ({ page }) => {
+    await open(page, '/run/wordSuperiority');
+    await page.getByRole('button', { name: 'English' }).click();
+    await page.getByPlaceholder(/שם|Name/).fill('E2E Tester');
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    // The mask is one # per letter, and it is on screen long enough (500ms) to catch.
+    await expect(page.getByText(/^#{3,4}$/)).toBeVisible({ timeout: 10_000 });
+
+    // Then two single-letter buttons — the forced choice.
+    const letters = page.locator('main button').filter({ hasText: /^.$/ });
+    await expect(letters).toHaveCount(2, { timeout: 10_000 });
+
+    // Practice scores each answer, so the next trial waits behind the feedback.
+    await letters.first().click();
+    await expect(page.getByText(/Correct|Incorrect/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/Practice · 1 \/ 6/)).toBeVisible();
+
+    // On to the next one. The mask is only up for 500ms, so the stable signal that the
+    // trial advanced is the counter and the letters coming back — catching the mask a
+    // second time would just be a race with the poll interval.
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(page.getByText(/Practice · 2 \/ 6/)).toBeVisible({ timeout: 10_000 });
+    await expect(letters).toHaveCount(2, { timeout: 10_000 });
   });
 
   test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {

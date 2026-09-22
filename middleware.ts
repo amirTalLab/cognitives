@@ -101,6 +101,7 @@ export const config = {
     // port. Both entries stay while app/{slug}/ is still on disk and still reachable —
     // dropping the bare one would leave the old link open to a student who still has it.
     '/run/stroop/:path*',
+    '/run/wordSuperiority/:path*',
     // The definition port of posnerCueing shares its slug, so the one lock covers both
     // versions — locking Posner cannot leave the /run copy open to students.
     '/run/posnerCueing/:path*',

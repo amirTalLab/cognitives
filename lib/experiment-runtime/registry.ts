@@ -8,17 +8,20 @@
 import type { ExperimentDefinition } from './schema';
 import { getPreview } from './preview-store';
 import { loadDefinition } from './store';
-import { BOUBA_KIKI, VISUAL_SEARCH, WORD_SUPERIORITY } from './round-trips';
+// WORD_SUPERIORITY (round-trips) is deliberately NOT registered: the port below shares its
+// slug and supersedes it. The round-trip was an outline that simplified the design to fit;
+// the port is the hand-built experiment itself.
+import { BOUBA_KIKI, VISUAL_SEARCH } from './round-trips';
 import { FLANKER, LEXICAL_DECISION, POSNER, STROOP, SIGNAL_DETECTION, DELAY_DISCOUNTING, SEMANTIC_PRIMING, FACE_INVERSION } from './generality-probe';
 import { NAVON, NUMBER_COMPARISON, MENTAL_ROTATION } from './templates';
-import { POSNER_CUEING, STROOP_PORT } from './ports';
+import { POSNER_CUEING, STROOP_PORT, WORD_SUPERIORITY_PORT } from './ports';
 
 const BUILT_IN: ExperimentDefinition[] = [
-  BOUBA_KIKI, WORD_SUPERIORITY, VISUAL_SEARCH,
+  BOUBA_KIKI, VISUAL_SEARCH,
   STROOP, FLANKER, POSNER, LEXICAL_DECISION,
   SEMANTIC_PRIMING, DELAY_DISCOUNTING, FACE_INVERSION, SIGNAL_DETECTION,
   NAVON, NUMBER_COMPARISON, MENTAL_ROTATION,
-  POSNER_CUEING, STROOP_PORT,
+  POSNER_CUEING, STROOP_PORT, WORD_SUPERIORITY_PORT,
 ];
 
 /**
