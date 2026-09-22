@@ -204,6 +204,43 @@ export type ResponseSpec =
 export type ResponseStep = ResponseSpec & { phase: string };
 
 /**
+ * A later block of an experiment: its own trials, phases, responses and stored fields.
+ *
+ * Several of the hand-built experiments are not one block but a sequence of them — DRM
+ * studies a list and then asks for free recall, serial order puts a distractor task
+ * between the two, SRT follows its main task with a generation test. Each block asks a
+ * different question and stores different fields, so a block is a whole design rather than
+ * a phase.
+ *
+ * The definition's own design is the FIRST block; `stages` are the ones after it. That
+ * keeps a single-block experiment exactly as it was.
+ */
+export interface Stage {
+  /** Stored on every row of this block, so a chart can say which block it is about. */
+  name: string;
+  /** Shown on a short screen before the block starts. Skipped when absent. */
+  title?: { en: string; he: string };
+  instructions?: { en: string; he: string };
+
+  pools?: Record<string, PoolItem[]>;
+  factors: Factor[];
+  exclude?: Record<string, string | number | boolean>[];
+  repetitions: number;
+  practice?: ExperimentDefinition['practice'];
+  trial: ExperimentDefinition['trial'];
+  store: string[];
+}
+
+/**
+ * Everything needed to build and run one block of trials.
+ *
+ * Both a definition and a stage satisfy this, which is what lets the trial builder, the
+ * scorer and the runner work on either without knowing which they have.
+ */
+export type TrialDesign =
+  Pick<Stage, 'pools' | 'factors' | 'exclude' | 'repetitions' | 'practice' | 'trial' | 'store'>;
+
+/**
  * A response whose options depend on the trial.
  *
  * `by` is a factor path — "item.responseSet" — and its value names which entry of `sets`
@@ -577,6 +614,20 @@ export interface ExperimentDefinition {
    * table or migration is ever needed.
    */
   store: string[];
+
+  /**
+   * Names the first block. Defaults to "main", and only matters once there is more than
+   * one — DRM's first block is "study", not "main".
+   */
+  stageName?: string;
+
+  /**
+   * Blocks that run AFTER the design above, in order.
+   *
+   * The design above is the first block and these follow it, so an experiment without them
+   * runs exactly as it always did — which is why the design fields stay required.
+   */
+  stages?: Stage[];
 
   /**
    * What "correct" means when the task has no right answer.

@@ -536,6 +536,57 @@ test('retrying with no feedback warns, since nothing tells the participant what 
   );
 });
 
+// ── G. Experiments made of several blocks ─────────────────────────────────────
+//
+// DRM studies a list then asks for recall; serial order puts a distractor between them;
+// SRT follows its main task with a generation test. The definition's own design is the
+// first block and `stages` are the ones after it.
+
+const stage = (over = {}) => ({
+  name: 'recall',
+  factors: [{ name: 'probe', levels: ['a', 'b'] }],
+  repetitions: 1,
+  trial: {
+    phases: [{ name: 'ask', display: { kind: 'text', text: '{probe}' }, awaitsResponse: true }],
+    response: { kind: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+    correct: { kind: 'none' },
+  },
+  store: ['probe'],
+  ...over,
+});
+
+test('a second block is accepted, and builds its own trials', () => {
+  const def = design({ stageName: 'study', stages: [stage()] });
+  assert.deepEqual(validate(def).filter(i => i.severity === 'error'), []);
+
+  // The stage is a design in its own right: the trial builder needs nothing else.
+  const trials = buildTrials(stage(), {});
+  assert.equal(trials.length, 2);
+  assert.deepEqual([...new Set(trials.map(t => t.values.probe))].sort(), ['a', 'b']);
+});
+
+test('two blocks with the same name are refused, since their rows could not be told apart', () => {
+  const def = design({ stageName: 'study', stages: [stage({ name: 'study' })] });
+  const errors = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(errors.some(m => /Two blocks are called "study"/.test(m)), errors.join(' | '));
+});
+
+test('a block missing its design is an error, never thrown', () => {
+  for (const broken of [{ factors: undefined }, { trial: undefined }, { store: undefined }, { name: undefined }]) {
+    const def = design({ stages: [stage(broken)] });
+    assert.doesNotThrow(() => validate(def));
+    assert.ok(
+      validate(def).some(i => i.severity === 'error'),
+      `accepted a block with ${Object.keys(broken)[0]} missing`,
+    );
+  }
+});
+
+test('naming the first block when there is only one says so', () => {
+  const messages = validate(design({ stageName: 'study' })).map(i => i.message);
+  assert.ok(messages.some(m => /only one, so nothing reads it/.test(m)), messages.join(' | '));
+});
+
 test('a malformed retryUntilCorrect is an error, never thrown', () => {
   for (const value of ['yes', 1, {}]) {
     const def = design({ practice: { count: 2, feedback: true, retryUntilCorrect: value } });

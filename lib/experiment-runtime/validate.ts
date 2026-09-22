@@ -286,6 +286,47 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     bad('"trial.correct"', 'an object with a "kind"');
   }
 
+  // Later blocks — DRM's recall, serial order's distractor. Each is a design in its own
+  // right, so the essentials are checked here and the trials themselves are built by the
+  // corpus tests, which is what catches a factor that refers to a pool it does not have.
+  if (def.stages !== undefined) {
+    if (!Array.isArray(def.stages) || def.stages.length === 0) {
+      bad('"stages"', 'a non-empty list of blocks, or nothing at all');
+    } else {
+      const seen = new Set<string>([def.stageName ?? 'main']);
+      def.stages.forEach((s, i) => {
+        const stage = s as unknown as Record<string, unknown>;
+        if (!isObj(stage)) return bad(`Stage #${i + 1}`, 'an object');
+        const at = `Stage ${isStr(stage.name) ? `"${stage.name}"` : `#${i + 1}`}`;
+        if (!isStr(stage.name)) bad(`${at}'s "name"`, 'a name, stored on every row of the block');
+        else if (seen.has(stage.name)) {
+          err(`Two blocks are called "${stage.name}", so their rows could not be told apart.`);
+        } else seen.add(stage.name);
+
+        if (!Array.isArray(stage.factors)) bad(`${at}'s "factors"`, 'a list of factors');
+        if (!Number.isFinite(stage.repetitions)) bad(`${at}'s "repetitions"`, 'a number');
+        if (!isObj(stage.trial)) bad(`${at}'s "trial"`, 'an object with phases and a response');
+        else {
+          const trial = stage.trial as Record<string, unknown>;
+          if (!Array.isArray(trial.phases) || trial.phases.length === 0) {
+            bad(`${at}'s "trial.phases"`, 'at least one phase');
+          }
+          if (trial.response === undefined) bad(`${at}'s "trial.response"`, 'a response');
+          if (!isObj(trial.correct) || !isStr((trial.correct as Record<string, unknown>).kind)) {
+            bad(`${at}'s "trial.correct"`, 'an object with a "kind"');
+          }
+        }
+        if (!Array.isArray(stage.store)) bad(`${at}'s "store"`, 'a list of fields to save');
+      });
+    }
+  }
+  if (def.stageName !== undefined && !isStr(def.stageName)) {
+    bad('"stageName"', 'a name for the first block');
+  }
+  if (def.stageName !== undefined && !def.stages?.length) {
+    warn('"stageName" names the first block, but this experiment has only one, so nothing reads it.');
+  }
+
   def.dashboard.charts.forEach((c, i) => {
     if (!isObj(c)) return bad(`Chart #${i + 1}`, 'an object');
     const at = `Chart ${label(i, c.title)}`;

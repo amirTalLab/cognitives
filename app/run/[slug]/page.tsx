@@ -15,7 +15,12 @@ import { getDefinition } from '@/lib/experiment-runtime/registry';
 import { Runner, TrialRow } from '@/lib/experiment-runtime/Runner';
 import { buildTrials } from '@/lib/experiment-runtime/trials';
 
-type Stage = 'loading' | 'missing' | 'landing' | 'practice' | 'practiceDone' | 'main' | 'thanks';
+// 'main' is the definition's own design — the first block. 'stageIntro' and 'stageRun'
+// walk whatever `stages` lists after it: DRM's recall, serial order's distractor, SRT's
+// generation test.
+type Stage =
+  | 'loading' | 'missing' | 'landing' | 'practice' | 'practiceDone' | 'main'
+  | 'stageIntro' | 'stageRun' | 'thanks';
 
 export default function RunPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -26,6 +31,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   const [language, setLanguage] = useState<'he' | 'en'>('he');
   const [name, setName] = useState('');
   const [rows, setRows] = useState<TrialRow[]>([]);
+  // Which of `def.stages` is next. The definition's own design is the block before them.
+  const [stageIdx, setStageIdx] = useState(0);
 
   // For the practice-complete screen. Counted from the design, since the main block's runner
   // has not been built yet when that screen is up.
@@ -132,10 +139,59 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
     );
   }
 
+  /** After a block: on to the next stage if there is one, otherwise the thank-you screen. */
+  const afterBlock = (completed: TrialRow[], nextIdx: number) => {
+    setRows(previous => [...previous, ...completed]);
+    if (def.stages && nextIdx <= def.stages.length) {
+      setStageIdx(nextIdx);
+      setStage('stageIntro');
+    } else {
+      setStage('thanks');
+    }
+  };
+
   if (stage === 'main') {
     return (
       <Runner key="main" definition={def} language={language}
-        onComplete={completed => { setRows(completed); setStage('thanks'); }} />
+        // Named only when there is more than one block, so a single-block experiment's
+        // rows keep exactly the payload they had before stages existed.
+        stage={def.stages?.length ? (def.stageName ?? 'main') : undefined}
+        onComplete={completed => afterBlock(completed, 1)} />
+    );
+  }
+
+  // Between blocks: what is about to happen, and a button to start it when ready.
+  if (stage === 'stageIntro') {
+    const next = def.stages?.[stageIdx - 1];
+    if (!next) return null;
+    return (
+      <main style={{ height: '100dvh' }} className="bg-[#0f172a] flex flex-col items-center justify-center gap-8 px-6">
+        <div className="text-center max-w-xl" dir={rtl ? 'rtl' : 'ltr'}>
+          <Check className="w-10 h-10 text-purple-400 mx-auto mb-4" />
+          {next.title && (
+            <h2 className="text-3xl font-bold text-gray-100 mb-3">{rtl ? next.title.he : next.title.en}</h2>
+          )}
+          {next.instructions && (
+            <p className="text-gray-300 leading-relaxed whitespace-pre-line">
+              {rtl ? next.instructions.he : next.instructions.en}
+            </p>
+          )}
+        </div>
+        <button onClick={() => setStage('stageRun')}
+          className="px-10 py-4 bg-purple-500 hover:bg-purple-400 text-white font-bold text-xl rounded-xl touch-manipulation">
+          {rtl ? 'המשך' : 'Continue'}
+        </button>
+      </main>
+    );
+  }
+
+  if (stage === 'stageRun') {
+    const current = def.stages?.[stageIdx - 1];
+    if (!current) return null;
+    return (
+      <Runner key={`stage-${current.name}`} definition={def} design={current} stage={current.name}
+        language={language}
+        onComplete={completed => afterBlock(completed, stageIdx + 1)} />
     );
   }
 

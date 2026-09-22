@@ -6,7 +6,7 @@
 
 // Type-only import: see the note in validate.ts — scripts/definition.mjs loads this
 // module directly under Node's type stripping.
-import type { Bound, ExperimentDefinition, Factor, PoolItem } from './schema';
+import type { Bound, ExperimentDefinition, Factor, PoolItem, TrialDesign } from './schema';
 
 /** One trial: the factor values chosen for it, plus its place in the run. */
 export interface Trial {
@@ -134,7 +134,7 @@ export function excluded(row: Record<string, unknown>, patterns: Record<string, 
  * alternating it keeps the count right while still balancing it.
  */
 export function buildTrials(
-  def: ExperimentDefinition,
+  def: TrialDesign,
   opts: { practice?: boolean; rng?: () => number } = {},
 ): Trial[] {
   const rng = opts.rng ?? Math.random;
@@ -235,7 +235,7 @@ export interface Outcome {
  * rather than the generic "incorrect" when the definition gives it that message.
  */
 export function feedbackMessage(
-  def: ExperimentDefinition,
+  def: TrialDesign,
   outcome: Outcome,
   practice: boolean,
 ): { en: string; he: string } | null {
@@ -278,7 +278,7 @@ export function phaseDuration(
  * Null is a real answer, not a missing one: preference tasks like bouba-kiki measure which
  * way people go, and scoring them would be meaningless.
  */
-export function isCorrect(def: ExperimentDefinition, trial: Trial, response: string): boolean | null {
+export function isCorrect(def: TrialDesign, trial: Trial, response: string): boolean | null {
   const rule = def.trial.correct;
   if (rule.kind === 'none') return null;
 
@@ -291,7 +291,7 @@ export function isCorrect(def: ExperimentDefinition, trial: Trial, response: str
 }
 
 /** The payload written alongside the fixed spine, from the definition's `store` list. */
-export function payloadOf(def: ExperimentDefinition, trial: Trial): Record<string, unknown> {
+export function payloadOf(def: TrialDesign, trial: Trial): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const key of def.store) {
     // Dotted keys are flattened, so `item.target` is stored as `item_target` — JSONB reads

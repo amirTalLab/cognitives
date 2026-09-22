@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import type { ExperimentDefinition, ResponseSpec, ResponseStep } from './schema';
+import type { ExperimentDefinition, ResponseSpec, ResponseStep, TrialDesign } from './schema';
 import {
   buildTrials, EARLY_RESPONSE, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf, phaseDuration, resolve, Trial,
 } from './trials';
@@ -34,7 +34,15 @@ export interface TrialRow {
 }
 
 interface RunnerProps {
+  /** Where the slug, assets and published revision come from — never the trials. */
   definition: ExperimentDefinition;
+  /**
+   * The block to run. Defaults to the definition's own design, which is the first block.
+   * A later stage passes its own, so one runner covers study, distractor and recall alike.
+   */
+  design?: TrialDesign;
+  /** Stored on every row, so a chart can tell the blocks apart. Omitted when there is one. */
+  stage?: string;
   language: 'he' | 'en';
   practice?: boolean;
   onComplete: (rows: TrialRow[]) => void;
@@ -49,7 +57,7 @@ interface RunnerProps {
  * factor. The last is why this takes the trial — bouba-kiki's control trials offer two
  * words where its main trials offer two shapes.
  */
-function responseSteps(def: ExperimentDefinition, trial?: Trial): ResponseStep[] {
+function responseSteps(def: TrialDesign, trial?: Trial): ResponseStep[] {
   let spec = def.trial.response;
 
   if (!Array.isArray(spec) && 'sets' in spec) {
@@ -71,8 +79,12 @@ function keyName(e: KeyboardEvent): string {
 
 type Feedback = { correct: boolean | null; message?: { en: string; he: string } };
 
-export function Runner({ definition, language, practice = false, onComplete, onSaveFailure }: RunnerProps) {
-  const [trials] = useState<Trial[]>(() => buildTrials(definition, { practice }));
+export function Runner({
+  definition, design: stageDesign, stage, language, practice = false, onComplete, onSaveFailure,
+}: RunnerProps) {
+  // One block: the definition's own design unless a stage supplies its own.
+  const design: TrialDesign = stageDesign ?? definition;
+  const [trials] = useState<Trial[]>(() => buildTrials(design, { practice }));
   const [trialIdx, setTrialIdx] = useState(0);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [feedback, setFeedback] = useState<null | Feedback>(null);
@@ -100,17 +112,17 @@ export function Runner({ definition, language, practice = false, onComplete, onS
   const values = trial
     ? { ...trial.values, [SEED_KEY]: trial.seed, [ASSET_BASE_KEY]: definition.assets?.base ?? '' }
     : {};
-  const phases = definition.trial.phases;
+  const phases = design.trial.phases;
   const phase = phases[phaseIdx];
   // Recomputed per trial: a definition may offer a different set of options on different
   // trials, so this cannot be hoisted out of the trial loop.
-  const steps = responseSteps(definition, trial);
+  const steps = responseSteps(design, trial);
   const rtl = language === 'he';
 
   // The stretch before the response phase in which the response controls are already shown,
   // when the definition asks for one. A press in it is an anticipation.
-  const earlyIdx = definition.trial.earlyFrom
-    ? phases.findIndex(p => p.name === definition.trial.earlyFrom)
+  const earlyIdx = design.trial.earlyFrom
+    ? phases.findIndex(p => p.name === design.trial.earlyFrom)
     : -1;
   const firstResponseIdx = phases.findIndex(p => p.name === steps[0]?.phase);
   const inEarlyWindow = earlyIdx >= 0 && phaseIdx >= earlyIdx && phaseIdx < firstResponseIdx;
@@ -134,8 +146,8 @@ export function Runner({ definition, language, practice = false, onComplete, onS
       setIti(false);
       settled.current = false;
       advancing.current = false;
-    }, definition.trial.itiMs ?? 300);
-  }, [trialIdx, trials.length, onComplete, definition.trial.itiMs]);
+    }, design.trial.itiMs ?? 300);
+  }, [trialIdx, trials.length, onComplete, design.trial.itiMs]);
 
   const finishTrial = useCallback((early = false) => {
     if (settled.current) return;
@@ -143,7 +155,7 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     const given = answers.current;
     const first = steps[0];
     const primary = early ? EARLY_RESPONSE : (given[first.phase] ?? '');
-    const correct = early ? false : isCorrect(definition, trial, primary);
+    const correct = early ? false : isCorrect(design, trial, primary);
 
     // Practice that teaches the response mapping rather than sampling the design: a wrong
     // answer keeps this same trial on screen with the right option marked, and the clock
@@ -154,13 +166,13 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     // advance would trap a participant who cannot find the answer.
     if (
       practice
-      && definition.practice?.retryUntilCorrect
+      && design.practice?.retryUntilCorrect
       && correct === false
       && !early
       && !timedOut.current
     ) {
       answers.current = {};
-      setRetryHint(correctOption(definition, trial, steps[0]));
+      setRetryHint(correctOption(design, trial, steps[0]));
       clock.current = performance.now();
       return;
     }
@@ -179,11 +191,13 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     // No reaction time when nothing was timed: a timeout has none, and a press during the
     // cue measured from a clock that has not started yet would be a negative or stale number.
     const rt = early || wasTimedOut ? null : Math.round(performance.now() - clock.current);
-    const payload = payloadOf(definition, trial);
+    // The stage name travels with every row, so one results table can hold a study block
+    // and a recall block and a chart can still ask about one of them.
+    const payload = { ...payloadOf(design, trial), ...(stage ? { stage } : {}) };
 
     // An early press the definition does not record is not a trial at all: it shows "too
     // early" and moves on, keeping nothing — as the hand-built experiments do.
-    const kept = !(early && definition.trial.recordEarly === false);
+    const kept = !(early && design.trial.recordEarly === false);
     if (kept) {
       rows.current.push({
         trial_index: trial.index,
@@ -200,7 +214,7 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     // tab halfway still contributes the trials they finished. Practice is written too,
     // flagged, because a dropout pattern during practice is worth being able to see —
     // unless the definition says practice is not recorded.
-    if (kept && !(practice && definition.practice?.record === false)) {
+    if (kept && !(practice && design.practice?.record === false)) {
       void saveTrial({
         slug: definition.slug,
         sessionId: sessionStorage.getItem(`${definition.slug}_session_id`) ?? 'unknown',
@@ -222,20 +236,20 @@ export function Runner({ definition, language, practice = false, onComplete, onS
 
     // Per-outcome messages, when the definition has them. They time out by themselves, so a
     // speeded task keeps its pace instead of waiting on a Next button after every miss.
-    if (definition.trial.feedback) {
-      const message = feedbackMessage(definition, { correct, timedOut: wasTimedOut, early }, practice);
+    if (design.trial.feedback) {
+      const message = feedbackMessage(design, { correct, timedOut: wasTimedOut, early }, practice);
       if (message) { setFeedback({ correct, message }); return; }
       advance();
       return;
     }
 
-    const showFeedback = practice && definition.practice?.feedback && correct !== null;
+    const showFeedback = practice && design.practice?.feedback && correct !== null;
     if (showFeedback) {
       setFeedback({ correct });
       return;
     }
     advance();
-  }, [definition, trial, practice, steps, advance, onSaveFailure]);
+  }, [definition, design, stage, trial, practice, steps, advance, onSaveFailure]);
 
   // Timed phases advance themselves; response phases wait for input. Idle during the ITI so
   // the old trial's phases do not keep running while the screen is blank.
@@ -269,9 +283,9 @@ export function Runner({ definition, language, practice = false, onComplete, onS
   // Messages from `trial.feedback` clear themselves.
   useEffect(() => {
     if (!feedback?.message) return;
-    const timer = setTimeout(advance, definition.trial.feedback?.durationMs ?? 800);
+    const timer = setTimeout(advance, design.trial.feedback?.durationMs ?? 800);
     return () => clearTimeout(timer);
-  }, [feedback, advance, definition.trial.feedback]);
+  }, [feedback, advance, design.trial.feedback]);
 
   function answer(value: string) {
     if (inEarlyWindow) { finishTrial(true); return; }
@@ -307,8 +321,8 @@ export function Runner({ definition, language, practice = false, onComplete, onS
   // Between trials: blank, or whatever the definition keeps up. Under a feedback message:
   // the feedback display when there is one, so a stimulus need not linger behind "Missed".
   const shown = iti
-    ? definition.trial.itiDisplay
-    : (feedback?.message && definition.trial.feedback?.display) || phase.display;
+    ? design.trial.itiDisplay
+    : (feedback?.message && design.trial.feedback?.display) || phase.display;
 
   return (
     <main style={{ height: '100dvh' }} className="bg-[#0f172a] flex flex-col">
@@ -364,14 +378,14 @@ export function Runner({ definition, language, practice = false, onComplete, onS
  * one piece of code that already knows how they differ.
  */
 function correctOption(
-  definition: ExperimentDefinition,
+  design: TrialDesign,
   trial: Trial,
   step: ResponseStep | undefined,
 ): string | null {
   if (!step || step.kind !== 'choice') return null;
   for (const opt of step.options) {
     const value = String(resolve(opt.value, trial.values) ?? opt.value);
-    if (isCorrect(definition, trial, value) === true) return value;
+    if (isCorrect(design, trial, value) === true) return value;
   }
   return null;
 }

@@ -611,6 +611,71 @@ test.describe('definition runtime — practice, saving and endings', () => {
     expect(sawWords, 'never saw a control trial offering BOUBA / KIKI').toBe(true);
   });
 
+  // Several hand-built experiments are not one block but a sequence of them: DRM studies a
+  // list then asks for recall, serial order puts a distractor between, SRT follows its main
+  // task with a generation test. Each block asks a different question and stores different
+  // fields, so this walks a two-block definition end to end and checks the rows can be told
+  // apart afterwards.
+  test('an experiment can run several blocks, and each row says which it came from', async ({ page }) => {
+    const def = {
+      version: 1, slug: 'e2eStages', title: 'Two blocks', titleHe: 'שני שלבים', category: 'MEMORY',
+      instructions: { en: 'Remember the word.', he: 'זכרו את המילה.' },
+      stageName: 'study',
+      factors: [{ name: 'word', levels: ['APPLE'] }],
+      repetitions: 1,
+      trial: {
+        phases: [{ name: 'show', display: { kind: 'text', text: '{word}' }, awaitsResponse: true, startsClock: true }],
+        response: { kind: 'choice', options: [{ value: 'seen', label: 'Seen it' }] },
+        correct: { kind: 'none' },
+      },
+      store: ['word'],
+      stages: [{
+        name: 'recall',
+        title: { en: 'Recall', he: 'היזכרות' },
+        instructions: { en: 'Now say whether you saw it.', he: 'עכשיו אמרו אם ראיתם.' },
+        factors: [{ name: 'probe', levels: ['APPLE'] }],
+        repetitions: 1,
+        trial: {
+          phases: [{ name: 'ask', display: { kind: 'text', text: 'Saw {probe}?' }, awaitsResponse: true, startsClock: true }],
+          response: { kind: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+          correct: { kind: 'none' },
+        },
+        store: ['probe'],
+      }],
+      dashboard: { charts: [{ title: 'Trials per block', kind: 'bar', groupBy: 'stage', measure: 'count' }] },
+    };
+
+    const saved = await runPreview(page, def);
+
+    // Block one: the study word, and its own single button.
+    await expect(page.getByText('APPLE')).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Seen it' }).click();
+
+    // Between blocks: what is coming, and a button to start it.
+    await expect(page.getByRole('heading', { name: 'Recall' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Now say whether you saw it.')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Block two asks a different question, with different options.
+    await expect(page.getByText('Saw APPLE?')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: 'Yes' })).toBeVisible();
+    await page.getByRole('button', { name: 'Yes' }).click();
+
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+
+    if (await rowsSent(saved, 2)) {
+      const byStage = Object.fromEntries(saved.map(r => [
+        (r.payload as Record<string, unknown>).stage,
+        (r.payload as Record<string, unknown>),
+      ]));
+      expect(Object.keys(byStage).sort()).toEqual(['recall', 'study']);
+      // Each block stored its own fields, not the other's.
+      expect(byStage.study).toMatchObject({ word: 'APPLE' });
+      expect(byStage.recall).toMatchObject({ probe: 'APPLE' });
+      expect(saved.map(r => r.response).sort()).toEqual(['seen', 'yes']);
+    }
+  });
+
   test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {
     const saved = await runPreview(page, speeded('e2eDiscardEarly', 'go', {
       phases: [
