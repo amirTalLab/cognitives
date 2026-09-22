@@ -42,9 +42,23 @@ interface RunnerProps {
   onSaveFailure?: () => void;
 }
 
-/** Normalises the one-response and many-responses forms into a single list. */
-function responseSteps(def: ExperimentDefinition): ResponseStep[] {
-  const spec = def.trial.response;
+/**
+ * Normalises every response form into a single list for this trial.
+ *
+ * Three forms: one response, several bound to named phases, or a set chosen per trial by a
+ * factor. The last is why this takes the trial — bouba-kiki's control trials offer two
+ * words where its main trials offer two shapes.
+ */
+function responseSteps(def: ExperimentDefinition, trial?: Trial): ResponseStep[] {
+  let spec = def.trial.response;
+
+  if (!Array.isArray(spec) && 'sets' in spec) {
+    const chosen = String(resolve(`{${spec.by}}`, trial?.values ?? {}) ?? '');
+    // Falling back to the first set keeps a mislabelled trial running rather than leaving a
+    // participant with no buttons at all; the validator names the mismatch up front.
+    spec = spec.sets[chosen] ?? Object.values(spec.sets)[0];
+  }
+
   if (Array.isArray(spec)) return spec;
   const phase = def.trial.phases.find(p => p.awaitsResponse)?.name ?? 'response';
   return [{ ...(spec as ResponseSpec), phase }];
@@ -88,7 +102,9 @@ export function Runner({ definition, language, practice = false, onComplete, onS
     : {};
   const phases = definition.trial.phases;
   const phase = phases[phaseIdx];
-  const steps = responseSteps(definition);
+  // Recomputed per trial: a definition may offer a different set of options on different
+  // trials, so this cannot be hoisted out of the trial loop.
+  const steps = responseSteps(definition, trial);
   const rtl = language === 'he';
 
   // The stretch before the response phase in which the response controls are already shown,

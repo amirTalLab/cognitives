@@ -162,6 +162,22 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
     case 'shape':
       return <ShapeView node={node} values={values} />;
 
+    case 'svgPath': {
+      const size = Number(resolve(node.size, values) ?? 200);
+      const d = String(resolve(node.d, values) ?? '');
+      // Only the path data is used. Nothing here is markup, so a definition — which may
+      // have come from the /create page — cannot put anything of its own into the page.
+      // Light by default: these sit on the runtime's dark surface, where the original's
+      // near-black fill on a white card would be invisible.
+      const fill = color(resolve(node.color, values) as string | undefined) || '#e5e7eb';
+      return (
+        <svg width={size} height={size} viewBox={node.viewBox ?? '0 0 200 200'}
+          xmlns="http://www.w3.org/2000/svg" aria-hidden>
+          <path d={d} fill={fill} />
+        </svg>
+      );
+    }
+
     case 'image': {
       const size = Number(resolve(node.size, values) ?? 180);
       const rotation = Number(resolve(node.rotation, values) ?? 0);

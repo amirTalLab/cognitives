@@ -97,6 +97,15 @@ export type Display =
   | { kind: 'mask'; pattern?: string }
   /** Two shapes side by side — bouba/kiki, composite faces, same/different judgements. */
   | { kind: 'pair'; left: Display; right: Display; gap?: number }
+  /**
+   * A shape given as an SVG path.
+   *
+   * `shape` covers the primitives a design usually wants; this is for a stimulus that IS a
+   * particular outline — bouba-kiki, where the shapes are the experiment and an
+   * approximation would be a different study. Only the path data is taken, never markup,
+   * so a definition still cannot inject anything into the page.
+   */
+  | { kind: 'svgPath'; d: Bound<string>; viewBox?: string; size?: Bound<number>; color?: Bound<string> }
   /** An SVG primitive. Self-contained, so no image assets need sourcing. */
   | { kind: 'shape'; shape: Bound<'blob' | 'star' | 'circle' | 'square' | 'arrow' | 'line'>; size?: Bound<number>; color?: Bound<string>; rotation?: Bound<number>; points?: Bound<number> }
   /**
@@ -193,6 +202,19 @@ export type ResponseSpec =
  * a single-response trial is just the one-element case.
  */
 export type ResponseStep = ResponseSpec & { phase: string };
+
+/**
+ * A response whose options depend on the trial.
+ *
+ * `by` is a factor path — "item.responseSet" — and its value names which entry of `sets`
+ * that trial uses. Every value the factor can take needs an entry; a trial naming one that
+ * does not exist falls back to the first, which the validator reports rather than allowing
+ * silently.
+ */
+export interface ResponseSets {
+  by: string;
+  sets: Record<string, ResponseSpec | ResponseStep[]>;
+}
 
 /**
  * What counts as correct.
@@ -490,8 +512,15 @@ export interface ExperimentDefinition {
 
   trial: {
     phases: Phase[];
-    /** One response, or several bound to named phases. */
-    response: ResponseSpec | ResponseStep[];
+    /**
+     * One response, several bound to named phases, or a set chosen per trial.
+     *
+     * The last form is for an experiment whose block mixes two kinds of question. Bouba-kiki
+     * is the case: most trials show a word and two SHAPES to choose between, while its
+     * control trials show one shape and two WORDS. The options differ in kind, not just in
+     * value, so binding them to a factor is not enough — the whole set has to swap.
+     */
+    response: ResponseSpec | ResponseStep[] | ResponseSets;
     correct: CorrectRule;
     /** Inter-trial interval. */
     itiMs?: number;

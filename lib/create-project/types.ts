@@ -169,7 +169,14 @@ export function specFromDefinition(def: ExperimentDefinition): Spec {
     .map(f => `${f.name}: ${f.levels ? f.levels.join(', ') : f.from ? `from ${f.from}` : 'derived'}`)
     .join('; ');
 
-  const responses = Array.isArray(def.trial.response) ? def.trial.response : [def.trial.response];
+  // Three forms: one response, several bound to phases, or a set chosen per trial. The
+  // last is flattened so the summary names every kind of question the block can ask.
+  const responseSpec = def.trial.response;
+  const responses = Array.isArray(responseSpec)
+    ? responseSpec
+    : 'sets' in responseSpec
+      ? Object.values(responseSpec.sets).flatMap(s => (Array.isArray(s) ? s : [s]))
+      : [responseSpec];
 
   const spec = blankSpec();
   const set = (key: string, value: string) => {

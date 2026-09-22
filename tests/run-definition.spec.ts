@@ -275,7 +275,7 @@ test.describe('definition runtime — teacher dashboard', () => {
     // Cheap breadth: a definition whose charts reference a factor that does not exist would
     // otherwise only surface when a lecturer opened it in front of a class.
     test.setTimeout(180_000);
-    for (const slug of ['stroopClassic', 'flanker', 'posnerClassic', 'boubaKiki', 'visualSearch', 'navonPrecedence', 'posnerCueing', 'stroop', 'wordSuperiority']) {
+    for (const slug of ['stroopClassic', 'flanker', 'posnerClassic', 'boubaKiki', 'visualSearch', 'navonPrecedence', 'posnerCueing', 'stroop', 'wordSuperiority', 'bouba-kiki']) {
       await asTeacher(page, slug);
       const mock = page.getByRole('button', { name: 'Mock Data' });
       if (!(await mock.isVisible().catch(() => false))) continue;
@@ -581,6 +581,34 @@ test.describe('definition runtime — practice, saving and endings', () => {
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await expect(page.getByText(/Practice · 2 \/ 6/)).toBeVisible({ timeout: 10_000 });
     await expect(letters).toHaveCount(2, { timeout: 10_000 });
+  });
+
+  // Bouba-kiki mixes two kinds of trial in one block: most offer two SHAPES to choose
+  // between, its control trials two WORDS. The options differ in kind, not just in value,
+  // so this is the check that a definition can swap the whole set per trial.
+  test('bouba-kiki offers shapes on a main trial and words on a control trial', async ({ page }) => {
+    await open(page, '/run/bouba-kiki');
+    await page.getByRole('button', { name: 'English' }).click();
+    await page.getByPlaceholder(/שם|Name/).fill('E2E Tester');
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    let sawShapes = false;
+    let sawWords = false;
+
+    // 16 trials, shuffled, four of which are control trials — both kinds turn up well
+    // inside a full pass.
+    for (let i = 0; i < 16 && !(sawShapes && sawWords); i++) {
+      const options = page.locator('main button');
+      await expect(options).toHaveCount(2, { timeout: 10_000 });
+
+      if (await page.getByRole('button', { name: /^(BOUBA|KIKI)$/ }).count() === 2) sawWords = true;
+      else if (await page.locator('main button svg path').count() === 2) sawShapes = true;
+
+      await options.first().click();
+    }
+
+    expect(sawShapes, 'never saw a main trial offering two shapes').toBe(true);
+    expect(sawWords, 'never saw a control trial offering BOUBA / KIKI').toBe(true);
   });
 
   test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {

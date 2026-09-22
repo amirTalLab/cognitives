@@ -263,8 +263,20 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     });
   }
 
-  const responseShapes: unknown[] =
-    Array.isArray(def.trial.response) ? def.trial.response : [def.trial.response];
+  // Three forms, and the per-trial one carries its options one level deeper.
+  const responseForm = def.trial.response as Record<string, unknown> | unknown[];
+  const asSets = !Array.isArray(responseForm) && isObj(responseForm) && 'sets' in responseForm
+    ? (responseForm as { by?: unknown; sets?: unknown })
+    : null;
+  if (asSets) {
+    if (!isStr(asSets.by)) bad('"trial.response.by"', 'a factor name whose value picks the set');
+    if (!isObj(asSets.sets) || Object.keys(asSets.sets as object).length === 0) {
+      bad('"trial.response.sets"', 'an object with at least one named set of options');
+    }
+  }
+  const responseShapes: unknown[] = asSets
+    ? Object.values((asSets.sets ?? {}) as Record<string, unknown>).flatMap(s => (Array.isArray(s) ? s : [s]))
+    : Array.isArray(def.trial.response) ? def.trial.response : [def.trial.response];
   responseShapes.forEach((s, i) => {
     if (!isObj(s)) return bad(`Response #${i + 1}`, 'an object');
     if (!isStr((s as ResponseStep).kind)) bad(`Response #${i + 1}'s "kind"`, 'a string');
@@ -431,9 +443,14 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     warn('No phase starts the reaction-time clock, so RT will be measured from the response phase.');
   }
 
-  const steps: ResponseStep[] = Array.isArray(def.trial.response)
-    ? def.trial.response
-    : responsePhases.slice(0, 1).map(phase => ({ ...def.trial.response, phase } as ResponseStep));
+  // A per-trial form is checked through its first set: every set binds to the same phases,
+  // and the options of all of them were shape-checked above.
+  const primaryResponse = !Array.isArray(def.trial.response) && 'sets' in def.trial.response
+    ? (Object.values(def.trial.response.sets)[0] ?? { kind: 'choice', options: [] })
+    : def.trial.response;
+  const steps: ResponseStep[] = Array.isArray(primaryResponse)
+    ? primaryResponse
+    : responsePhases.slice(0, 1).map(phase => ({ ...primaryResponse, phase } as ResponseStep));
 
   // Response phases that end by themselves. Not pressing is an answer there, which is the
   // only thing that makes a single "go" button a real choice rather than a trial that

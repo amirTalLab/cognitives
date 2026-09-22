@@ -24,7 +24,8 @@ const EXPERIMENTS: Exp[] = [
   // serve the 46 rows in posner_results at /posnerCueing/teacher; this card points at the
   // ported one, which is where new runs go.
   { id: 'posnerCueing',    title: 'Spatial Cueing',          titleHe: 'הכוונה מרחבית',      icon: Target,    color: 'text-amber-400', href: '/run/posnerCueing' },
-  { id: 'bouba-kiki',      title: 'Bouba-Kiki Effect',       titleHe: 'אפקט בובה-קיקי',    icon: Shapes,    color: 'text-indigo-400'  },
+  // Ported. app/bouba-kiki/ still serves its own table at /bouba-kiki/teacher.
+  { id: 'bouba-kiki',      title: 'Bouba-Kiki Effect',       titleHe: 'אפקט בובה-קיקי',    icon: Shapes,    color: 'text-indigo-400', href: '/run/bouba-kiki' },
   // Ported. app/stroop/ still serves its own 112 rows at /stroop/teacher; new runs go here.
   { id: 'stroop',          title: 'Stroop Effect',           titleHe: 'אפקט סטרופ',         icon: Brain,     color: 'text-emerald-400', href: '/run/stroop' },
   { id: 'mentalRep',       title: 'Mental Representation',   titleHe: 'ייצוג מנטלי',        icon: BrainCog,  color: 'text-cyan-400'    },
