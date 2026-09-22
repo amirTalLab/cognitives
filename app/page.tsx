@@ -37,7 +37,6 @@ const EXPERIMENTS: Exp[] = [
   { id: 'logics',          title: 'Reasoning Biases',       titleHe: 'הטיות בחשיבה',         icon: Lightbulb, color: 'text-yellow-400'  },
   { id: 'creativity',      title: 'Creativity Battery',     titleHe: 'סוללת יצירתיות',       icon: Sparkles,  color: 'text-emerald-400' },
   { id: 'bRMS',             title: 'bRMS Emotion',           titleHe: 'bRMS רגש',              icon: Eye,       color: 'text-purple-400'  },
-  { id: 'boubaKikiDemo', title: 'Bouba / Kiki shape–sound mapping', titleHe: 'אפקט בובה-קיקי', icon: Shapes, color: 'text-purple-400' },
   // The card used to point at /run/flankerLetterTask, which exists nowhere — not published,
   // not built in — so it showed students "No experiment named". It now runs the built-in
   // Eriksen flanker; publishing a definition under this slug replaces it.
@@ -48,7 +47,10 @@ const EXPERIMENTS: Exp[] = [
 const CATEGORIES = [
   { name: 'PERCEPTION',        nameHe: 'תפיסה',         ids: ['summaryStats', 'CompositeFace', 'wordSuperiority'] },
   { name: 'ATTENTION',         nameHe: 'קשב',           ids: ['visualSearch', 'posnerCueing', 'flanker'] },
-  { name: 'LANGUAGE',          nameHe: 'שפה',           ids: ['bouba-kiki', 'boubaKikiDemo', 'lexicalDecisionPairs'] },
+  // boubaKikiDemo was a /create demo sitting beside the real bouba-kiki in this row, which
+  // made it unclear which card was which. Its card is gone; the experiment itself is
+  // untouched and still reachable at /boubaKikiDemo and /run/boubaKikiDemo.
+  { name: 'LANGUAGE',          nameHe: 'שפה',           ids: ['bouba-kiki', 'lexicalDecisionPairs'] },
   { name: 'EXECUTIVE CONTROL', nameHe: 'בקרה ניהולית', ids: ['stroop'] },
   { name: 'IMAGINATION',       nameHe: 'דמיון',         ids: ['mentalRep'] },
   { name: 'MEMORY',            nameHe: 'זיכרון',        ids: ['drm', 'serialOrder', 'testingEffect'] },
