@@ -1410,3 +1410,33 @@ test('mock data fills every block, so no figure is empty', () => {
     assert.ok(aggregate(chart, rows).length > 0, `chart "${chart.title}" aggregated to nothing`);
   }
 });
+
+test('a planned block names the definition entry it came from', () => {
+  // `design` is a COPY for a block inside a group — the experiment's pools are merged into
+  // it — so anything matching a running block back to the authored definition must use
+  // `source`. The design editor compared `design` by identity and silently counted every
+  // later block as zero trials the moment that stopped being the same object.
+  const def = grouped();
+  const plan = planStages(def, seededRandom(12));
+
+  assert.equal(plan[0].source, def, 'the first block is the definition itself');
+
+  const authored = def.stages[0].stages;
+  for (const block of plan.slice(1)) {
+    assert.ok(
+      authored.includes(block.source),
+      `block "${block.stage}" does not point back at a stage the definition declares`,
+    );
+  }
+  // And the copy really is a copy, or this whole field would be pointless.
+  const inGroup = plan.find(b => b.stage === 'study');
+  assert.notEqual(inGroup.design, inGroup.source);
+  assert.equal(inGroup.design.trial, inGroup.source.trial, 'the copy is shallow, not a rebuild');
+});
+
+test('a block inside a group can reach a pool the experiment declared, through the copy', () => {
+  const def = grouped();
+  def.stages[0].stages[1].factors = [{ name: 'probe', from: 'lists' }];
+  const recall = planStages(def, seededRandom(12)).find(b => b.stage === 'recall');
+  assert.equal(buildTrials(recall.design, { context: recall.context }).length, LISTS.length);
+});

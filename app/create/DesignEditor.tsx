@@ -73,7 +73,10 @@ function describe(def: ExperimentDefinition): { rows: BlockRow[]; practice: numb
   let planError: string | undefined;
   try {
     for (const block of planStages(def, rng)) {
-      const row = rows.find(r => r.design === block.design);
+      // `block.source`, not `block.design`: a block inside a group is handed a copy with the
+      // experiment's pools merged in, so comparing against `design` matches nothing and every
+      // later block silently counts as zero trials.
+      const row = rows.find(r => r.design === block.source);
       if (!row || !row.built) continue;
       if (row.passes) row.passes.count++;
       try {

@@ -294,6 +294,17 @@ export function isStageGroup(entry: Stage | StageGroup): entry is StageGroup {
 /** One block of a run, in the order it will happen. */
 export interface PlannedBlock {
   design: TrialDesign;
+  /**
+   * The entry in the definition this block came from — the definition itself, or one of the
+   * stages as written.
+   *
+   * `design` is not always that object: a block inside a group is handed a copy with the
+   * experiment's pools merged in. Anything wanting to match a running block back to the
+   * definition it was authored in must compare against THIS, not against `design`. The
+   * design editor compared identities and silently counted every later block as zero trials
+   * the moment `design` started being a copy.
+   */
+  source: TrialDesign;
   /** Stored on every row of this block, so a chart can say which block it is about. */
   stage: string;
   title?: { en: string; he: string };
@@ -321,7 +332,7 @@ export function planStages(
   rng: () => number = Math.random,
 ): PlannedBlock[] {
   const blocks: PlannedBlock[] = [
-    { design: def, stage: def.stageName ?? 'main', context: {} },
+    { design: def, source: def, stage: def.stageName ?? 'main', context: {} },
   ];
 
   /**
@@ -340,6 +351,7 @@ export function planStages(
     if (!isStageGroup(entry)) {
       blocks.push({
         design: withPools(entry),
+        source: entry,
         stage: entry.name,
         title: entry.title,
         instructions: entry.instructions,
@@ -359,6 +371,7 @@ export function planStages(
       for (const stage of entry.stages) {
         blocks.push({
           design: withPools(stage),
+          source: stage,
           stage: stage.name,
           title: stage.title,
           instructions: stage.instructions,
