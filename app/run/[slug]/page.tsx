@@ -13,7 +13,8 @@ import { FlaskConical, Check } from 'lucide-react';
 import { ExperimentDefinition } from '@/lib/experiment-runtime/schema';
 import { getDefinition } from '@/lib/experiment-runtime/registry';
 import { Runner, TrialRow } from '@/lib/experiment-runtime/Runner';
-import { buildTrials, planStages, type PlannedBlock } from '@/lib/experiment-runtime/trials';
+import { buildTrials, planStages, resolve, type PlannedBlock } from '@/lib/experiment-runtime/trials';
+import { DisplayView } from '@/lib/experiment-runtime/DisplayView';
 
 // 'main' is the definition's own design — the first block. 'stageIntro' and 'stageRun'
 // walk whatever `stages` lists after it: DRM's recall, serial order's distractor, SRT's
@@ -97,9 +98,19 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
             </button>
           </div>
 
-          {/* pre-line keeps the paragraphs a lecturer types in /create's instructions box. */}
+          {/* What this participant will actually be looking for, where the design gives them
+              their own condition — a coloured letter says it better than the word for it. */}
+          {def.instructionsDisplay && (
+            <div className="flex justify-center mb-6">
+              <DisplayView node={def.instructionsDisplay} values={plan[0]?.context ?? {}} />
+            </div>
+          )}
+
+          {/* pre-line keeps the paragraphs a lecturer types in /create's instructions box.
+              Resolved against the assignment, so instructions can name the condition this
+              person was given rather than describing the design in the abstract. */}
           <p className="text-gray-300 leading-relaxed mb-6 whitespace-pre-line" dir={rtl ? 'rtl' : 'ltr'}>
-            {rtl ? def.instructions.he : def.instructions.en}
+            {resolve(rtl ? def.instructions.he : def.instructions.en, plan[0]?.context ?? {})}
           </p>
 
           <form onSubmit={begin} dir={rtl ? 'rtl' : 'ltr'} className="flex flex-col gap-3">

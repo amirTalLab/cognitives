@@ -61,14 +61,26 @@ export const VISUAL_SEARCH_PORT: ExperimentDefinition = {
   titleHe: 'חיפוש חזותי',
   category: 'ATTENTION',
 
+  // The letter above, in this participant's own colour — the hand-built page shows the
+  // stimulus itself rather than naming it, which is quicker to read and not open to
+  // anyone's idea of what "red" means.
+  instructionsDisplay: {
+    kind: 'text',
+    text: 'T',
+    color: '{group.target}',
+    size: 64,
+    font: 'sans',
+  },
+
   instructions: {
-    en: 'On each screen you will see a scatter of letters — some T, some L, in two colours.\n'
-      + 'Decide as fast as you can whether an upright T IN YOUR COLOUR is present.\n'
-      + 'Your colour is shown before the task starts. Ts in the other colour do not count, '
-      + 'and neither do Ls in yours.',
-    he: 'בכל מסך יופיעו אותיות מפוזרות — חלקן T וחלקן L, בשני צבעים.\n'
-      + 'החליטי מהר ככל האפשר האם קיימת T זקופה בצבע שלך.\n'
-      + 'הצבע שלך יוצג לפני תחילת המשימה. אותיות T בצבע השני אינן נחשבות, וגם לא L בצבע שלך.',
+    en: 'Search for a T in the colour shown above.\n\n'
+      + 'On each screen you will see a scatter of letters — some T, some L, in two colours. '
+      + 'Decide as fast as you can whether an upright {group.targetName} T is present.\n'
+      + 'Ts in the other colour do not count, and neither do Ls in {group.targetName}.',
+    he: 'חפשי את האות T בצבע המוצג למעלה.\n\n'
+      + 'בכל מסך יופיעו אותיות מפוזרות — חלקן T וחלקן L, בשני צבעים. החליטי מהר ככל האפשר '
+      + 'האם קיימת T זקופה {group.targetNameHe}.\n'
+      + 'אותיות T בצבע השני אינן נחשבות, וגם לא אותיות L {group.targetNameHe}.',
   },
 
   pools: { colourGroups: COLOUR_GROUPS },

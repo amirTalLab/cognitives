@@ -689,8 +689,25 @@ export interface ExperimentDefinition {
   titleHe: string;
   category: string;
 
-  /** Bilingual instructions shown on the landing page. Hebrew is the default language. */
+  /**
+   * Bilingual instructions shown on the landing page. Hebrew is the default language.
+   *
+   * `{group.field}` interpolates the between-subject item this participant was assigned, so
+   * an experiment that gives half the class one condition can actually tell them which one
+   * they got. Without it the instructions can only describe the design in general, and a
+   * visual search that never says which colour to hunt is not a search.
+   */
   instructions: { en: string; he: string };
+
+  /**
+   * Something to SHOW on the landing page, above the instructions.
+   *
+   * Words are a poor way to name a stimulus. Visual search hunts a red or a blue T, and the
+   * hand-built page prints that very letter in that very colour rather than the word "red"
+   * — which is both quicker to take in and immune to a participant's idea of red. Bound
+   * like any display, so it can show the condition this person was assigned.
+   */
+  instructionsDisplay?: Display;
 
   /**
    * Which published version this is — 1 for the first publish, then up by one each time.

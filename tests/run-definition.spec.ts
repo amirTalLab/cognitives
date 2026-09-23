@@ -1484,6 +1484,22 @@ test.describe('Visual search, the ported experiment', () => {
       route.fulfill({ status: 201, contentType: 'application/json', body: '[]' }));
 
     await page.goto('/run/visualSearch');
+
+    // The landing page must say which colour this participant hunts. Without it the whole
+    // task is unanswerable, and nothing offline can tell: the assignment is drawn in the
+    // browser and the instructions are a static string until they are resolved against it.
+    const sample = page.locator('main *').filter({ hasText: /^T$/ });
+    await expect(sample.first()).toBeVisible({ timeout: 10_000 });
+    // Any of them, not the first: an ancestor whose only text is "T" matches too, and it
+    // inherits its colour rather than carrying the one under test.
+    const colours = await sample.evaluateAll(els => els.map(el => getComputedStyle(el).color));
+    const hunted = colours.find(c => c === 'rgb(239, 68, 68)' || c === 'rgb(59, 130, 246)');
+    expect(hunted, `no sample T was red or blue; saw ${colours.join(', ')}`).toBeTruthy();
+    // And the words must name it too, rather than leaving a "{group.targetName}" on screen.
+    // Hebrew by default, so the colour is named there — אדומה (red) or כחולה (blue).
+    await expect(page.getByText(/אדומה|כחולה/).first()).toBeVisible();
+    await expect(page.getByText('{group')).toHaveCount(0);
+
     await page.getByPlaceholder(/Name|שם/).fill('E2E VS');
     await page.getByRole('button', { name: /Begin|התחלה/ }).click();
 
