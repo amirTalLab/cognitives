@@ -204,6 +204,22 @@ export type ResponseSpec =
 export type ResponseStep = ResponseSpec & { phase: string };
 
 /**
+ * Whether the built trial list is shuffled, or kept in the order the design produces.
+ *
+ * Shuffling is right for every design whose trials are interchangeable — which is all four
+ * of the ported experiments, and why it was unconditional until now. It is wrong whenever
+ * the ORDER IS THE MANIPULATION: SRT repeats a fixed 12-item sequence and measures the
+ * learning of it, and a study list is presented in its order so that serial position means
+ * something. Shuffling those does not add noise, it deletes the experiment.
+ *
+ * `fixed` keeps the cross in the order the factors and pools are written, repeated
+ * `repetitions` times. Note that a factor using `sample` still DRAWS at random, per
+ * participant — fixed order governs the sequence of the finished list, not which items are
+ * in it.
+ */
+export type TrialOrder = 'shuffled' | 'fixed';
+
+/**
  * A later block of an experiment: its own trials, phases, responses and stored fields.
  *
  * Several of the hand-built experiments are not one block but a sequence of them — DRM
@@ -226,6 +242,7 @@ export interface Stage {
   factors: Factor[];
   exclude?: Record<string, string | number | boolean>[];
   repetitions: number;
+  order?: TrialOrder;
   practice?: ExperimentDefinition['practice'];
   trial: ExperimentDefinition['trial'];
   store: string[];
@@ -238,7 +255,7 @@ export interface Stage {
  * scorer and the runner work on either without knowing which they have.
  */
 export type TrialDesign =
-  Pick<Stage, 'pools' | 'factors' | 'exclude' | 'repetitions' | 'practice' | 'trial' | 'store'>;
+  Pick<Stage, 'pools' | 'factors' | 'exclude' | 'repetitions' | 'order' | 'practice' | 'trial' | 'store'>;
 
 /**
  * A response whose options depend on the trial.
@@ -514,6 +531,9 @@ export interface ExperimentDefinition {
 
   /** How many times the full cross of factors is repeated. */
   repetitions: number;
+
+  /** Whether to shuffle the finished list. Shuffled when absent. */
+  order?: TrialOrder;
 
   practice?: {
     /** Trials drawn from the same design, with feedback after each. */

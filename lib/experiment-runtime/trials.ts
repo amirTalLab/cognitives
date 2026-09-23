@@ -173,7 +173,11 @@ export function buildTrials(
   }
 
   rows = Array.from({ length: def.repetitions }, () => rows).flat();
-  rows = shuffle(rows, rng);
+  // `fixed` leaves the list in the order the cross produced — for a design where the order
+  // IS the manipulation: a repeating motor sequence, or a study list whose serial positions
+  // are the measure. See TrialOrder.
+  const fixedOrder = def.order === 'fixed';
+  if (!fixedOrder) rows = shuffle(rows, rng);
 
   for (const factor of balanced) {
     const levels = levelsOf(factor, def.pools, rng);
@@ -194,10 +198,12 @@ export function buildTrials(
     });
   }
 
-  // A practice block is drawn from the same design, so it rehearses the real task.
+  // A practice block is drawn from the same design, so it rehearses the real task. Under
+  // fixed order it takes the opening trials rather than a random handful, so practice
+  // rehearses the beginning of the sequence the participant is about to meet.
   if (practice) {
     const count = def.practice?.count ?? 0;
-    rows = shuffle(rows, rng).slice(0, count);
+    rows = (fixedOrder ? rows : shuffle(rows, rng)).slice(0, count);
   }
 
   return rows.map((values, index) => ({

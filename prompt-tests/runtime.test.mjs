@@ -597,3 +597,82 @@ test('a malformed retryUntilCorrect is an error, never thrown', () => {
     );
   }
 });
+
+// ── H. Designs whose order is the manipulation ────────────────────────────────
+
+/** A design whose trials are distinguishable, so an order can actually be asserted. */
+function ordered(over = {}) {
+  return design({
+    factors: [{ name: 'step', levels: [1, 2, 3, 4] }],
+    repetitions: 3,
+    order: 'fixed',
+    trial: { ...design().trial, correct: { kind: 'none' } },
+    store: ['step'],
+    ...over,
+  });
+}
+
+test('a fixed order keeps the cross in the order it was written', () => {
+  const trials = buildTrials(ordered(), { rng: seededRandom(7) });
+  assert.deepEqual(trials.map(t => t.values.step), [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]);
+});
+
+test('a fixed order is the same however the run is seeded', () => {
+  const a = buildTrials(ordered(), { rng: seededRandom(1) }).map(t => t.values.step);
+  const b = buildTrials(ordered(), { rng: seededRandom(99999) }).map(t => t.values.step);
+  assert.deepEqual(a, b);
+});
+
+test('omitting order still shuffles, so every ported experiment is untouched', () => {
+  // Seeded, so this asserts a fact rather than hoping: 12 trials in written order would be
+  // a 1-in-369,600 coincidence, but the seed makes the check deterministic either way.
+  const trials = buildTrials(ordered({ order: undefined }), { rng: seededRandom(3) });
+  assert.notDeepEqual(trials.map(t => t.values.step), [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]);
+  assert.equal(trials.length, 12);
+});
+
+test('a fixed order still builds every trial exactly as often', () => {
+  const counts = new Map();
+  for (const t of buildTrials(ordered(), {})) {
+    counts.set(t.values.step, (counts.get(t.values.step) ?? 0) + 1);
+  }
+  assert.deepEqual([...counts.entries()].sort(), [[1, 3], [2, 3], [3, 3], [4, 3]]);
+});
+
+test('fixed-order practice rehearses the opening of the sequence, not a random handful', () => {
+  const def = ordered({ practice: { count: 3, feedback: true } });
+  assert.deepEqual(buildTrials(def, { practice: true }).map(t => t.values.step), [1, 2, 3]);
+});
+
+test('a pool drawn in fixed order presents its items as the list is written', () => {
+  const def = ordered({
+    pools: { list: [{ word: 'bed' }, { word: 'rest' }, { word: 'awake' }] },
+    factors: [{ name: 'item', from: 'list' }],
+    repetitions: 1,
+    store: ['item.word'],
+  });
+  assert.deepEqual(
+    buildTrials(def, { rng: seededRandom(5) }).map(t => t.values.item.word),
+    ['bed', 'rest', 'awake'],
+  );
+});
+
+test('an order that is neither shuffled nor fixed is refused, never silently shuffled', () => {
+  for (const value of ['random', 'Fixed', true, 1]) {
+    const def = design({ order: value });
+    assert.doesNotThrow(() => validate(def));
+    assert.ok(
+      validate(def).some(i => i.severity === 'error'),
+      `accepted order: ${JSON.stringify(value)}`,
+    );
+  }
+});
+
+test('a block may set its own order independently of the first one', () => {
+  const def = design({
+    order: 'fixed',
+    stages: [stage({ name: 'recall', order: 'sorted' })],
+  });
+  assert.doesNotThrow(() => validate(def));
+  assert.ok(validate(def).some(i => i.severity === 'error' && /"order"/.test(i.message)));
+});

@@ -179,6 +179,12 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     bad('"repetitions"', 'a whole number of at least 1');
   }
 
+  // Checked rather than ignored: anything but "fixed" shuffles, so a typo here would quietly
+  // scramble a design whose order is the whole point, and the data would look merely noisy.
+  if (def.order !== undefined && def.order !== 'shuffled' && def.order !== 'fixed') {
+    bad('"order"', 'either "shuffled" or "fixed"');
+  }
+
   def.store.forEach((key, i) => { if (!isStr(key)) bad(`Entry #${i + 1} of "store"`, 'a string'); });
 
   def.trial.phases.forEach((p, i) => {
@@ -305,6 +311,9 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
 
         if (!Array.isArray(stage.factors)) bad(`${at}'s "factors"`, 'a list of factors');
         if (!Number.isFinite(stage.repetitions)) bad(`${at}'s "repetitions"`, 'a number');
+        if (stage.order !== undefined && stage.order !== 'shuffled' && stage.order !== 'fixed') {
+          bad(`${at}'s "order"`, 'either "shuffled" or "fixed"');
+        }
         if (!isObj(stage.trial)) bad(`${at}'s "trial"`, 'an object with phases and a response');
         else {
           const trial = stage.trial as Record<string, unknown>;
