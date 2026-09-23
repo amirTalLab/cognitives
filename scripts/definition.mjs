@@ -49,7 +49,7 @@ function shortPath(path) {
   return rel && !rel.startsWith('..') ? rel.replace(/\\/g, '/') : path;
 }
 const { validate } = await import('../lib/experiment-runtime/validate.ts');
-const { buildTrials, resolve: resolveBound } = await import('../lib/experiment-runtime/trials.ts');
+const { buildTrials, planStages, resolve: resolveBound } = await import('../lib/experiment-runtime/trials.ts');
 
 // ── Output ───────────────────────────────────────────────────────────────────
 
@@ -129,7 +129,8 @@ function describe(def) {
   say(`\n  ${c.bold(def.title)} ${c.dim(`· ${def.category} · /run/${def.slug}`)}`);
   say(`  ${trials.length} trials${practice ? ` (+ ${practice} practice)` : ''}, ` +
       `${def.factors.length} factor${def.factors.length === 1 ? '' : 's'}, ` +
-      `${def.trial.phases.length} phases`);
+      `${def.trial.phases.length} phases` +
+      (def.stages?.length ? c.dim(' — first block') : ''));
 
   // Cell counts per factor. An unbalanced design is legal but almost never intended, so
   // it is worth seeing before a class runs it.
@@ -149,8 +150,41 @@ function describe(def) {
   }
 
   const { fixed, awaited } = trialTiming(def, trials[0] ?? { values: {} });
-  const minutes = ((fixed * (trials.length + practice)) / 60000).toFixed(1);
-  say(`  ${c.dim(`≈ ${minutes} min of fixed timing${awaited ? ', plus response time' : ''}`)}`);
+  let totalMs = fixed * (trials.length + practice);
+  let anyAwaited = awaited;
+
+  // Every block, not just the first. A multi-block experiment reported only its opening
+  // block — "3 trials, 0.1 min" for a design that actually runs eight word lists and takes
+  // twenty-five minutes. Someone reading that would think they had built almost nothing.
+  if (def.stages?.length) {
+    const blocks = planStages(def, rng).slice(1);
+    const counts = new Map();
+
+    for (const block of blocks) {
+      const blockTrials = buildTrials(block.design, { rng, context: block.context });
+      const timing = trialTiming(block.design, blockTrials[0] ?? { values: {} });
+      anyAwaited = anyAwaited || timing.awaited;
+      // A block bounded by a clock takes exactly that long, however many trials it offers.
+      totalMs += block.design.endsAfterMs ?? timing.fixed * blockTrials.length;
+      totalMs += block.autoAdvanceMs ?? 0;
+
+      const seen = counts.get(block.stage) ?? { runs: 0, trials: 0, timed: !!block.design.endsAfterMs };
+      seen.runs += 1;
+      seen.trials += blockTrials.length;
+      counts.set(block.stage, seen);
+    }
+
+    say(`  ${c.dim('then')} ${blocks.length} more block${blocks.length === 1 ? '' : 's'}:`);
+    for (const [name, seen] of counts) {
+      const each = seen.timed
+        ? 'timed'
+        : `${Math.round(seen.trials / seen.runs)} trial${seen.trials / seen.runs === 1 ? '' : 's'}`;
+      say(`    ${c.dim('·')} ${name}: ${seen.runs}× ${c.dim(`(${each} each)`)}`);
+    }
+  }
+
+  const minutes = (totalMs / 60000).toFixed(1);
+  say(`  ${c.dim(`≈ ${minutes} min of fixed timing${anyAwaited ? ', plus response time' : ''}`)}`);
 }
 
 function report(issues) {

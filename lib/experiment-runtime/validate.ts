@@ -12,7 +12,7 @@
 // `import type` rather than a plain import so this module can also be loaded by
 // scripts/definition.mjs, which runs the real validator from the terminal under Node's
 // type stripping — that leaves a value import of a types-only module behind and fails.
-import type { ExperimentDefinition, Factor, ResponseStep } from './schema';
+import type { ExperimentDefinition, Factor, ResponseStep, Stage } from './schema';
 import { excluded, MAX_TRIALS, NO_RESPONSE } from './trials';
 
 export interface ValidationIssue {
@@ -25,13 +25,63 @@ const REF = /^\{([^}]+)\}$/;
 /** Factor names a definition makes available, including pool item fields as `factor.field`. */
 function availableNames(def: ExperimentDefinition): Set<string> {
   const names = new Set<string>();
-  for (const factor of def.factors) {
-    names.add(factor.name);
-    if (factor.from) {
-      const item = def.pools?.[factor.from]?.[0];
-      for (const key of Object.keys(item ?? {})) names.add(`${factor.name}.${key}`);
+
+  const fromFactors = (factors: Factor[] | undefined, pools: ExperimentDefinition['pools']) => {
+    for (const factor of factors ?? []) {
+      if (!factor?.name) continue;
+      names.add(factor.name);
+      // Both spellings, since a chart may be written either way and the aggregator flattens
+      // dots to underscores before it looks.
+      const draws = [
+        ...(factor.from ? [factor.from] : []),
+        ...(factor.fromEach ?? []).map(p => p?.pool).filter(Boolean),
+      ];
+      for (const name of draws) {
+        const item = pools?.[name as string]?.[0];
+        for (const key of Object.keys(item ?? {})) names.add(`${factor.name}.${key}`);
+      }
+    }
+  };
+
+  fromFactors(def.factors, def.pools);
+
+  // Later blocks store their OWN fields, and a chart is usually about one of them. Reading
+  // only the first block's `store` made every chart of a multi-block experiment look like it
+  // would show nothing — nine such warnings on a correct definition, which is the kind of
+  // false alarm that makes someone abandon a design that was never wrong.
+  if (def.stages?.length) {
+    names.add('stage');
+    names.add('repetition');
+
+    const walk = (stage: Stage) => {
+      fromFactors(stage.factors, { ...def.pools, ...stage.pools });
+      for (const key of stage.store ?? []) names.add(key);
+
+      // A recall block writes a row per studied item, carrying that item's own fields
+      // rather than the block's factors — that is where `serialPosition` and `itemType`
+      // come from, and no `store` entry mentions them.
+      const recall = stage.trial?.recall;
+      if (!recall) return;
+      names.add('outputPosition');
+      if (recall.intrusions) names.add('intrusion');
+      const pool = recall.against.startsWith('{')
+        // "{list.words}" — the list is a pool item, so look inside the pool it comes from.
+        ? Object.values({ ...def.pools, ...stage.pools })
+          .flat()
+          .map(entry => (entry as Record<string, unknown>)[recall.against.slice(1, -1).split('.')[1]])
+          .find(Array.isArray) as Record<string, unknown>[] | undefined
+        : { ...def.pools, ...stage.pools }[recall.against];
+      for (const key of Object.keys(pool?.[0] ?? {})) names.add(key);
+    };
+
+    for (const entry of def.stages) {
+      const group = entry as unknown as { forEach?: unknown; stages?: Stage[]; as?: string };
+      if (group.forEach === undefined) { walk(entry as Stage); continue; }
+      if (typeof group.as === 'string') names.add(group.as);
+      for (const inner of group.stages ?? []) walk(inner);
     }
   }
+
   return names;
 }
 
@@ -930,8 +980,12 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   // trial_index is on every row's spine, which is what lets a chart bin by position in the
   // session without the definition storing it.
   // "sequence" and "all" are computed by the aggregation itself rather than read off a row.
-  const derived = new Set(['participant', 'is_correct', 'confidence', 'trial_index', 'sequence', 'all']);
-  const stored = def.store.map(s => s.replace(/\./g, '_'));
+  const derived = new Set(['participant', 'is_correct', 'confidence', 'trial_index', 'sequence', 'all', 'response']);
+  // Every block's stored fields, not just the first one's. A chart on a multi-block
+  // experiment is usually about a LATER block, and reading only `def.store` reported nine
+  // false alarms on a correct definition — each one saying a working chart "would show
+  // nothing", which is exactly the advice that makes someone rewrite a design that was fine.
+  const stored = [...available, ...def.store].map(s => s.replace(/\./g, '_'));
   const readable = (field: string) => stored.includes(field.replace(/\./g, '_')) || derived.has(field);
   for (const chart of def.dashboard.charts) {
     if (!readable(chart.groupBy)) {
