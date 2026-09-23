@@ -75,6 +75,16 @@ export interface Factor {
    */
   per?: string;
   /**
+   * Or build the item set out of SEVERAL pools, each drawn its own way.
+   *
+   * A recognition test is the case that needs it. DRM's is two studied words at every
+   * serial position, plus every critical lure, plus every unrelated foil — three different
+   * draws that together make one shuffled list of probes. One pool with one `sample` cannot
+   * say that, and splitting them into separate blocks would tell the participant which kind
+   * of word they were about to see.
+   */
+  fromEach?: { pool: string; sample?: number; per?: string }[];
+  /**
    * Or compute the value from other factors, via a lookup table.
    *
    * Not every value in a design is independent. A Posner cue appears on the target's side
@@ -394,7 +404,15 @@ export interface RecallScoring {
  */
 export type CorrectRule =
   | { kind: 'matchesFactor'; factor: string }
-  | { kind: 'mapping'; factor: string; expect: Record<string, string> }
+  /**
+   * `expect` may name SEVERAL acceptable responses for a factor value.
+   *
+   * A recognition test is why: its four buttons carry a decision and a confidence at once —
+   * "sure yes", "think yes", "think no", "sure no" — so a studied word is answered correctly
+   * by either of two of them. Splitting the judgement into two presses to keep one expected
+   * answer per value would change what the participant is asked to do.
+   */
+  | { kind: 'mapping'; factor: string; expect: Record<string, string | string[]> }
   /** Preference tasks with no correct answer — ratings, free choice. */
   | { kind: 'none' };
 
@@ -471,7 +489,7 @@ export interface AssetManifest {
 export interface AxisSpec {
   measure: 'accuracy' | 'meanRt' | 'proportion' | 'count';
   /** Required by `measure: 'proportion'` — which response value to count. */
-  ofResponse?: string;
+  ofResponse?: string | string[];
   /** Only rows whose stored fields match, as on a chart. */
   filter?: Record<string, string | number | boolean | (string | number | boolean)[]>;
   /** Only correctly answered trials, for this axis. */
@@ -500,7 +518,7 @@ export interface ChartSpec {
    */
   measure: 'accuracy' | 'meanRt' | 'proportion' | 'count';
   /** Required by `measure: 'proportion'` — which response value to count. */
-  ofResponse?: string;
+  ofResponse?: string | string[];
   /** Split into series by a second factor. */
   seriesBy?: string;
   /** A reference line, e.g. 50 for chance on a 2AFC task. */
@@ -576,7 +594,7 @@ export interface ChartSpec {
 export interface StatSpec {
   label: string;
   measure: ChartSpec['measure'];
-  ofResponse?: string;
+  ofResponse?: string | string[];
   filter?: ChartSpec['filter'];
   correctOnly?: boolean;
   difference?: ChartSpec['difference'];

@@ -73,14 +73,24 @@ export function generateMockRows(def: ExperimentDefinition): ResultRow[] {
 
       // Where the right answer is to press nothing, a correct trial has no response and no
       // RT — exactly as the runner records it — so RT charts are never fed invented times.
-      const withheld = correct && expectedResponse(def, trial.values) === NO_RESPONSE;
+      const expected = expectedResponse(def, trial.values);
+      const withheld = correct && expected.includes(NO_RESPONSE);
+
+      // A value the experiment could really have produced, so proportion charts count
+      // something. Falls back to the old literals where a definition offers no fixed set —
+      // free text, or options whose labels change from trial to trial.
+      const offered = responseValues(def);
+      const wrongOnes = offered.filter(v => !expected.includes(v));
+      const answered = correct
+        ? (expected[0] ?? offered[Math.floor(rng() * offered.length)] ?? 'correct')
+        : (wrongOnes[Math.floor(rng() * wrongOnes.length)] ?? 'incorrect');
 
       const row: ResultRow = {
         session_id: `mock-${p}`,
         participant_name: name,
         trial_index: trial.index,
         is_practice: false,
-        response: withheld ? NO_RESPONSE : correct ? 'correct' : 'incorrect',
+        response: withheld ? NO_RESPONSE : answered,
         is_correct: correct,
         reaction_time_ms: withheld ? null : reaction,
       };
@@ -105,12 +115,52 @@ export function sem(values: number[]): number {
   return Math.sqrt(variance / values.length);
 }
 
-/** The response a trial's correctness rule expects, when the rule names one. */
-function expectedResponse(def: ExperimentDefinition, values: Record<string, unknown>): string | undefined {
+/** The response(s) a trial's correctness rule expects, when the rule names any. */
+function expectedResponse(
+  def: ExperimentDefinition,
+  values: Record<string, unknown>,
+): string[] {
   const rule = def.trial.correct;
-  if (rule.kind === 'mapping') return rule.expect[String(valueAt(values, rule.factor))];
-  if (rule.kind === 'matchesFactor') return String(valueAt(values, rule.factor));
-  return undefined;
+  if (rule.kind === 'mapping') {
+    const expected = rule.expect[String(valueAt(values, rule.factor))];
+    if (expected === undefined) return [];
+    return Array.isArray(expected) ? expected : [expected];
+  }
+  if (rule.kind === 'matchesFactor') return [String(valueAt(values, rule.factor))];
+  return [];
+}
+
+/**
+ * Every value a participant could answer with, read off the definition's own response spec.
+ *
+ * Mock rows used to record the literal words "correct" and "incorrect", which meant every
+ * `proportion` chart aggregated to zero under Mock Data — the toggle a lecturer uses to
+ * demonstrate an effect with no participants showed them an empty chart. Answering with a
+ * value the experiment can actually produce is what makes those charts mean anything.
+ *
+ * Bound values like "{item.optionA}" are skipped: they name a different word on every trial,
+ * so there is no fixed value to count.
+ */
+function responseValues(def: ExperimentDefinition): string[] {
+  const spec = def.trial.response;
+  const specs = Array.isArray(spec)
+    ? spec
+    : 'sets' in spec
+      ? Object.values(spec.sets).flatMap(s => (Array.isArray(s) ? s : [s]))
+      : [spec];
+
+  const out = new Set<string>();
+  for (const one of specs) {
+    if (one.kind === 'choice') {
+      for (const option of one.options) {
+        const value = String(option.value);
+        if (!value.includes('{')) out.add(value);
+      }
+    } else if (one.kind === 'rating') {
+      for (let n = one.min; n <= one.max; n++) out.add(String(n));
+    }
+  }
+  return [...out];
 }
 
 function measureOf(chart: ChartSpec, rows: ResultRow[]): number {
@@ -124,7 +174,10 @@ function measureOf(chart: ChartSpec, rows: ResultRow[]): number {
       return timed.reduce((a, r) => a + (r.reaction_time_ms as number), 0) / timed.length;
     }
     case 'proportion': {
-      const hits = rows.filter(r => String(r.response) === chart.ofResponse).length;
+      // A list counts any of several answers as a hit: a recognition test's "said old" is
+      // two of its four buttons, since each carries a confidence as well as a decision.
+      const wanted = Array.isArray(chart.ofResponse) ? chart.ofResponse : [chart.ofResponse];
+      const hits = rows.filter(r => wanted.includes(String(r.response))).length;
       return (hits / rows.length) * 100;
     }
     case 'count':
@@ -450,6 +503,9 @@ export function measureLabel(chart: ChartSpec, def: ExperimentDefinition): strin
   if (chart.yLabel) return chart.yLabel;
   if (chart.measure === 'meanRt') return 'RT (ms)';
   if (chart.measure === 'count') return 'Trials';
-  if (chart.measure === 'proportion') return `Chose "${chart.ofResponse}" (%)`;
+  if (chart.measure === 'proportion') {
+    const wanted = Array.isArray(chart.ofResponse) ? chart.ofResponse : [chart.ofResponse];
+    return `Chose "${wanted.join('" or "')}" (%)`;
+  }
   return def.correctMeans ? `${def.correctMeans} (%)` : 'Accuracy (%)';
 }

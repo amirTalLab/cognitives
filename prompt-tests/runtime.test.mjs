@@ -1192,3 +1192,94 @@ test('a block inside a group carries its self-advancing screen too', () => {
   assert.ok(study.length > 0);
   assert.ok(study.every(b => b.autoAdvanceMs === 1500));
 });
+
+// ── N. Several right answers, and several answers counted together ────────────
+
+/** A recognition probe: four buttons carrying a decision and a confidence at once. */
+function recognition(over = {}) {
+  return design({
+    factors: [{ name: 'itemType', levels: ['studied', 'lure', 'foil'] }],
+    repetitions: 4,
+    trial: {
+      phases: [{ name: 'judge', display: { kind: 'text', text: 'word' }, awaitsResponse: true, startsClock: true }],
+      response: {
+        kind: 'choice',
+        options: [
+          { value: 'sure_no', label: 'Sure no' },
+          { value: 'think_no', label: 'Think no' },
+          { value: 'think_yes', label: 'Think yes' },
+          { value: 'sure_yes', label: 'Sure yes' },
+        ],
+      },
+      correct: {
+        kind: 'mapping',
+        factor: 'itemType',
+        expect: {
+          studied: ['think_yes', 'sure_yes'],
+          lure: ['think_no', 'sure_no'],
+          foil: ['think_no', 'sure_no'],
+        },
+      },
+    },
+    store: ['itemType'],
+    dashboard: {
+      charts: [{
+        title: 'Said old', kind: 'bar', groupBy: 'itemType',
+        measure: 'proportion', ofResponse: ['think_yes', 'sure_yes'],
+      }],
+    },
+    ...over,
+  });
+}
+
+test('a recognition design with several right answers per item type is valid', () => {
+  assert.deepEqual(validate(recognition()).filter(i => i.severity === 'error'), []);
+});
+
+test('either of the two "yes" buttons is correct for a studied word', () => {
+  const def = recognition();
+  const trial = buildTrials(def, {}).find(t => t.values.itemType === 'studied');
+  assert.equal(isCorrect(def, trial, 'sure_yes'), true);
+  assert.equal(isCorrect(def, trial, 'think_yes'), true);
+  assert.equal(isCorrect(def, trial, 'think_no'), false);
+});
+
+test('and either "no" button is correct for a lure', () => {
+  const def = recognition();
+  const trial = buildTrials(def, {}).find(t => t.values.itemType === 'lure');
+  assert.equal(isCorrect(def, trial, 'sure_no'), true);
+  assert.equal(isCorrect(def, trial, 'sure_yes'), false);
+});
+
+test('a proportion chart can count several responses as one answer', () => {
+  const rows = [
+    { session_id: 'a', itemType: 'studied', response: 'sure_yes', is_correct: true },
+    { session_id: 'a', itemType: 'studied', response: 'think_yes', is_correct: true },
+    { session_id: 'a', itemType: 'studied', response: 'think_no', is_correct: false },
+    { session_id: 'a', itemType: 'studied', response: 'sure_no', is_correct: false },
+  ];
+  const chart = { title: 'c', kind: 'bar', groupBy: 'itemType', measure: 'proportion', ofResponse: ['think_yes', 'sure_yes'] };
+  assert.equal(aggregate(chart, rows)[0].value, 50);
+});
+
+test('a single response value still works as it always did', () => {
+  const rows = [
+    { session_id: 'a', itemType: 'studied', response: 'sure_yes', is_correct: true },
+    { session_id: 'a', itemType: 'studied', response: 'sure_no', is_correct: false },
+  ];
+  const chart = { title: 'c', kind: 'bar', groupBy: 'itemType', measure: 'proportion', ofResponse: 'sure_yes' };
+  assert.equal(aggregate(chart, rows)[0].value, 50);
+});
+
+test('mock data answers with values the experiment could really produce', () => {
+  const rows = generateMockRows(recognition());
+  const offered = new Set(['sure_no', 'think_no', 'think_yes', 'sure_yes']);
+  assert.ok(rows.every(r => offered.has(r.response)), 'mock invented a response the task never offers');
+});
+
+test('mock data drives a proportion chart rather than leaving it at zero', () => {
+  const def = recognition();
+  const points = aggregate(def.dashboard.charts[0], generateMockRows(def));
+  assert.ok(points.length > 0);
+  assert.ok(points.some(p => p.value > 0), 'every group aggregated to zero under mock data');
+});

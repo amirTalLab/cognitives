@@ -12,7 +12,7 @@
 // `import type` rather than a plain import so this module can also be loaded by
 // scripts/definition.mjs, which runs the real validator from the terminal under Node's
 // type stripping — that leaves a value import of a types-only module behind and fails.
-import type { ExperimentDefinition, ResponseStep } from './schema';
+import type { ExperimentDefinition, Factor, ResponseStep } from './schema';
 import { excluded, MAX_TRIALS, NO_RESPONSE } from './trials';
 
 export interface ValidationIssue {
@@ -103,6 +103,37 @@ function expandSrc(def: ExperimentDefinition, src: string): string[] | null {
 
 /** Already addressable — an absolute URL, a data URI, or a path this site already serves. */
 const ADDRESSABLE = /^(https?:|data:|blob:|\/)/;
+
+/**
+ * How many values a factor contributes to the cross.
+ *
+ * A stratified draw takes `sample` at EACH level of `per`, so it yields the number of
+ * distinct levels times the sample; a plain sample yields the sample; several pools yield
+ * the sum of their draws. Counting a stratified draw as `sample` would report DRM's
+ * fifty-item recognition test as two trials.
+ */
+function levelCount(f: Factor, pools: ExperimentDefinition['pools']): number {
+  if (f.levels) return f.levels.length;
+
+  const drawSize = (name: string, sample?: number, per?: string): number => {
+    const pool = pools?.[name];
+    if (!pool) return sample ?? 1;
+    if (!sample) return pool.length;
+    if (!per) return Math.min(sample, pool.length);
+    const levels = new Set(pool.map(item => String(
+      per.split('.').reduce<unknown>((a, k) => (a as Record<string, unknown>)?.[k], item) ?? '',
+    )));
+    return levels.size * sample;
+  };
+
+  if (f.fromEach) {
+    return Array.isArray(f.fromEach)
+      ? f.fromEach.reduce((n: number, p) => n + (p && typeof p.pool === 'string' ? drawSize(p.pool, p.sample, p.per) : 0), 0)
+      : 1;
+  }
+  if (f.from) return drawSize(f.from, f.sample, f.per);
+  return 1;
+}
 
 export function validate(def: ExperimentDefinition): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -481,33 +512,66 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
       }
       continue;
     }
-    if (!factor.levels && !factor.from) {
+    if (!factor.levels && !factor.from && !factor.fromEach) {
       err(`Factor "${factor.name}" has neither levels nor a pool to draw from.`);
       continue;
     }
     if (factor.levels && factor.levels.length === 0) {
       err(`Factor "${factor.name}" has an empty list of levels.`);
     }
-    if (factor.from) {
-      const pool = def.pools?.[factor.from];
+
+    /** One draw's pool: named, sized, and sampled no further than it goes. */
+    const checkDraw = (name: string, sample?: number) => {
+      // A "{list.words}" reference is resolved from the item a stage group drew, so there is
+      // no pool of that name to find and nothing to check until the run.
+      if (name.startsWith('{')) {
+        if (!def.stages?.some(s => (s as { forEach?: unknown }).forEach !== undefined)) {
+          err(`Factor "${factor.name}" draws from "${name}", which only means something inside a stage group, and this experiment has none.`);
+        }
+        return;
+      }
+      const pool = def.pools?.[name];
       if (!pool) {
-        err(`Factor "${factor.name}" draws from pool "${factor.from}", which is not defined.`);
+        err(`Factor "${factor.name}" draws from pool "${name}", which is not defined.`);
       } else if (pool.length === 0) {
-        err(`Pool "${factor.from}" is empty.`);
-      } else if (factor.sample && factor.sample > pool.length) {
+        err(`Pool "${name}" is empty.`);
+      } else if (sample && sample > pool.length) {
         // The bug this file exists for.
         err(
-          `Factor "${factor.name}" samples ${factor.sample} items from pool "${factor.from}", ` +
+          `Factor "${factor.name}" samples ${sample} items from pool "${name}", ` +
           `which holds only ${pool.length}. The experiment would silently run ${pool.length} of them.`,
         );
       }
+    };
+
+    if (factor.from) checkDraw(factor.from, factor.sample);
+
+    if (factor.fromEach !== undefined) {
+      if (!Array.isArray(factor.fromEach) || factor.fromEach.length === 0) {
+        bad(`Factor "${factor.name}"'s "fromEach"`, 'a non-empty list of pools to draw from');
+      } else {
+        for (const part of factor.fromEach) {
+          if (!isObj(part) || !isStr(part.pool)) {
+            bad(`One of factor "${factor.name}"'s "fromEach" entries`, 'an object naming a "pool"');
+            continue;
+          }
+          checkDraw(part.pool, typeof part.sample === 'number' ? part.sample : undefined);
+        }
+      }
+    }
+    if (factor.per !== undefined && !factor.sample) {
+      warn(`Factor "${factor.name}" says "per" but takes no "sample", so it draws the whole pool and "per" does nothing.`);
     }
   }
 
   // ── Trial count ────────────────────────────────────────────────────────────
+  //
+  // How many values a factor contributes, for counting the trials a design will build. A
+  // stratified draw takes `sample` at EACH level, so the count is the number of levels times
+  // the sample — not the sample.
   const cells = def.factors
     .filter(f => !f.counterbalance && !f.derivedFrom)
-    .reduce((n, f) => n * (f.levels?.length ?? f.sample ?? def.pools?.[f.from ?? '']?.length ?? 1), 1);
+    .reduce((n, f) => n * levelCount(f, def.pools), 1);
   const total = cells * def.repetitions;
   if (total === 0) err('The design produces no trials.');
   else if (total < 8) warn(`Only ${total} trials — too few to show an effect reliably.`);
@@ -835,9 +899,14 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
       // Wherever a response phase can run out, "none" is a real answer — the right one on a
       // catch or no-go trial.
       if (timeoutPhases.size > 0 && literal.length > 0) literal.push(NO_RESPONSE);
-      for (const expected of Object.values(rule.expect)) {
-        if (literal.length > 0 && !literal.includes(expected)) {
-          err(`Correctness expects the response "${expected}", which is not one of the options.`);
+      // A value may be a LIST where several answers are right — a recognition button says
+      // "yes" and how sure at once — so each one is checked separately. Flattening with
+      // String() would report the whole list as one unknown response.
+      for (const value of Object.values(rule.expect)) {
+        for (const expected of Array.isArray(value) ? value : [value]) {
+          if (literal.length > 0 && !literal.includes(expected)) {
+            err(`Correctness expects the response "${expected}", which is not one of the options.`);
+          }
         }
       }
     }

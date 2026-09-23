@@ -98,11 +98,10 @@ export function shuffle<T>(items: T[], rng: () => number = Math.random): T[] {
  * trials of DRM's study block come from whichever themed list this pass got.
  */
 function poolFor(
-  factor: Factor,
+  from: string,
   pools: Record<string, PoolItem[]> | undefined,
   context: Record<string, unknown>,
 ): PoolItem[] {
-  const from = factor.from!;
   if (from.startsWith('{')) {
     const found = resolve<unknown>(from, context);
     return Array.isArray(found) ? found as PoolItem[] : [];
@@ -110,7 +109,37 @@ function poolFor(
   return pools?.[from] ?? [];
 }
 
-/** The levels a factor contributes: explicit, or drawn from a pool. */
+/** One draw: a whole pool, a sample of it, or a fixed number from each level of a field. */
+function drawFrom(
+  spec: { pool: string; sample?: number; per?: string },
+  pools: Record<string, PoolItem[]> | undefined,
+  rng: () => number,
+  context: Record<string, unknown>,
+): PoolItem[] {
+  const pool = poolFor(spec.pool, pools, context);
+  if (!spec.sample) return pool;
+
+  // Stratified: that many for each distinct value of the named field, rather than that many
+  // overall. Drawing 20 items at random from 50 would leave some serial positions probed
+  // four times and others not at all, and the curve those produce is not the one the design
+  // asks for.
+  if (spec.per) {
+    const strata = new Map<string, PoolItem[]>();
+    for (const item of pool) {
+      const key = String(lookup(spec.per, item) ?? '');
+      const bucket = strata.get(key);
+      if (bucket) bucket.push(item);
+      else strata.set(key, [item]);
+    }
+    return [...strata.values()].flatMap(items => shuffle(items, rng).slice(0, spec.sample));
+  }
+
+  // Sampling is per participant, so two people see different subsets of the same pool —
+  // which is what the hand-written experiments do to avoid item-specific effects.
+  return shuffle(pool, rng).slice(0, spec.sample);
+}
+
+/** The levels a factor contributes: explicit, or drawn from one pool or several. */
 function levelsOf(
   factor: Factor,
   pools: Record<string, PoolItem[]> | undefined,
@@ -118,29 +147,11 @@ function levelsOf(
   context: Record<string, unknown> = {},
 ): unknown[] {
   if (factor.levels) return factor.levels;
+  // Several pools, each drawn its own way, making one item set — a recognition test's
+  // studied words, lures and foils.
+  if (factor.fromEach) return factor.fromEach.flatMap(s => drawFrom(s, pools, rng, context));
   if (!factor.from) return [];
-
-  const pool = poolFor(factor, pools, context);
-  if (!factor.sample) return pool;
-
-  // Stratified: that many for each distinct value of the named field, rather than that many
-  // overall. Drawing 20 items at random from 50 would leave some serial positions probed
-  // four times and others not at all, and the curve those produce is not the one the design
-  // asks for.
-  if (factor.per) {
-    const strata = new Map<string, PoolItem[]>();
-    for (const item of pool) {
-      const key = String(lookup(factor.per, item) ?? '');
-      const bucket = strata.get(key);
-      if (bucket) bucket.push(item);
-      else strata.set(key, [item]);
-    }
-    return [...strata.values()].flatMap(items => shuffle(items, rng).slice(0, factor.sample));
-  }
-
-  // Sampling is per participant, so two people see different subsets of the same pool —
-  // which is what the hand-written experiments do to avoid item-specific effects.
-  return shuffle(pool, rng).slice(0, factor.sample);
+  return drawFrom({ pool: factor.from, sample: factor.sample, per: factor.per }, pools, rng, context);
 }
 
 /** Cartesian product of the crossed factors. */
@@ -205,7 +216,9 @@ export function buildTrials(
   const crossed = def.factors
     .filter(f => !f.counterbalance && !f.derivedFrom)
     .map(f => (fixed && f.name === fixed.factor
-      ? { ...f, levels: undefined, from: fixed.pool, sample: undefined }
+      // Every other way of choosing items is cleared, not just `levels`: a fixed practice
+      // set means this pool and nothing else.
+      ? { ...f, levels: undefined, from: fixed.pool, fromEach: undefined, sample: undefined, per: undefined }
       : f));
   const balanced = def.factors.filter(f => f.counterbalance && !f.derivedFrom);
 
@@ -514,7 +527,10 @@ export function isCorrect(def: TrialDesign, trial: Trial, response: string): boo
   }
 
   const value = String(lookup(rule.factor, trial.values));
-  return rule.expect[value] === response;
+  const expected = rule.expect[value];
+  // A list means several answers are right — a recognition button says "yes" and how sure
+  // at the same time, so a studied word is answered correctly by either of two of them.
+  return Array.isArray(expected) ? expected.includes(response) : expected === response;
 }
 
 /** The payload written alongside the fixed spine, from the definition's `store` list. */
