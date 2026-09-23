@@ -88,11 +88,38 @@ function ShapeView({ node, values }: { node: Extract<Display, { kind: 'shape' }>
  * reshuffle the array mid-trial — which would be a visible glitch during a timed display.
  */
 function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>; values: Values }) {
-  const targets = Number(resolve(node.count, values) ?? 0);
-  const distractors = Number(resolve(node.distractorCount, values) ?? 0);
   const area = node.area ?? { width: 600, height: 400 };
-
   const seed = Number(values[SEED_KEY] ?? 1);
+
+  // One flat list of what to draw. `groups` is the general form — a conjunction search holds
+  // three kinds at once — and the older target-and-distractor pair is the two-group case of
+  // the same thing, kept working so no existing experiment changes.
+  const drawn = useMemo(() => {
+    const spec = node.groups
+      ?? [
+        { count: node.count, item: node.item },
+        { count: node.distractorCount ?? 0, item: node.distractor ?? node.item },
+      ];
+    // Seeded apart from the layout, so adding an item cannot reshuffle every rotation.
+    const spin = seededRandom(seed * 7 + 13);
+    const out: { item: Display; rotation: number }[] = [];
+    for (const group of spec) {
+      const n = Math.max(0, Math.round(Number(resolve(group.count, values) ?? 0)));
+      const turns = 'rotate' in group ? group.rotate : undefined;
+      for (let i = 0; i < n; i++) {
+        out.push({
+          item: group.item,
+          rotation: turns?.length ? turns[Math.floor(spin() * turns.length)] : 0,
+        });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the node is a constant of the definition
+  }, [node, values, seed]);
+
+  const targets = drawn.length;
+  const distractors = 0;
+
   const positions = useMemo(() => {
     const rng = seededRandom(seed);
     const total = targets + distractors;
@@ -115,8 +142,13 @@ function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>
   return (
     <div style={{ position: 'relative', width: area.width, height: area.height, maxWidth: '100%' }}>
       {positions.map((p, i) => (
-        <div key={i} style={{ position: 'absolute', left: p.x, top: p.y, transform: 'translate(-50%, -50%)' }}>
-          <DisplayView node={i < targets ? node.item : (node.distractor ?? node.item)} values={values} />
+        <div key={i} style={{
+          position: 'absolute', left: p.x, top: p.y,
+          // The rotation rides on the wrapper, so any item kind can be turned — a letter as
+          // easily as a shape — without every display variant growing its own rotation.
+          transform: `translate(-50%, -50%) rotate(${drawn[i]?.rotation ?? 0}deg)`,
+        }}>
+          <DisplayView node={drawn[i]?.item ?? node.item} values={values} />
         </div>
       ))}
     </div>

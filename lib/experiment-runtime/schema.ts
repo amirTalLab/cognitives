@@ -168,7 +168,34 @@ export type Display =
    * A generated array of items in a box — visual search, ensemble perception.
    * The renderer lays them out with non-overlapping random positions.
    */
-  | { kind: 'array'; count: Bound<number>; item: Display; distractor?: Display; distractorCount?: Bound<number>; area?: { width: number; height: number } }
+  | {
+      kind: 'array';
+      count: Bound<number>;
+      item: Display;
+      distractor?: Display;
+      distractorCount?: Bound<number>;
+      area?: { width: number; height: number };
+      /**
+       * Three or more kinds of item in one array, instead of a target and a distractor.
+       *
+       * A CONJUNCTION search needs it. Finding the red T among red Ls and blue Ts is hard
+       * precisely because neither colour nor shape alone picks the target out — so the
+       * display holds three kinds at once, and a target-and-distractor array cannot say it.
+       * Given `groups`, `count` and `distractor` are ignored.
+       */
+      groups?: {
+        count: Bound<number>;
+        item: Display;
+        /**
+         * Give each item of this group one of these rotations at random, in degrees.
+         *
+         * Per ITEM, not per group: the distractors in a search array are turned every which
+         * way, and a group that shared one rotation would line them all up into a texture
+         * the eye can dismiss at a glance.
+         */
+        rotate?: number[];
+      }[];
+    }
   /** Something at a screen location — Posner cues and targets, where the side is the manipulation. */
   | { kind: 'positioned'; at: Bound<'left' | 'right' | 'top' | 'bottom' | 'center'>; content: Display }
   /** Several displays at once. */

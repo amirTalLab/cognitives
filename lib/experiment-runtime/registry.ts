@@ -8,21 +8,25 @@
 import type { ExperimentDefinition } from './schema';
 import { getPreview } from './preview-store';
 import { loadDefinition } from './store';
-// WORD_SUPERIORITY (round-trips) is deliberately NOT registered: the port below shares its
-// slug and supersedes it. The round-trip was an outline that simplified the design to fit;
-// the port is the hand-built experiment itself.
-import { BOUBA_KIKI, VISUAL_SEARCH } from './round-trips';
+// WORD_SUPERIORITY and VISUAL_SEARCH (round-trips) are deliberately NOT registered: the
+// ports below share their slugs and supersede them. A round-trip was an outline that
+// simplified the design to fit; a port is the hand-built experiment itself.
+//
+// Registering both would not be harmless. The lookup takes the FIRST match on slug, so the
+// round-trip — listed earlier — would win, and the port would sit in the codebase fully
+// tested and never once served to a student.
+import { BOUBA_KIKI } from './round-trips';
 import { FLANKER, LEXICAL_DECISION, POSNER, STROOP, SIGNAL_DETECTION, DELAY_DISCOUNTING, SEMANTIC_PRIMING, FACE_INVERSION } from './generality-probe';
 import { NAVON, NUMBER_COMPARISON, MENTAL_ROTATION } from './templates';
-import { COMPOSITE_FACE_PORT, BOUBA_KIKI_PORT, DRM_PORT, POSNER_CUEING, SERIAL_ORDER_PORT, SRT_PORT, STROOP_PORT, WORD_SUPERIORITY_PORT } from './ports';
+import { COMPOSITE_FACE_PORT, VISUAL_SEARCH_PORT, BOUBA_KIKI_PORT, DRM_PORT, POSNER_CUEING, SERIAL_ORDER_PORT, SRT_PORT, STROOP_PORT, WORD_SUPERIORITY_PORT } from './ports';
 
 const BUILT_IN: ExperimentDefinition[] = [
-  BOUBA_KIKI, VISUAL_SEARCH,
+  BOUBA_KIKI,
   STROOP, FLANKER, POSNER, LEXICAL_DECISION,
   SEMANTIC_PRIMING, DELAY_DISCOUNTING, FACE_INVERSION, SIGNAL_DETECTION,
   NAVON, NUMBER_COMPARISON, MENTAL_ROTATION,
   POSNER_CUEING, STROOP_PORT, WORD_SUPERIORITY_PORT, BOUBA_KIKI_PORT, DRM_PORT,
-  SERIAL_ORDER_PORT, SRT_PORT, COMPOSITE_FACE_PORT,
+  SERIAL_ORDER_PORT, SRT_PORT, COMPOSITE_FACE_PORT, VISUAL_SEARCH_PORT,
 ];
 
 /**

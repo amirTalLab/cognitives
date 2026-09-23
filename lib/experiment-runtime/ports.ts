@@ -23,6 +23,7 @@ export { DRM_PORT } from './ports/drm';
 export { SERIAL_ORDER_PORT } from './ports/serial-order';
 export { SRT_PORT } from './ports/srt';
 export { COMPOSITE_FACE_PORT } from './ports/composite-face';
+export { VISUAL_SEARCH_PORT } from './ports/visual-search';
 
 import { POSNER_CUEING } from './ports/posner-cueing';
 import { STROOP_PORT } from './ports/stroop';
@@ -32,5 +33,6 @@ import { DRM_PORT } from './ports/drm';
 import { SERIAL_ORDER_PORT } from './ports/serial-order';
 import { SRT_PORT } from './ports/srt';
 import { COMPOSITE_FACE_PORT } from './ports/composite-face';
+import { VISUAL_SEARCH_PORT } from './ports/visual-search';
 
-export const PORTS = [POSNER_CUEING, STROOP_PORT, WORD_SUPERIORITY_PORT, BOUBA_KIKI_PORT, DRM_PORT, SERIAL_ORDER_PORT, SRT_PORT, COMPOSITE_FACE_PORT];
+export const PORTS = [POSNER_CUEING, STROOP_PORT, WORD_SUPERIORITY_PORT, BOUBA_KIKI_PORT, DRM_PORT, SERIAL_ORDER_PORT, SRT_PORT, COMPOSITE_FACE_PORT, VISUAL_SEARCH_PORT];

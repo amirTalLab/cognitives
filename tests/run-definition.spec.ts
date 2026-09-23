@@ -1475,3 +1475,63 @@ test.describe('Composite face, the ported experiment', () => {
     await expect(page.locator('.recharts-surface')).toHaveCount(5, { timeout: 15_000 });
   });
 });
+
+// The search array is the part that needed new runtime code: three kinds of item at once,
+// each distractor turned its own way. Only a browser can check what is actually drawn.
+test.describe('Visual search, the ported experiment', () => {
+  test('the array holds two colours and both letters, with distractors turned', async ({ page }) => {
+    await page.route('**/rest/v1/experiment_results*', route =>
+      route.fulfill({ status: 201, contentType: 'application/json', body: '[]' }));
+
+    await page.goto('/run/visualSearch');
+    await page.getByPlaceholder(/Name|שם/).fill('E2E VS');
+    await page.getByRole('button', { name: /Begin|התחלה/ }).click();
+
+    // Walk practice trials until one is crowded enough to show the design off. The set size
+    // is drawn per trial, so a one-item display is a legitimate thing to skip past.
+    let seen: { letters: Set<string>; colours: Set<string>; angles: Set<string> } | null = null;
+
+    for (let attempt = 0; attempt < 8 && !seen; attempt++) {
+      const items = page.locator('main div[style*="rotate"]');
+      await expect(items.first()).toBeVisible({ timeout: 10_000 });
+
+      const found = await items.evaluateAll(els => els.map(el => ({
+        text: (el.textContent ?? '').trim(),
+        colour: (el.firstElementChild as HTMLElement | null)?.style.color ?? '',
+        angle: /rotate\(([-\d.]+)deg\)/.exec(el.style.transform)?.[1] ?? '0',
+      })).filter(x => x.text === 'T' || x.text === 'L'));
+
+      if (found.length >= 6) {
+        seen = {
+          letters: new Set(found.map(f => f.text)),
+          colours: new Set(found.map(f => f.colour).filter(Boolean)),
+          angles: new Set(found.map(f => f.angle)),
+        };
+        break;
+      }
+
+      await page.getByRole('button', { name: /Present|קיימת/ }).click();
+      await page.waitForTimeout(1400);
+    }
+
+    expect(seen, 'never reached a display with enough items to check').not.toBeNull();
+    // A conjunction search: both letters, in both colours, or it is a feature search.
+    expect([...seen!.letters].sort()).toEqual(['L', 'T']);
+    expect(seen!.colours.size, 'the array used only one colour').toBe(2);
+    // And the distractors are not all standing the same way up.
+    expect(seen!.angles.size, 'every item was drawn at the same angle').toBeGreaterThan(1);
+  });
+
+  test('the teacher dashboard draws every figure from mock data', async ({ page }) => {
+    await page.route('**/rest/v1/**', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await page.addInitScript(() => sessionStorage.setItem('ss_teacher_authed', '1'));
+    await page.goto('/run/visualSearch/teacher');
+
+    await page.getByRole('button', { name: 'Mock Data' }).click();
+
+    await expect(page.getByText('Search time by set size, target present vs absent'))
+      .toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.recharts-surface')).toHaveCount(6, { timeout: 15_000 });
+  });
+});

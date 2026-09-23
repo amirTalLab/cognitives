@@ -110,5 +110,6 @@ export const config = {
     '/run/serialOrder/:path*',
     '/run/srt/:path*',
     '/run/CompositeFace/:path*',
+    '/run/visualSearch/:path*',
   ],
 };

@@ -1865,3 +1865,129 @@ test('mock data shows the composite effect: aligned is the hard condition', () =
   const large = byCondition['Misaligned (large)'];
   assert.ok(large > aligned + 10, `aligned ${aligned}% is not clearly worse than misaligned ${large}%`);
 });
+
+test('no two built-in experiments share a slug', () => {
+  // The lookup takes the FIRST match, so a duplicate slug does not error — it silently
+  // serves whichever was listed earlier. The visual search port shipped behind its own
+  // round-trip exactly that way: fully tested, registered, and never once reached.
+  const registry = readFileSync(join(process.cwd(), 'lib', 'experiment-runtime', 'registry.ts'), 'utf8');
+  const listed = (registry.split('const BUILT_IN')[1] ?? '').split('];')[0]
+    .split(/[^A-Za-z0-9_]+/).filter(Boolean);
+
+  const modules = { ...roundTrips, ...probe, ...templates, ...ports };
+  const slugs = new Map();
+  for (const name of listed) {
+    const def = modules[name];
+    if (!def || typeof def !== 'object' || !def.slug) continue;
+    const already = slugs.get(def.slug);
+    assert.ok(
+      !already,
+      `${already} and ${name} are both registered as "${def.slug}"; only ${already} would ever be served`,
+    );
+    slugs.set(def.slug, name);
+  }
+  assert.ok(slugs.size > 10, `only found ${slugs.size} registered definitions`);
+});
+
+// ── S. Visual search ──────────────────────────────────────────────────────────
+
+const VS = ports.VISUAL_SEARCH_PORT;
+const vsFirst = seed => planStages(VS, seededRandom(seed))[0];
+const vsTrials = seed => {
+  const b = vsFirst(seed);
+  return buildTrials(b.design, { rng: seededRandom(seed), context: b.context });
+};
+
+test('128 trials: four set sizes crossed with four, present and absent, four times over', () => {
+  assert.equal(vsTrials(3).length, 128);
+});
+
+test('every cell of the design is run equally often', () => {
+  const counts = {};
+  for (const t of vsTrials(3)) {
+    const key = `${t.values.targetSetSize}/${t.values.distractorSetSize}/${t.values.targetPresent}`;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  assert.equal(Object.keys(counts).length, 32, 'not every cell was built');
+  assert.ok(Object.values(counts).every(n => n === 4), `uneven cells: ${JSON.stringify(counts)}`);
+});
+
+test('a participant hunts one colour, and the distractors are the other', () => {
+  const group = vsFirst(3).context.group;
+  assert.ok(['red', 'blue'].includes(group.label));
+  assert.notEqual(group.target, group.other);
+});
+
+test('the class is split between the two target colours', () => {
+  const labels = new Set(
+    Array.from({ length: 12 }, (_, i) => vsFirst(i + 1).context.group.label),
+  );
+  assert.deepEqual([...labels].sort(), ['blue', 'red']);
+});
+
+test('a present trial shows one target and one fewer same-colour distractor', () => {
+  for (const t of vsTrials(3)) {
+    const expected = t.values.targetPresent ? 1 : 0;
+    assert.equal(t.values.nTarget, expected,
+      `targetPresent ${t.values.targetPresent} produced ${t.values.nTarget} targets`);
+    // The same-colour items always add up to the set size, target included.
+    assert.equal(t.values.nTarget + t.values.nSameColour, t.values.targetSetSize,
+      `set size ${t.values.targetSetSize} does not add up`);
+  }
+});
+
+test('the array holds three kinds at once, which is what makes it a conjunction search', () => {
+  const search = VS.trial.phases.find(p => p.name === 'search');
+  assert.equal(search.display.kind, 'array');
+  assert.equal(search.display.groups.length, 3);
+
+  const [target, sameColour, sameShape] = search.display.groups;
+  assert.equal(target.item.text, 'T');
+  assert.equal(sameColour.item.text, 'L');
+  assert.equal(sameShape.item.text, 'T');
+  // Target colour for the first two, the other colour for the third.
+  assert.equal(target.item.color, sameColour.item.color);
+  assert.notEqual(target.item.color, sameShape.item.color);
+});
+
+test('the target is never rotated, and every distractor can be', () => {
+  const [target, sameColour, sameShape] = VS.trial.phases
+    .find(p => p.name === 'search').display.groups;
+  // A T on its side reads as an L, so rotating the target would make it unfindable.
+  assert.equal(target.rotate, undefined);
+  assert.deepEqual(sameColour.rotate, [0, 90, 180, 270]);
+  assert.deepEqual(sameShape.rotate, [0, 90, 180, 270]);
+});
+
+test('answering with what the display holds is correct', () => {
+  const trials = vsTrials(3);
+  const present = trials.find(t => t.values.targetPresent === true);
+  const absent = trials.find(t => t.values.targetPresent === false);
+  assert.equal(isCorrect(VS, present, 'present'), true);
+  assert.equal(isCorrect(VS, present, 'absent'), false);
+  assert.equal(isCorrect(VS, absent, 'absent'), true);
+});
+
+test('a search that has not finished in five seconds is recorded and moved on', () => {
+  const search = VS.trial.phases.find(p => p.name === 'search');
+  assert.equal(search.timeoutMs, 5000);
+  assert.equal(VS.trial.itiMs, 500);
+});
+
+test('mock data shows search time climbing with the number of items', () => {
+  const rows = generateMockRows(VS);
+  const bySize = Object.fromEntries(
+    aggregate(VS.dashboard.charts[1], rows).map(p => [String(p.group), p.value]),
+  );
+  assert.ok(bySize['8'] > bySize['1'] + 300, `8 items (${bySize['8']}) is not far slower than 1 (${bySize['1']})`);
+  assert.ok(bySize['4'] > bySize['2'], 'the climb is not monotonic');
+});
+
+test('mock data shows an absent search costing more than a present one', () => {
+  const rows = generateMockRows(VS);
+  const present = rows.filter(r => String(r.targetPresent) === 'true' && r.is_correct && r.reaction_time_ms != null);
+  const absent = rows.filter(r => String(r.targetPresent) === 'false' && r.is_correct && r.reaction_time_ms != null);
+  const mean = xs => xs.reduce((a, b) => a + b.reaction_time_ms, 0) / xs.length;
+  assert.ok(mean(absent) > mean(present) + 200,
+    `absent ${Math.round(mean(absent))}ms is not clearly slower than present ${Math.round(mean(present))}ms`);
+});

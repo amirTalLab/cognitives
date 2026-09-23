@@ -20,7 +20,8 @@ const EXPERIMENTS: Exp[] = [
   { id: 'CompositeFace',   title: 'Composite Face Task',     titleHe: 'משימת פנים מורכבות', icon: Users,     color: 'text-pink-400', href: '/run/CompositeFace' },
   // Ported. app/wordSuperiority/ still serves its own table at /wordSuperiority/teacher.
   { id: 'wordSuperiority', title: 'Word Superiority Effect', titleHe: 'אפקט עליונות המילה', icon: Type,      color: 'text-teal-400', href: '/run/wordSuperiority' },
-  { id: 'visualSearch',    title: 'Visual Search',           titleHe: 'חיפוש חזותי',        icon: Search,    color: 'text-rose-400'    },
+  // Ported. app/visualSearch/ still serves its own rows at /visualSearch/teacher.
+  { id: 'visualSearch',    title: 'Visual Search',           titleHe: 'חיפוש חזותי',        icon: Search,    color: 'text-rose-400', href: '/run/visualSearch' },
   // Ported to the definition runtime. The hand-built pages are still on disk and still
   // serve the 46 rows in posner_results at /posnerCueing/teacher; this card points at the
   // ported one, which is where new runs go.

@@ -45,6 +45,14 @@ function availableNames(def: ExperimentDefinition): Set<string> {
 
   fromFactors(def.factors, def.pools);
 
+  // The between-subject item is in scope everywhere, exactly like a factor, so a display
+  // saying "{group.target}" is referring to something real.
+  if (def.assign?.as) {
+    names.add(def.assign.as);
+    const item = def.pools?.[def.assign.pool]?.[0];
+    for (const key of Object.keys(item ?? {})) names.add(`${def.assign.as}.${key}`);
+  }
+
   // Later blocks store their OWN fields, and a chart is usually about one of them. Reading
   // only the first block's `store` made every chart of a multi-block experiment look like it
   // would show nothing — nine such warnings on a correct definition, which is the kind of
