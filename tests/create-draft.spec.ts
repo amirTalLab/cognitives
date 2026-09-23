@@ -474,106 +474,59 @@ test('publishing sends the definition to the password-checked function, with the
   expect((sent[0].p_definition as { slug: string }).slug).toBe(DEFINITION.slug);
 });
 
-// ── Editing trial counts and timing by hand ───────────────────────────────────
-//
-// Same free path as the instruction boxes. The fixture is Sternberg: 4 set sizes × 3
-// variants × present/absent = 24 conditions, repeated twice, with 2 practice trials.
 
-test('the trial count shown is what the runtime builds, and follows an edit with no API call', async ({ page }) => {
+// ── Editing the title by hand ─────────────────────────────────────────────────
+
+test('an edited title reaches the running experiment, with no API call', async ({ page }) => {
   const apiCalls: string[] = [];
   page.on('request', r => { if (r.url().includes('/api/create/')) apiCalls.push(r.url()); });
+
   await openRefine(page);
+  await expect(page.getByLabel('Experiment title in English')).toHaveValue(DEFINITION.title);
+  await page.getByLabel('Experiment title in English').fill('Letters in Memory');
+  await page.getByLabel('Experiment title in Hebrew').fill('אותיות בזיכרון');
+  await page.getByRole('button', { name: 'Update preview' }).click();
 
-  const total = page.getByTestId('design-total');
-  await expect(total).toContainText('48 trials');
-  await expect(total).toContainText('2 practice trials');
-
-  await page.getByLabel('Repetitions').fill('3');
-  await expect(total).toContainText('72 trials');
-  await expect(page.getByText('72 trials (24 conditions × 3)')).toBeVisible();
-
-  // Reaches the preview and the draft, exactly as an instruction edit does.
-  await expect.poll(async () => JSON.parse(
-    await page.evaluate(k => sessionStorage.getItem(k as string) ?? '{}', PREVIEW_KEY),
-  )[DEFINITION.slug]?.repetitions).toBe(3);
-  await expect.poll(async () => JSON.parse(
-    await page.evaluate(k => localStorage.getItem(k as string) ?? '{}', DRAFT_KEY),
-  ).definition?.repetitions).toBe(3);
-
-  await page.getByLabel('Pause between trials').fill('750');
-  await expect.poll(async () => JSON.parse(
-    await page.evaluate(k => localStorage.getItem(k as string) ?? '{}', DRAFT_KEY),
-  ).definition?.trial?.itiMs).toBe(750);
+  const frame = page.frameLocator('iframe[title*="Preview"]');
+  await expect(frame.getByRole('heading', { name: 'אותיות בזיכרון' })).toBeVisible({ timeout: 30_000 });
+  await frame.getByRole('button', { name: 'English' }).click();
+  await expect(frame.getByRole('heading', { name: 'Letters in Memory' })).toBeVisible();
 
   expect(apiCalls.filter(u => !u.includes('/api/create/status')), 'editing must not call the API').toEqual([]);
 });
 
-test('an edit the validator dislikes is flagged on the spot', async ({ page }) => {
+test('an edited title is saved in both copies — the definition and the spec', async ({ page }) => {
   await openRefine(page);
-  await expect(page.getByText('The design checks out.')).toBeVisible();
+  await page.getByLabel('Experiment title in English').fill('Letters in Memory');
 
-  await page.getByLabel('Practice trials').fill('100');
-  await expect(page.getByText('Warning: Practice is 100 trials but the design only has 48.')).toBeVisible();
+  // The spec's copy is what homepage registration sends, so it must not be left behind.
+  await expect.poll(async () => {
+    const saved = JSON.parse(await page.evaluate(k => localStorage.getItem(k as string) ?? '{}', DRAFT_KEY));
+    return [saved.definition?.title, saved.spec?.title];
+  }).toEqual(['Letters in Memory', 'Letters in Memory']);
 });
 
-test('a half-typed number is held back rather than applied', async ({ page }) => {
+test('an empty title is flagged', async ({ page }) => {
   await openRefine(page);
-  await page.getByLabel('Repetitions').fill('');
-  await expect(page.getByText(/not applied yet/)).toBeVisible();
-  // The definition still has the last good value — an empty box never becomes 0 repetitions.
-  await expect(page.getByTestId('design-total')).toContainText('48 trials');
+  await page.getByLabel('Experiment title in Hebrew').fill('');
+  await expect(page.getByText(/A title is empty/)).toBeVisible();
 });
 
-test('each block is edited on its own; a timed block has no trial count, and fixed order says so', async ({ page }) => {
-  const base = JSON.parse(readFileSync('experiments/memoryScanning.json', 'utf8'));
-  const { pools, factors, exclude, trial, store } = base;
-  const block = { pools, factors, exclude, trial, store };
-  const staged = {
-    ...base,
-    stages: [
-      { ...block, name: 'filler', repetitions: 2, endsAfterMs: 30_000 },
-      { ...block, name: 'sequence', repetitions: 1, order: 'fixed' },
-    ],
-  };
-  await openCreate(page, draft({ definition: staged }));
-  await page.getByRole('button', { name: 'Restore' }).click();
+test('publishing sends the edited title', async ({ page }) => {
+  await serverNotInMock(page);
+  await openRefine(page);
+  await page.getByLabel('Experiment title in English').fill('Letters in Memory');
 
-  // The timed block's clock replaces its trial count, and is not counted in the total.
-  await expect(page.getByLabel('filler: repetitions')).toHaveCount(0);
-  await expect(page.getByLabel('filler: length')).toHaveValue('30');
-  await expect(page.getByText(/measured in\s+time, so it has no trial count to set/)).toBeVisible();
-  await expect(page.getByTestId('design-total')).toContainText('72 trials');
-  await expect(page.getByTestId('design-total')).toContainText('1 timed block');
+  let published = '';
+  await page.route('**/api/create/publish', route => {
+    published = route.request().postData() ?? '';
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: 'stopped for the test' }),
+    });
+  });
+  await page.getByRole('button', { name: 'Finish & publish' }).click();
+  await expect(page.getByText(/stopped for the test/)).toBeVisible();
 
-  // Fixed order: repeating it repeats the sequence, and the page says as much.
-  await page.getByLabel('sequence: repetitions').fill('2');
-  await expect(page.getByText(/this sequence of 24 trials runs 2 times over/)).toBeVisible();
-  await expect(page.getByTestId('design-total')).toContainText('96 trials');
-
-  // Only the block that was edited changed.
-  await expect.poll(async () => JSON.parse(
-    await page.evaluate(k => localStorage.getItem(k as string) ?? '{}', DRAFT_KEY),
-  ).definition?.stages?.[1]?.repetitions).toBe(2);
-  const def = JSON.parse(await page.evaluate(k => localStorage.getItem(k as string) ?? '{}', DRAFT_KEY)).definition;
-  expect(def.repetitions).toBe(2);
-  expect(def.stages[0].repetitions).toBe(2);
-});
-
-test('a block inside a group is edited once and counted once per pass', async ({ page }) => {
-  const base = JSON.parse(readFileSync('experiments/memoryScanning.json', 'utf8'));
-  const { factors, exclude, trial, store } = base;
-  const grouped = {
-    ...base,
-    pools: { ...base.pools, lists: [{ theme: 'a' }, { theme: 'b' }] },
-    stages: [{ forEach: 'lists', as: 'list', stages: [{ factors, exclude, trial, store, name: 'study', repetitions: 1 }] }],
-  };
-  await openCreate(page, draft({ definition: grouped }));
-  await page.getByRole('button', { name: 'Restore' }).click();
-
-  await expect(page.getByText(/repeats for each of 2 "lists" items — edits apply to every pass/)).toBeVisible();
-  await expect(page.getByText('48 trials (24 conditions × 1), across 2 passes, shuffled.')).toBeVisible();
-  await expect(page.getByTestId('design-total')).toContainText('96 trials');
-
-  await page.getByLabel('study: repetitions').fill('2');
-  await expect(page.getByTestId('design-total')).toContainText('144 trials');
+  expect(JSON.parse(published).definition.title).toBe('Letters in Memory');
 });

@@ -22,7 +22,6 @@ import { AssetManifest, ExperimentDefinition } from '@/lib/experiment-runtime/sc
 import { uploadAssets } from '@/lib/experiment-runtime/assets';
 import { ValidationIssue } from '@/lib/experiment-runtime/validate';
 import { putPreview } from '@/lib/experiment-runtime/preview-store';
-import DesignEditor from './DesignEditor';
 import {
   listPublished, loadDefinition, publishDefinition, PublishedSummary,
 } from '@/lib/experiment-runtime/store';
@@ -701,13 +700,18 @@ export default function CreateProjectPage() {
   }
 
   /**
-   * A hand edit to the design's numbers — repetitions, practice, the pause between trials.
-   * Same path as updateInstructions, for the same reason: changing a digit is not worth a
-   * paid refine. DesignEditor builds the edited definition; this only stores it.
+   * A hand edit to the experiment's name, the same free path as updateInstructions.
+   *
+   * The spec holds a second copy — homepage registration reads it — so both change
+   * together. Otherwise the run page would say one name and the homepage card another.
    */
-  function updateDesign(next: ExperimentDefinition) {
+  function updateTitle(lang: 'en' | 'he', text: string) {
+    if (!definition) return;
+    const key = lang === 'en' ? 'title' : 'titleHe';
+    const next = { ...definition, [key]: text };
     setDefinition(next);
     putPreview(next);
+    setSpec(s => s && ({ ...s, [key]: text }));
   }
 
   function updateSpecField(key: string, value: string) {
@@ -1349,16 +1353,16 @@ export default function CreateProjectPage() {
               )}
             </div>
 
-            {/* Instructions — edited by hand, not through Refine. Wording is the lecturer's
-                call and needs no model: a paid round-trip to change a sentence is waste. */}
+            {/* Title and instructions — edited by hand, not through Refine. Wording is the
+                lecturer's call and needs no model: a paid round-trip to change a sentence is waste. */}
             {definition && (
               <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
                 <div className="flex items-start gap-3 flex-wrap mb-4">
                   <div className="flex-1 min-w-64">
-                    <h2 className="font-semibold text-gray-200 mb-1">Instructions</h2>
+                    <h2 className="font-semibold text-gray-200 mb-1">Title &amp; instructions</h2>
                     <p className="text-sm text-gray-400">
-                      What participants read before they start. Edit the text directly — this is free, no AI is
-                      involved. Press Update preview to see it in the experiment above.
+                      The experiment&apos;s name and what participants read before they start. Edit the text
+                      directly — this is free, no AI is involved. Press Update preview to see it in the experiment above.
                     </p>
                   </div>
                   <button onClick={() => { setPreviewTab('experiment'); setPreviewNonce(n => n + 1); }}
@@ -1366,6 +1370,23 @@ export default function CreateProjectPage() {
                     <RefreshCw className="w-4 h-4 inline mr-1.5 -mt-0.5" />Update preview
                   </button>
                 </div>
+                <div className="grid md:grid-cols-2 gap-4 mb-4">
+                  {([['en', 'English', 'ltr'], ['he', 'עברית', 'rtl']] as const).map(([lang, label, dir]) => (
+                    <label key={lang} className="flex flex-col gap-1.5">
+                      <span className="text-xs text-gray-500">Title · {label}</span>
+                      <input type="text" value={lang === 'en' ? definition.title : definition.titleHe} dir={dir}
+                        disabled={!!busy}
+                        aria-label={lang === 'en' ? 'Experiment title in English' : 'Experiment title in Hebrew'}
+                        onChange={e => updateTitle(lang, e.target.value)}
+                        className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-gray-200 outline-none focus:border-purple-400 disabled:opacity-50" />
+                    </label>
+                  ))}
+                </div>
+                {(!definition.title.trim() || !definition.titleHe.trim()) && (
+                  <p className="text-xs text-amber-400 -mt-2 mb-4">
+                    A title is empty — participants who choose that language will see an experiment with no name.
+                  </p>
+                )}
                 <div className="grid md:grid-cols-2 gap-4">
                   {([['en', 'English', 'ltr'], ['he', 'עברית', 'rtl']] as const).map(([lang, label, dir]) => (
                     <label key={lang} className="flex flex-col gap-1.5">
@@ -1384,25 +1405,6 @@ export default function CreateProjectPage() {
                     One language is empty — participants who choose it will see no instructions at all.
                   </p>
                 )}
-                {finishResult && (
-                  <p className="text-xs text-amber-400 mt-3">
-                    Already published — press Finish &amp; publish again so students see the change.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Trial counts and timing — edited by hand for the same reason as the instructions.
-                Disabled mid-call for the same reason too: a refine reply replaces the lot. */}
-            {definition && (
-              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
-                <h2 className="font-semibold text-gray-200 mb-1">Trials &amp; timing</h2>
-                <p className="text-sm text-gray-400 mb-4">
-                  How long the experiment is. Edit the numbers directly — free, no AI involved. The count shown is
-                  what the experiment actually builds, and the design is re-checked after every change. Update
-                  preview, above, runs it.
-                </p>
-                <DesignEditor definition={definition} onChange={updateDesign} disabled={!!busy} />
                 {finishResult && (
                   <p className="text-xs text-amber-400 mt-3">
                     Already published — press Finish &amp; publish again so students see the change.
