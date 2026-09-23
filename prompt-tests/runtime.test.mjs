@@ -744,3 +744,66 @@ test('a block that asks nothing is not nagged about the reaction-time clock', ()
   const messages = validate(study()).map(i => i.message);
   assert.ok(!messages.some(m => /reaction-time clock/.test(m)), messages.join(' | '));
 });
+
+// ── J. Blocks measured in time ────────────────────────────────────────────────
+
+/** A filled delay: plenty of sums, bounded by a clock rather than by a count. */
+function delay(over = {}) {
+  return design({
+    factors: [{ name: 'n', levels: Array.from({ length: 90 }, (_, i) => i + 10) }],
+    repetitions: 1,
+    endsAfterMs: 30_000,
+    trial: {
+      phases: [{ name: 'ask', display: { kind: 'text', text: '{n}' }, awaitsResponse: true, startsClock: true }],
+      response: { kind: 'choice', options: [{ value: 'odd', label: 'Odd' }, { value: 'even', label: 'Even' }] },
+      correct: { kind: 'none' },
+    },
+    store: ['n'],
+    dashboard: { charts: [{ title: 'c', kind: 'bar', groupBy: 'n', measure: 'count' }] },
+    ...over,
+  });
+}
+
+test('a block bounded by a clock is valid', () => {
+  const issues = validate(delay());
+  assert.deepEqual(issues.filter(i => i.severity === 'error'), [], JSON.stringify(issues));
+});
+
+test('a timed block still builds a full trial list to draw on', () => {
+  assert.equal(buildTrials(delay(), {}).length, 90);
+});
+
+test('a timed block too short to outlast its own clock is flagged', () => {
+  const def = delay({ factors: [{ name: 'n', levels: [1, 2, 3] }], store: ['n'] });
+  const messages = validate(def).map(i => i.message);
+  assert.ok(messages.some(m => /shorter delay than a slow one/.test(m)), messages.join(' | '));
+});
+
+test('a timed block is not nagged for being a long session, since the clock ends it', () => {
+  const def = delay({ repetitions: 6 });
+  const messages = validate(def).map(i => i.message);
+  assert.ok(!messages.some(m => /long session/.test(m)), messages.join(' | '));
+});
+
+test('an untimed block of the same size is still called a long session', () => {
+  const def = delay({ repetitions: 6, endsAfterMs: undefined });
+  const messages = validate(def).map(i => i.message);
+  assert.ok(messages.some(m => /long session/.test(m)), messages.join(' | '));
+});
+
+test('a duration that is not a positive number of milliseconds is refused', () => {
+  for (const value of [0, -1, 'thirty seconds', null]) {
+    const def = delay({ endsAfterMs: value });
+    assert.doesNotThrow(() => validate(def));
+    assert.ok(
+      validate(def).some(i => i.severity === 'error'),
+      `accepted endsAfterMs: ${JSON.stringify(value)}`,
+    );
+  }
+});
+
+test('a later block may be the timed one', () => {
+  const def = design({ stages: [stage({ name: 'distractor', endsAfterMs: 'soon' })] });
+  assert.doesNotThrow(() => validate(def));
+  assert.ok(validate(def).some(i => i.severity === 'error' && /endsAfterMs/.test(i.message)));
+});

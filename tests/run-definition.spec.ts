@@ -738,6 +738,46 @@ test.describe('definition runtime — practice, saving and endings', () => {
     }
   });
 
+  // A filled delay is measured in seconds, not trials: it has to last the same time for a
+  // fast participant as for a slow one, which is the whole reason it is there.
+  test('a block bounded by a clock ends itself, however many trials were answered', async ({ page }) => {
+    const def = {
+      version: 1, slug: 'e2eTimed', title: 'Filled delay', titleHe: 'השהיה', category: 'MEMORY',
+      instructions: { en: 'Odd or even?', he: 'זוגי או אי-זוגי?' },
+      stageName: 'distractor',
+      factors: [{ name: 'n', levels: Array.from({ length: 40 }, (_, i) => i + 10) }],
+      repetitions: 1,
+      endsAfterMs: 3000,
+      trial: {
+        phases: [{ name: 'ask', display: { kind: 'text', text: '{n}' }, awaitsResponse: true, startsClock: true }],
+        response: { kind: 'choice', options: [{ value: 'odd', label: 'Odd' }, { value: 'even', label: 'Even' }] },
+        correct: { kind: 'none' },
+      },
+      itiMs: 50,
+      store: ['n'],
+      dashboard: { charts: [{ title: 'Answered', kind: 'bar', groupBy: 'n', measure: 'count' }] },
+    };
+
+    const saved = await runPreview(page, def);
+
+    // A countdown, not "trial 1 of 40" — there is no list to get through.
+    await expect(page.getByText(/^\d+s$/)).toBeVisible({ timeout: 10_000 });
+
+    // Answer a couple, then simply wait: the block has to end on its own.
+    for (let i = 0; i < 2; i++) {
+      await page.getByRole('button', { name: 'Odd' }).click();
+      await page.waitForTimeout(150);
+    }
+
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+
+    // Only the answered trials were kept — the one on screen when the clock ran out was
+    // abandoned, since nobody answered it.
+    await page.waitForTimeout(500);
+    expect(saved.length).toBe(2);
+    expect(saved.every(r => r.response === 'odd')).toBe(true);
+  });
+
   test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {
     const saved = await runPreview(page, speeded('e2eDiscardEarly', 'go', {
       phases: [

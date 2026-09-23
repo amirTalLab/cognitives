@@ -185,6 +185,11 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     bad('"order"', 'either "shuffled" or "fixed"');
   }
 
+  if (def.endsAfterMs !== undefined
+      && (!Number.isFinite(def.endsAfterMs) || (def.endsAfterMs as number) <= 0)) {
+    bad('"endsAfterMs"', 'a number of milliseconds above zero');
+  }
+
   def.store.forEach((key, i) => { if (!isStr(key)) bad(`Entry #${i + 1} of "store"`, 'a string'); });
 
   def.trial.phases.forEach((p, i) => {
@@ -313,6 +318,10 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
         if (!Number.isFinite(stage.repetitions)) bad(`${at}'s "repetitions"`, 'a number');
         if (stage.order !== undefined && stage.order !== 'shuffled' && stage.order !== 'fixed') {
           bad(`${at}'s "order"`, 'either "shuffled" or "fixed"');
+        }
+        if (stage.endsAfterMs !== undefined
+            && (!Number.isFinite(stage.endsAfterMs) || (stage.endsAfterMs as number) <= 0)) {
+          bad(`${at}'s "endsAfterMs"`, 'a number of milliseconds above zero');
         }
         if (!isObj(stage.trial)) bad(`${at}'s "trial"`, 'an object with phases and a response');
         else {
@@ -471,7 +480,23 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     // produced `repetitions: 1e9` on an otherwise valid definition and took the process
     // down with "JavaScript heap out of memory".
     err(`${total.toLocaleString()} trials is far more than any session can run, and building it would exhaust memory. Reduce the repetitions or the number of levels.`);
-  } else if (total > 400) warn(`${total} trials is a long session; consider fewer repetitions.`);
+  } else if (total > 400 && !def.endsAfterMs) {
+    // Not for a timed block: its list is deliberately longer than anyone can finish, and the
+    // clock — not the count — decides how long the participant is there.
+    warn(`${total} trials is a long session; consider fewer repetitions.`);
+  }
+
+  // A timed block stops on whichever comes first, clock or list. A list that runs out cuts
+  // the delay short, and a filled delay whose length depends on how fast someone answers is
+  // the one thing it must not be. One trial per second is faster than anyone sustains, so a
+  // list shorter than that is certainly too short.
+  if (typeof def.endsAfterMs === 'number' && def.endsAfterMs > 0 && total > 0
+      && total < def.endsAfterMs / 1000) {
+    warn(
+      `This block runs for ${Math.round(def.endsAfterMs / 1000)}s but offers only ${total} trials, ` +
+      `so a quick participant would run out and get a shorter delay than a slow one. Give it more trials.`,
+    );
+  }
 
   if (def.practice && def.practice.count > total) {
     warn(`Practice is ${def.practice.count} trials but the design only has ${total}.`);

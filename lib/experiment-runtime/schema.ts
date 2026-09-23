@@ -233,6 +233,24 @@ export type ResponseStep = ResponseSpec & { phase: string };
 export type TrialOrder = 'shuffled' | 'fixed';
 
 /**
+ * A block measured in TIME rather than in trials — it ends after this long, whatever trial
+ * the participant is on.
+ *
+ * Every block until now ran a counted list, because in a reaction-time design the trial
+ * count is the design. A filled-delay task is the opposite: DRM and serial order put
+ * arithmetic between studying a list and recalling it, and what matters is that the delay
+ * lasted thirty seconds — how many sums anyone got through in that time is a property of
+ * the participant, not of the experiment. Counting the trials instead would give a fast
+ * participant a longer delay than a slow one, which is the one thing the delay must not do.
+ *
+ * Named so it cannot be read as a phase's `durationMs`: this ends the whole block.
+ *
+ * The design still needs a trial list, and should offer comfortably more trials than anyone
+ * could finish — the block ends on whichever comes first, so a list that runs out cuts the
+ * delay short. The validator warns when it looks too short to outlast the clock.
+ */
+
+/**
  * A later block of an experiment: its own trials, phases, responses and stored fields.
  *
  * Several of the hand-built experiments are not one block but a sequence of them — DRM
@@ -256,6 +274,7 @@ export interface Stage {
   exclude?: Record<string, string | number | boolean>[];
   repetitions: number;
   order?: TrialOrder;
+  endsAfterMs?: number;
   practice?: ExperimentDefinition['practice'];
   trial: ExperimentDefinition['trial'];
   store: string[];
@@ -268,7 +287,7 @@ export interface Stage {
  * scorer and the runner work on either without knowing which they have.
  */
 export type TrialDesign =
-  Pick<Stage, 'pools' | 'factors' | 'exclude' | 'repetitions' | 'order' | 'practice' | 'trial' | 'store'>;
+  Pick<Stage, 'pools' | 'factors' | 'exclude' | 'repetitions' | 'order' | 'endsAfterMs' | 'practice' | 'trial' | 'store'>;
 
 /**
  * A response whose options depend on the trial.
@@ -547,6 +566,9 @@ export interface ExperimentDefinition {
 
   /** Whether to shuffle the finished list. Shuffled when absent. */
   order?: TrialOrder;
+
+  /** Ends the block after this long, whatever trial it is on. Runs the full list when absent. */
+  endsAfterMs?: number;
 
   practice?: {
     /** Trials drawn from the same design, with feedback after each. */

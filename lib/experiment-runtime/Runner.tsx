@@ -108,6 +108,9 @@ export function Runner({
   // the trial twice or skip the next one entirely.
   const settled = useRef(false);
   const advancing = useRef(false);
+  // One handoff per BLOCK. A timed block can run out in the same instant as its last trial
+  // finishes, and completing twice would append this block's rows to the run twice.
+  const ended = useRef(false);
 
   const trial = trials[trialIdx];
   // Displays that draw something random (array layouts) read the seed from here, so a
@@ -135,7 +138,7 @@ export function Runner({
     advancing.current = true;
     setFeedback(null);
     if (trialIdx + 1 >= trials.length) {
-      onComplete(rows.current);
+      if (!ended.current) { ended.current = true; onComplete(rows.current); }
       return;
     }
     // The inter-trial interval is a gap, not a phase — nothing is on screen during it. Blank
@@ -153,7 +156,9 @@ export function Runner({
   }, [trialIdx, trials.length, onComplete, design.trial.itiMs]);
 
   const finishTrial = useCallback((early = false) => {
-    if (settled.current) return;
+    // `ended` as well as `settled`: once a timed block has handed its rows over, a press
+    // still landing from the abandoned trial must not write another one.
+    if (settled.current || ended.current) return;
 
     const given = answers.current;
     const first = steps[0];
@@ -259,6 +264,31 @@ export function Runner({
     advance();
   }, [definition, design, stage, trial, practice, steps, advance, onSaveFailure]);
 
+  // A block measured in time: it ends when the clock runs out, mid-trial if need be. The
+  // trial in flight is abandoned rather than recorded — nobody answered it, and a filled
+  // delay is not measured in trials anyway.
+  //
+  // Practice is never time-boxed: a filled delay exists to occupy a fixed stretch of the
+  // real session, and rehearsing it would only make the session longer.
+  const timed = !practice && !!design.endsAfterMs;
+  const [remainingMs, setRemainingMs] = useState(design.endsAfterMs ?? 0);
+
+  useEffect(() => {
+    const total = design.endsAfterMs;
+    if (!total || practice) return;
+    const startedAt = performance.now();
+    const tick = setInterval(() => {
+      const left = total - (performance.now() - startedAt);
+      setRemainingMs(Math.max(0, left));
+      if (left <= 0 && !ended.current) {
+        ended.current = true;
+        clearInterval(tick);
+        onComplete(rows.current);
+      }
+    }, 200);
+    return () => clearInterval(tick);
+  }, [design.endsAfterMs, practice, onComplete]);
+
   // A trial that asks nothing ends when its last phase has played. Without this the phase
   // index walks past the end of the list, `phase` becomes undefined, and the runner renders
   // nothing for ever — a silent deadlock rather than a visible error.
@@ -345,7 +375,9 @@ export function Runner({
       <div className="flex-shrink-0 h-6">
         <div className="h-1.5 bg-gray-800">
           <motion.div className="h-full bg-purple-500"
-            animate={{ width: `${(trialIdx / trials.length) * 100}%` }}
+            animate={{ width: `${timed
+              ? (1 - remainingMs / (design.endsAfterMs || 1)) * 100
+              : (trialIdx / trials.length) * 100}%` }}
             transition={{ duration: 0.4 }} />
         </div>
       </div>
@@ -378,7 +410,10 @@ export function Runner({
       </div>
 
       <p className="flex-shrink-0 text-center text-xs text-gray-600 pb-4">
-        {practice ? (rtl ? 'תרגול · ' : 'Practice · ') : ''}{trialIdx + 1} / {trials.length}
+        {practice ? (rtl ? 'תרגול · ' : 'Practice · ') : ''}
+        {/* A timed block counts down: "trial 7 of 90" would imply a list to get through,
+            when the only thing being asked is to keep going until the time is up. */}
+        {timed ? `${Math.ceil(remainingMs / 1000)}s` : `${trialIdx + 1} / ${trials.length}`}
       </p>
     </main>
   );
