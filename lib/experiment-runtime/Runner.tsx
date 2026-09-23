@@ -83,6 +83,16 @@ function responseSteps(def: TrialDesign, trial?: Trial): ResponseStep[] {
   return [{ ...(spec as ResponseSpec), phase }];
 }
 
+/**
+ * Whether a response is typed rather than pressed.
+ *
+ * These hold what the participant has entered in their own state, so a deadline has to be
+ * handed to them to submit — it cannot be answered on their behalf from outside.
+ */
+function typedStep(step: ResponseStep | undefined): boolean {
+  return step?.kind === 'text' || step?.kind === 'number' || step?.kind === 'wordList';
+}
+
 /** A keyboard event's key, in the spelling definitions use for `key`. */
 function keyName(e: KeyboardEvent): string {
   return e.key === ' ' ? 'space' : e.key.toLowerCase();
@@ -340,6 +350,10 @@ export function Runner({
     if (!phase?.awaitsResponse || feedback || iti) return;
     const ms = Number(resolve(phase.timeoutMs, trial?.values ?? {}) ?? 0);
     if (!(ms > 0)) return;
+    // A typed answer submits ITSELF at the deadline, because what the participant has
+    // written lives in the input's own state: answering "none" from out here would throw
+    // away ninety seconds of recall and record the trial as if nothing had been typed.
+    if (typedStep(steps.find(s => s.phase === phase.name))) return;
     const timer = setTimeout(() => {
       if (phase.name === steps[0]?.phase) timedOut.current = true;
       answer(NO_RESPONSE);
@@ -410,7 +424,10 @@ export function Runner({
         {shown && <DisplayView node={shown} values={values} />}
 
         {showResponse && step && (
-          <ResponseView step={step} values={values} rtl={rtl} onAnswer={answer} highlight={retryHint} />
+          <ResponseView step={step} values={values} rtl={rtl} onAnswer={answer} highlight={retryHint}
+            deadlineMs={typedStep(step)
+              ? Number(resolve(phase.timeoutMs, values) ?? 0) || undefined
+              : undefined} />
         )}
 
         {feedback && feedback.message && (
@@ -465,13 +482,15 @@ function correctOption(
   return null;
 }
 
-function ResponseView({ step, values, rtl, onAnswer, highlight }: {
+function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
   step: ResponseStep;
   values: Record<string, unknown>;
   rtl: boolean;
   onAnswer: (value: string) => void;
   /** Marks the correct option while practice waits for it to be pressed. */
   highlight?: string | null;
+  /** For a typed answer: submit whatever has been entered after this long. */
+  deadlineMs?: number;
 }) {
   // Never row-reverse: an ancestor dir="rtl" cancels it and you get the opposite order.
   const dir = { flexDirection: 'row' as const, direction: rtl ? ('rtl' as const) : ('ltr' as const) };
@@ -534,24 +553,85 @@ function ResponseView({ step, values, rtl, onAnswer, highlight }: {
   }
 
   if (step.kind === 'number' || step.kind === 'text') {
-    return <FreeInput step={step} rtl={rtl} onAnswer={onAnswer} />;
+    return <FreeInput step={step} rtl={rtl} onAnswer={onAnswer} deadlineMs={deadlineMs} />;
   }
 
   // Named rather than left as a fall-through: "none" now shares this union, and a
   // fall-through would have shown a word-list box to a trial that asks nothing.
   if (step.kind === 'wordList') {
-    return <WordListInput rtl={rtl} onAnswer={onAnswer} max={step.maxWords} />;
+    return <WordListInput rtl={rtl} onAnswer={onAnswer} max={step.maxWords} deadlineMs={deadlineMs} />;
   }
 
   return null;
 }
 
-function FreeInput({ step, rtl, onAnswer }: {
+/**
+ * Counts down to a deadline, and fires once when it arrives.
+ *
+ * Returns the seconds left so a timed answer can show them, as every hand-built experiment
+ * with a deadline does — a recall box with a silent ninety-second limit would cut people off
+ * with no warning.
+ */
+function useDeadline(deadlineMs: number | undefined, onElapsed: () => void): number | null {
+  // Through a ref: the callback closes over what has been typed, so it changes on every
+  // keystroke, and depending on it would restart the countdown with each letter.
+  const fire = useRef(onElapsed);
+  fire.current = onElapsed;
+  const [left, setLeft] = useState<number | null>(deadlineMs ?? null);
+
+  useEffect(() => {
+    if (!deadlineMs) return;
+    const startedAt = performance.now();
+    let done = false;
+    const tick = setInterval(() => {
+      const remaining = deadlineMs - (performance.now() - startedAt);
+      setLeft(Math.max(0, remaining));
+      if (remaining <= 0 && !done) {
+        done = true;
+        clearInterval(tick);
+        fire.current();
+      }
+    }, 200);
+    return () => clearInterval(tick);
+  }, [deadlineMs]);
+
+  return deadlineMs ? left : null;
+}
+
+/** The seconds remaining, shown above a timed answer. */
+function Countdown({ ms }: { ms: number | null }) {
+  if (ms === null) return null;
+  return <p className="text-2xl font-bold text-purple-400 text-center">{Math.ceil(ms / 1000)}s</p>;
+}
+
+function FreeInput({ step, rtl, onAnswer, deadlineMs }: {
   step: Extract<ResponseSpec, { kind: 'number' } | { kind: 'text' }>;
   rtl: boolean;
   onAnswer: (v: string) => void;
+  deadlineMs?: number;
 }) {
   const [value, setValue] = useState('');
+  // Whatever has been typed when the time runs out is the answer — an empty one if nothing
+  // was typed, which is still a real observation.
+  const left = useDeadline(deadlineMs, () => onAnswer(value.trim()));
+  if (deadlineMs) {
+    return (
+      <div className="w-full max-w-md flex flex-col gap-3">
+        <Countdown ms={left} />
+        <FreeInputForm step={step} rtl={rtl} value={value} setValue={setValue} onAnswer={onAnswer} />
+      </div>
+    );
+  }
+  return <FreeInputForm step={step} rtl={rtl} value={value} setValue={setValue} onAnswer={onAnswer} />;
+}
+
+function FreeInputForm({ step, rtl, value, setValue, onAnswer }: {
+  step: Extract<ResponseSpec, { kind: 'number' } | { kind: 'text' }>;
+  rtl: boolean;
+  value: string;
+  setValue: (v: string) => void;
+  onAnswer: (v: string) => void;
+}) {
   return (
     <form onSubmit={e => { e.preventDefault(); if (value.trim()) onAnswer(value.trim()); }}
       className="flex gap-3 w-full max-w-md" dir={rtl ? 'rtl' : 'ltr'}>
@@ -569,12 +649,24 @@ function FreeInput({ step, rtl, onAnswer }: {
   );
 }
 
-function WordListInput({ rtl, onAnswer, max }: { rtl: boolean; onAnswer: (v: string) => void; max?: number }) {
+function WordListInput({ rtl, onAnswer, max, deadlineMs }: {
+  rtl: boolean;
+  onAnswer: (v: string) => void;
+  max?: number;
+  deadlineMs?: number;
+}) {
   const [words, setWords] = useState<string[]>([]);
   const [current, setCurrent] = useState('');
 
+  // The half-typed word counts too. The hand-built experiments take a whole textarea at the
+  // deadline, so a word someone was in the middle of writing is part of their recall; losing
+  // it here would score them as having forgotten it.
+  const submit = () => onAnswer([...words, current.trim()].filter(Boolean).join(','));
+  const left = useDeadline(deadlineMs, submit);
+
   return (
     <div className="w-full max-w-md flex flex-col gap-3" dir={rtl ? 'rtl' : 'ltr'}>
+      <Countdown ms={left} />
       <form onSubmit={e => {
         e.preventDefault();
         if (!current.trim()) return;
@@ -588,7 +680,7 @@ function WordListInput({ rtl, onAnswer, max }: { rtl: boolean; onAnswer: (v: str
       <div className="flex flex-wrap gap-2">
         {words.map((w, i) => <span key={i} className="px-3 py-1 rounded-full bg-gray-800 text-gray-300 text-sm">{w}</span>)}
       </div>
-      <button onClick={() => onAnswer(words.join(','))} disabled={max !== undefined && words.length > max}
+      <button onClick={submit} disabled={max !== undefined && words.length > max}
         className="px-6 py-3 bg-purple-500 hover:bg-purple-400 text-white font-semibold rounded-lg touch-manipulation">
         {rtl ? 'סיימתי' : 'Done'}
       </button>

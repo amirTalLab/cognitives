@@ -6,8 +6,10 @@
 // what lets a brand-new experiment demo on day one — the sixteen hand-written experiments
 // each needed a bespoke generator, and that is 16 files of work this replaces.
 
-import type { ChartSpec, ExperimentDefinition } from './schema';
-import { buildTrials, NO_RESPONSE, seededRandom } from './trials';
+import type { ChartSpec, ExperimentDefinition, PoolItem, TrialDesign } from './schema';
+import {
+  buildTrials, MISSED, NO_RESPONSE, planStages, RECALLED, seededRandom, SHOWN,
+} from './trials';
 
 /** A stored trial, flattened — the fixed spine plus the definition's payload keys. */
 export interface ResultRow {
@@ -55,50 +57,120 @@ export function generateMockRows(def: ExperimentDefinition): ResultRow[] {
     const speed = 0.85 + rng() * 0.35;          // individual speed factor
     const ability = (rng() - 0.5) * 0.12;       // individual accuracy offset
 
-    for (const trial of buildTrials(def, { rng })) {
-      let rt = spec.baseRtMs;
-      let acc = spec.baseAccuracy + ability;
+    // EVERY block, not just the first. A multi-block experiment's dashboard asks about its
+    // later blocks — DRM's figures are almost all about recall and recognition — so a mock
+    // set covering only the opening block leaves the whole dashboard empty, which is
+    // precisely when a lecturer reaches for the Mock Data toggle.
+    const plan = planStages(def, rng);
+    const multiBlock = plan.length > 1;
 
-      for (const effect of spec.effects ?? []) {
-        // Read as a path, so an effect can name a pool field such as "trialType.validity".
-        if (String(valueAt(trial.values, effect.factor)) !== String(effect.level)) continue;
-        rt += (effect.rtDeltaMs ?? 0) + (effect.rtPerTrialMs ?? 0) * trial.index;
-        acc += effect.accuracyDelta ?? 0;
-      }
-
-      const correct = rng() < Math.min(0.99, Math.max(0.02, acc));
-      // Errors are slower than correct responses, as they are in real data.
-      const jitter = (rng() - 0.5) * 260;
-      const reaction = Math.max(220, Math.round(rt * speed + jitter + (correct ? 0 : 120)));
-
-      // Where the right answer is to press nothing, a correct trial has no response and no
-      // RT — exactly as the runner records it — so RT charts are never fed invented times.
-      const expected = expectedResponse(def, trial.values);
-      const withheld = correct && expected.includes(NO_RESPONSE);
-
-      // A value the experiment could really have produced, so proportion charts count
-      // something. Falls back to the old literals where a definition offers no fixed set —
-      // free text, or options whose labels change from trial to trial.
-      const offered = responseValues(def);
-      const wrongOnes = offered.filter(v => !expected.includes(v));
-      const answered = correct
-        ? (expected[0] ?? offered[Math.floor(rng() * offered.length)] ?? 'correct')
-        : (wrongOnes[Math.floor(rng() * wrongOnes.length)] ?? 'incorrect');
-
-      const row: ResultRow = {
-        session_id: `mock-${p}`,
-        participant_name: name,
-        trial_index: trial.index,
-        is_practice: false,
-        response: withheld ? NO_RESPONSE : answered,
-        is_correct: correct,
-        reaction_time_ms: withheld ? null : reaction,
+    for (const block of plan) {
+      const design = block.design;
+      const stamp: Record<string, unknown> = {
+        ...(multiBlock ? { stage: block.stage } : {}),
+        ...(block.repetition !== undefined ? { repetition: block.repetition } : {}),
       };
-      for (const key of def.store) {
-        row[key.replace(/\./g, '_')] = key.split('.').reduce<unknown>(
-          (acc2, k) => (acc2 as Record<string, unknown>)?.[k], trial.values as unknown);
+
+      /** How likely this item is to go right, given the effects that name its values. */
+      const chanceFor = (values: Record<string, unknown>) => {
+        let acc = spec.baseAccuracy + ability;
+        for (const effect of spec.effects ?? []) {
+          if (String(valueAt(values, effect.factor)) !== String(effect.level)) continue;
+          acc += effect.accuracyDelta ?? 0;
+        }
+        return Math.min(0.99, Math.max(0.02, acc));
+      };
+
+      // A block bounded by a clock offers far more trials than anyone finishes — that is how
+      // it guarantees it never runs out. Mocking all of them would say every participant
+      // answered ninety sums in thirty seconds, so only as many as the time allows are kept.
+      const built = buildTrials(design, { rng, context: block.context });
+      const affordable = design.endsAfterMs
+        ? Math.max(1, Math.round(design.endsAfterMs / (spec.baseRtMs * speed + 300)))
+        : built.length;
+
+      for (const trial of built.slice(0, affordable)) {
+        const stored: Record<string, unknown> = {};
+        for (const key of design.store) {
+          stored[key.replace(/\./g, '_')] = key.split('.').reduce<unknown>(
+            (acc2, k) => (acc2 as Record<string, unknown>)?.[k], trial.values as unknown);
+        }
+        const base = {
+          session_id: `mock-${p}`,
+          participant_name: name,
+          trial_index: trial.index,
+          is_practice: false,
+        };
+
+        // A block that asks nothing presents and moves on, exactly as the runner records it.
+        if (responseValues(design).length === 0 && design.trial.response
+            && !Array.isArray(design.trial.response) && !('sets' in design.trial.response)
+            && design.trial.response.kind === 'none') {
+          rows.push({ ...base, response: SHOWN, is_correct: null, reaction_time_ms: null, ...stamp, ...stored });
+          continue;
+        }
+
+        // A recall block answers once about many items, so it produces a row per studied
+        // word — the shape the runner writes, and the only shape a serial-position curve or
+        // a lure rate can be drawn from.
+        if (design.trial.recall) {
+          const against = design.trial.recall.against;
+          const probes = (against.startsWith('{')
+            ? valueAt(trial.values, against.slice(1, -1))
+            : design.pools?.[against] ?? def.pools?.[against]) as PoolItem[] | undefined;
+          let output = 0;
+          for (const item of probes ?? []) {
+            const came = rng() < chanceFor(item as Record<string, unknown>);
+            if (came) output++;
+            rows.push({
+              ...base,
+              response: came ? RECALLED : MISSED,
+              is_correct: null,
+              reaction_time_ms: null,
+              ...stamp,
+              ...stored,
+              ...(item as Record<string, unknown>),
+              outputPosition: came ? output : null,
+            });
+          }
+          continue;
+        }
+
+        let rt = spec.baseRtMs;
+        for (const effect of spec.effects ?? []) {
+          // Read as a path, so an effect can name a pool field such as "trialType.validity".
+          if (String(valueAt(trial.values, effect.factor)) !== String(effect.level)) continue;
+          rt += (effect.rtDeltaMs ?? 0) + (effect.rtPerTrialMs ?? 0) * trial.index;
+        }
+
+        const correct = rng() < chanceFor(trial.values);
+        // Errors are slower than correct responses, as they are in real data.
+        const jitter = (rng() - 0.5) * 260;
+        const reaction = Math.max(220, Math.round(rt * speed + jitter + (correct ? 0 : 120)));
+
+        // Where the right answer is to press nothing, a correct trial has no response and no
+        // RT — exactly as the runner records it — so RT charts are never fed invented times.
+        const expected = expectedResponse(design, trial.values);
+        const withheld = correct && expected.includes(NO_RESPONSE);
+
+        // A value the experiment could really have produced, so proportion charts count
+        // something. Falls back to the old literals where a definition offers no fixed set —
+        // free text, or options whose labels change from trial to trial.
+        const offered = responseValues(design);
+        const wrongOnes = offered.filter(v => !expected.includes(v));
+        const answered = correct
+          ? (expected[Math.floor(rng() * expected.length)] ?? offered[Math.floor(rng() * offered.length)] ?? 'correct')
+          : (wrongOnes[Math.floor(rng() * wrongOnes.length)] ?? 'incorrect');
+
+        rows.push({
+          ...base,
+          response: withheld ? NO_RESPONSE : answered,
+          is_correct: correct,
+          reaction_time_ms: withheld ? null : reaction,
+          ...stamp,
+          ...stored,
+        });
       }
-      rows.push(row);
     }
   }
 
@@ -117,7 +189,7 @@ export function sem(values: number[]): number {
 
 /** The response(s) a trial's correctness rule expects, when the rule names any. */
 function expectedResponse(
-  def: ExperimentDefinition,
+  def: TrialDesign,
   values: Record<string, unknown>,
 ): string[] {
   const rule = def.trial.correct;
@@ -141,7 +213,7 @@ function expectedResponse(
  * Bound values like "{item.optionA}" are skipped: they name a different word on every trial,
  * so there is no fixed value to count.
  */
-function responseValues(def: ExperimentDefinition): string[] {
+function responseValues(def: TrialDesign): string[] {
   const spec = def.trial.response;
   const specs = Array.isArray(spec)
     ? spec

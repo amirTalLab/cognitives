@@ -19,10 +19,12 @@ export { POSNER_CUEING } from './ports/posner-cueing';
 export { STROOP_PORT } from './ports/stroop';
 export { WORD_SUPERIORITY_PORT } from './ports/word-superiority';
 export { BOUBA_KIKI_PORT } from './ports/bouba-kiki';
+export { DRM_PORT } from './ports/drm';
 
 import { POSNER_CUEING } from './ports/posner-cueing';
 import { STROOP_PORT } from './ports/stroop';
 import { WORD_SUPERIORITY_PORT } from './ports/word-superiority';
 import { BOUBA_KIKI_PORT } from './ports/bouba-kiki';
+import { DRM_PORT } from './ports/drm';
 
-export const PORTS = [POSNER_CUEING, STROOP_PORT, WORD_SUPERIORITY_PORT, BOUBA_KIKI_PORT];
+export const PORTS = [POSNER_CUEING, STROOP_PORT, WORD_SUPERIORITY_PORT, BOUBA_KIKI_PORT, DRM_PORT];

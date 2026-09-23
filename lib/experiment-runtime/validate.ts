@@ -442,7 +442,10 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
         for (const [side, axis] of sides) {
           const a = axis as Record<string, unknown>;
           if (!isStr(a.measure)) bad(`${at}'s "axes.${side}.measure"`, 'a measure name');
-          if (a.measure === 'proportion' && !isStr(a.ofResponse)) {
+          // A list is as good as a single value: several responses may count as one answer.
+          const named = isStr(a.ofResponse)
+            || (Array.isArray(a.ofResponse) && a.ofResponse.length > 0 && a.ofResponse.every(isStr));
+          if (a.measure === 'proportion' && !named) {
             bad(`${at}'s "axes.${side}"`, 'an "ofResponse" — a proportion has to be of some response');
           }
           if (a.filter !== undefined && !isObj(a.filter)) {
@@ -574,7 +577,12 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     .reduce((n, f) => n * levelCount(f, def.pools), 1);
   const total = cells * def.repetitions;
   if (total === 0) err('The design produces no trials.');
-  else if (total < 8) warn(`Only ${total} trials — too few to show an effect reliably.`);
+  // Only where this block IS the session. In a multi-block experiment the first block is
+  // often a short warm-up — DRM's is three practice words — and calling that too few trials
+  // to show an effect would be advice about the wrong thing.
+  else if (total < 8 && !def.stages?.length) {
+    warn(`Only ${total} trials — too few to show an effect reliably.`);
+  }
   else if (total > MAX_TRIALS) {
     // An error rather than a warning, because nothing downstream survives it. The trial
     // list is built in memory and the mock generator multiplies it by the participant

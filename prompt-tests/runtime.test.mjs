@@ -1283,3 +1283,130 @@ test('mock data drives a proportion chart rather than leaving it at zero', () =>
   assert.ok(points.length > 0);
   assert.ok(points.some(p => p.value > 0), 'every group aggregated to zero under mock data');
 });
+
+// ── O. DRM ────────────────────────────────────────────────────────────────────
+
+const DRM = ports.DRM_PORT;
+const drmPlan = () => planStages(DRM, seededRandom(21));
+
+test('DRM runs practice, then five lists of study/distractor/recall, then recognition', () => {
+  const stages = drmPlan().map(b => b.stage);
+  assert.deepEqual(stages.slice(0, 3), ['practiceStudy', 'practiceDistractor', 'practiceRecall']);
+  assert.equal(stages.at(-1), 'recognition');
+  assert.equal(stages.filter(s => s === 'study').length, 5);
+  assert.equal(stages.filter(s => s === 'distractor').length, 5);
+  assert.equal(stages.filter(s => s === 'recall').length, 5);
+});
+
+test('each list is studied exactly once, and the five are in a different order per participant', () => {
+  const themesFor = seed => planStages(DRM, seededRandom(seed))
+    .filter(b => b.stage === 'study').map(b => b.context.list.theme);
+  const themes = themesFor(21);
+  assert.equal(new Set(themes).size, 5, 'a list was studied twice or not at all');
+  assert.ok(new Set([1, 2, 3, 4, 5, 6].map(s => themesFor(s).join(','))).size > 1);
+});
+
+test('a study block presents its ten words in list order, and never the critical lure', () => {
+  const study = drmPlan().find(b => b.stage === 'study');
+  const trials = buildTrials(study.design, { context: study.context });
+  assert.equal(trials.length, 10);
+  const shown = trials.map(t => t.values.item.word);
+  assert.deepEqual(shown, shown.slice().sort((a, b) =>
+    trials.find(t => t.values.item.word === a).values.item.serialPosition
+    - trials.find(t => t.values.item.word === b).values.item.serialPosition));
+  // The lure is the whole point: it must never appear during study.
+  const lure = ports.DRM_PORT.pools.lists.find(l => l.theme === study.context.list.theme);
+  assert.ok(!shown.includes(lure.probes.find(p => p.itemType === 'critical_lure').word));
+});
+
+test('a study word is shown for 2000ms with 250ms between, as the original', () => {
+  const study = drmPlan().find(b => b.stage === 'study');
+  const [word, gap] = study.design.trial.phases;
+  assert.equal(word.durationMs, 2000);
+  assert.equal(gap.durationMs, 250);
+  assert.equal(study.design.trial.response.kind, 'none');
+});
+
+test('the filled delay is thirty seconds, and offers far more sums than anyone finishes', () => {
+  const distractor = drmPlan().find(b => b.stage === 'distractor');
+  assert.equal(distractor.design.endsAfterMs, 30_000);
+  assert.equal(buildTrials(distractor.design, { context: distractor.context }).length, 90);
+});
+
+test('recall is scored against the ten studied words plus the lure', () => {
+  const recall = drmPlan().find(b => b.stage === 'recall');
+  const trial = buildTrials(recall.design, { context: recall.context })[0];
+  const rows = expandRecall(recall.design, trial, '');
+  assert.equal(rows.length, 11);
+  assert.equal(rows.filter(r => r.payload.itemType === 'critical_lure').length, 1);
+  assert.equal(recall.design.trial.phases[0].timeoutMs, 90_000);
+});
+
+test('saying the lure in recall is recorded as the false memory, not as an intrusion', () => {
+  const recall = drmPlan().find(b => b.stage === 'recall');
+  const trial = buildTrials(recall.design, { context: recall.context })[0];
+  const lure = recall.context.list.probes.find(p => p.itemType === 'critical_lure').word;
+  const row = expandRecall(recall.design, trial, lure).find(r => r.payload.word === lure);
+  assert.equal(row.response, 'recalled');
+  assert.equal(row.payload.itemType, 'critical_lure');
+  assert.ok(!row.payload.intrusion);
+});
+
+test('the recognition test is 50 items: 2 per serial position, 5 lures, 25 foils', () => {
+  const recognition = drmPlan().at(-1);
+  const trials = buildTrials(recognition.design, { rng: seededRandom(5) });
+  assert.equal(trials.length, 50);
+
+  const byType = {};
+  for (const t of trials) byType[t.values.item.itemType] = (byType[t.values.item.itemType] ?? 0) + 1;
+  assert.deepEqual(byType, { studied: 20, critical_lure: 5, unrelated_foil: 25 });
+
+  const positions = {};
+  for (const t of trials) {
+    if (t.values.item.itemType !== 'studied') continue;
+    const pos = t.values.item.serialPosition;
+    positions[pos] = (positions[pos] ?? 0) + 1;
+  }
+  assert.deepEqual(Object.values(positions), Array(10).fill(2), 'serial positions are not probed evenly');
+});
+
+test('either "yes" button is right for a studied word, either "no" for the lure', () => {
+  const recognition = drmPlan().at(-1);
+  const trials = buildTrials(recognition.design, { rng: seededRandom(5) });
+  const studied = trials.find(t => t.values.item.itemType === 'studied');
+  const lure = trials.find(t => t.values.item.itemType === 'critical_lure');
+  assert.equal(isCorrect(recognition.design, studied, 'think_yes'), true);
+  assert.equal(isCorrect(recognition.design, studied, 'sure_yes'), true);
+  assert.equal(isCorrect(recognition.design, studied, 'sure_no'), false);
+  assert.equal(isCorrect(recognition.design, lure, 'sure_no'), true);
+  assert.equal(isCorrect(recognition.design, lure, 'sure_yes'), false);
+});
+
+test('a later block can reach the pools the experiment declared at the top', () => {
+  // The bug this catches ran the whole distractor block as one empty trial, in silence.
+  for (const name of ['practiceDistractor', 'distractor', 'recognition']) {
+    const block = drmPlan().find(b => b.stage === name);
+    assert.ok(
+      buildTrials(block.design, { context: block.context }).length > 1,
+      `block "${name}" built no trials, so its pool was out of reach`,
+    );
+  }
+});
+
+test('mock data shows the false memory: the lure is recognised nearly as often as a studied word', () => {
+  const rows = generateMockRows(DRM);
+  const [studied, lure, foil] = aggregate(DRM.dashboard.charts[0], rows).map(p => p.value);
+  assert.ok(lure > foil + 30, `lure ${lure}% is not clearly above foils ${foil}%`);
+  assert.ok(lure > studied - 20, `lure ${lure}% is far below studied ${studied}%`);
+});
+
+test('mock data fills every block, so no figure is empty', () => {
+  const rows = generateMockRows(DRM);
+  const stages = new Set(rows.map(r => r.stage));
+  for (const name of ['study', 'distractor', 'recall', 'recognition']) {
+    assert.ok(stages.has(name), `mock produced no rows for "${name}"`);
+  }
+  for (const chart of DRM.dashboard.charts) {
+    assert.ok(aggregate(chart, rows).length > 0, `chart "${chart.title}" aggregated to nothing`);
+  }
+});

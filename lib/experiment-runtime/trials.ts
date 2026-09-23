@@ -324,10 +324,22 @@ export function planStages(
     { design: def, stage: def.stageName ?? 'main', context: {} },
   ];
 
+  /**
+   * A later block, with the experiment's pools in scope.
+   *
+   * Stimulus pools are declared once at the top of a definition, and a block that named one
+   * used to find nothing — `buildTrials` looked only at that block's own `pools`. The factor
+   * then contributed no levels, the cross collapsed to a single empty trial, and the block
+   * ran once and moved on. Silent, and it looked like a design that simply had little in it.
+   * A block may still declare pools of its own, which win.
+   */
+  const withPools = (stage: Stage): TrialDesign =>
+    ({ ...stage, pools: { ...def.pools, ...stage.pools } });
+
   for (const entry of def.stages ?? []) {
     if (!isStageGroup(entry)) {
       blocks.push({
-        design: entry,
+        design: withPools(entry),
         stage: entry.name,
         title: entry.title,
         instructions: entry.instructions,
@@ -346,7 +358,7 @@ export function planStages(
     drawn.forEach((item, i) => {
       for (const stage of entry.stages) {
         blocks.push({
-          design: stage,
+          design: withPools(stage),
           stage: stage.name,
           title: stage.title,
           instructions: stage.instructions,
