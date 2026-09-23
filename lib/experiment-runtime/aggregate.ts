@@ -567,7 +567,12 @@ export function aggregateXY(chart: ChartSpec, allRows: ResultRow[]): XYPoint[] {
 export function seriesNames(chart: ChartSpec, rows: ResultRow[]): string[] {
   if (!chart.seriesBy) return [];
   const key = chart.seriesBy.replace(/\./g, '_');
-  return [...new Set(rows.map(r => String(r[key])))].filter(s => s !== 'undefined').sort();
+  // Only rows the chart actually draws. Reading every row instead named a series for values
+  // the chart filters out — a serial-position chart split by block listed all five blocks of
+  // the experiment, so the legend advertised three series that were empty everywhere.
+  return [...new Set(rows.filter(r => included(chart, r)).map(r => String(r[key])))]
+    .filter(s => s !== 'undefined')
+    .sort();
 }
 
 /** The axis label for a measure, honouring `correctMeans` on preference tasks. */

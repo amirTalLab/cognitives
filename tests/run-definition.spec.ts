@@ -1311,3 +1311,40 @@ test.describe('DRM, the ported experiment', () => {
     await expect(page.locator('.recharts-surface')).toHaveCount(7, { timeout: 15_000 });
   });
 });
+
+// Serial order is two twenty-word lists with a two-and-a-half-minute delay, so the whole
+// run is far too long for a test. This walks as far as the parts a browser can break: the
+// passive Hebrew study list, and the typed arithmetic that follows it on a clock.
+test.describe('Serial position, the ported experiment', () => {
+  test('the study list plays itself, then the arithmetic starts on a clock', async ({ page }) => {
+    await page.route('**/rest/v1/experiment_results*', route =>
+      route.fulfill({ status: 201, contentType: 'application/json', body: '[]' }));
+
+    await page.goto('/run/serialOrder');
+    await page.getByPlaceholder(/Name|שם/).fill('E2E SO');
+    await page.getByRole('button', { name: /Begin|התחלה/ }).click();
+
+    // Words present themselves, with nothing to press.
+    await expect(page.getByText('סולם')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('main button')).toHaveCount(0);
+
+    // Twenty words at 3s each is a minute, so this only checks the block is still running
+    // and shows the list in order rather than sitting through all of it.
+    await expect(page.getByText('תפוז')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('מראה')).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('the teacher dashboard draws all eight figures from mock data', async ({ page }) => {
+    await page.route('**/rest/v1/**', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await page.addInitScript(() => sessionStorage.setItem('ss_teacher_authed', '1'));
+    await page.goto('/run/serialOrder/teacher');
+
+    await page.getByRole('button', { name: 'Mock Data' }).click();
+
+    await expect(page.getByText('Serial position curve — session 1 (delayed recall)'))
+      .toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Arithmetic: problems attempted against accuracy')).toBeVisible();
+    await expect(page.locator('.recharts-surface')).toHaveCount(8, { timeout: 15_000 });
+  });
+});

@@ -1440,3 +1440,124 @@ test('a block inside a group can reach a pool the experiment declared, through t
   const recall = planStages(def, seededRandom(12)).find(b => b.stage === 'recall');
   assert.equal(buildTrials(recall.design, { context: recall.context }).length, LISTS.length);
 });
+
+// ── P. Serial position ────────────────────────────────────────────────────────
+
+const SO = ports.SERIAL_ORDER_PORT;
+const soPlan = () => planStages(SO, seededRandom(31));
+
+test('serial order runs study, arithmetic, recall, then a second list and immediate recall', () => {
+  assert.deepEqual(
+    soPlan().map(b => b.stage),
+    ['study1', 'arithmetic', 'recall1', 'study2', 'recall2'],
+  );
+});
+
+test('each list is twenty words, presented in list order', () => {
+  for (const name of ['study1', 'study2']) {
+    const block = soPlan().find(b => b.stage === name);
+    const trials = buildTrials(block.design, { rng: seededRandom(2) });
+    assert.equal(trials.length, 20, `${name} is not twenty words`);
+    assert.deepEqual(
+      trials.map(t => t.values.item.serialPosition),
+      Array.from({ length: 20 }, (_, i) => i + 1),
+      `${name} is not in serial order`,
+    );
+  }
+});
+
+test('the two sessions study different words, or a recall could belong to either', () => {
+  const wordsOf = name => buildTrials(soPlan().find(b => b.stage === name).design, {})
+    .map(t => t.values.item.word);
+  const first = new Set(wordsOf('study1'));
+  assert.ok(wordsOf('study2').every(w => !first.has(w)));
+});
+
+test('a word is shown for 2000ms, after a 500ms fixation and before a 500ms blank', () => {
+  const [fixation, word, blank] = soPlan()[0].design.trial.phases;
+  assert.equal(fixation.durationMs, 500);
+  assert.equal(word.durationMs, 2000);
+  assert.equal(blank.durationMs, 500);
+  assert.equal(soPlan()[0].design.trial.response.kind, 'none');
+});
+
+test('only the first session has a filled delay, and it lasts two and a half minutes', () => {
+  const timed = soPlan().filter(b => b.design.endsAfterMs);
+  assert.equal(timed.length, 1);
+  assert.equal(timed[0].stage, 'arithmetic');
+  assert.equal(timed[0].design.endsAfterMs, 150_000);
+});
+
+test('the arithmetic offers far more problems than the delay allows', () => {
+  const block = soPlan().find(b => b.stage === 'arithmetic');
+  const built = buildTrials(block.design, { rng: seededRandom(3) });
+  assert.ok(built.length > 150, `only ${built.length} problems for a 150s delay`);
+  // Typed, and marked right against the problem's own answer.
+  assert.equal(block.design.trial.response.kind, 'number');
+  const trial = built[0];
+  assert.equal(isCorrect(block.design, trial, String(trial.values.sum.answer)), true);
+  assert.equal(isCorrect(block.design, trial, String(trial.values.sum.answer + 1)), false);
+});
+
+test('recall is two minutes and is scored against the list that session studied', () => {
+  for (const [name, study] of [['recall1', 'study1'], ['recall2', 'study2']]) {
+    const block = soPlan().find(b => b.stage === name);
+    assert.equal(block.design.trial.phases[0].timeoutMs, 120_000);
+    const trial = buildTrials(block.design, {})[0];
+    const studied = buildTrials(soPlan().find(b => b.stage === study).design, {})
+      .map(t => t.values.item.word);
+    const rows = expandRecall(block.design, trial, studied[0]);
+    assert.equal(rows.length, 20);
+    assert.equal(rows.find(r => r.payload.word === studied[0]).response, 'recalled');
+  }
+});
+
+test('every studied word knows which third of the list it is in', () => {
+  const words = buildTrials(soPlan()[0].design, {}).map(t => t.values.item);
+  const regionAt = pos => words.find(w => w.serialPosition === pos).region;
+  assert.equal(regionAt(1), 'primacy');
+  assert.equal(regionAt(7), 'primacy');
+  assert.equal(regionAt(8), 'middle');
+  assert.equal(regionAt(13), 'middle');
+  assert.equal(regionAt(14), 'recency');
+  assert.equal(regionAt(20), 'recency');
+});
+
+test('mock data shows the serial position curve: the ends beat the middle', () => {
+  const rows = generateMockRows(SO);
+  const byRegion = Object.fromEntries(
+    aggregate(SO.dashboard.charts[2], rows).map(p => [p.group, p.recall1]),
+  );
+  const primacy = byRegion['Primacy (1–7)'];
+  const middle = byRegion['Middle (8–13)'];
+  const recency = byRegion['Recency (14–20)'];
+  assert.ok(primacy > middle + 10, `primacy ${primacy} vs middle ${middle}`);
+  assert.ok(recency > middle + 10, `recency ${recency} vs middle ${middle}`);
+});
+
+test('a chart split by block names only the blocks it draws', () => {
+  // All five block names used to be offered as series on a chart filtered to two of them,
+  // so the legend advertised three series that were empty everywhere.
+  const rows = generateMockRows(SO);
+  assert.deepEqual(seriesNames(SO.dashboard.charts[2], rows), ['recall1', 'recall2']);
+});
+
+test('every ported experiment is registered where the runtime looks for it', () => {
+  // Twice now a port was added to PORTS, given tests, and switched on the homepage, while
+  // never reaching the registry's BUILT_IN — so /run/<slug> answered "no experiment named
+  // <slug>". Nothing offline reads the registry, so only a browser test caught it, and only
+  // by accident. This is the cheap version of that check.
+  const registry = readFileSync(join(process.cwd(), 'lib', 'experiment-runtime', 'registry.ts'), 'utf8');
+  const builtIn = registry.split('const BUILT_IN')[1]?.split('];')[0] ?? '';
+
+  for (const port of ports.PORTS) {
+    const name = Object.entries(ports).find(([, v]) => v === port)?.[0];
+    assert.ok(
+      // Split into identifiers rather than matching a pattern: a word boundary written in a
+      // template literal is one lost backslash away from being a backspace character, which
+      // matches nothing and makes this test fail on a registry that is perfectly correct.
+      builtIn.split(/[^A-Za-z0-9_]+/).includes(name),
+      `${name} ("${port.slug}") is in PORTS but not in the registry's BUILT_IN, so /run/${port.slug} would answer "no experiment named ${port.slug}"`,
+    );
+  }
+});
