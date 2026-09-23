@@ -305,10 +305,9 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
       bad('"stages"', 'a non-empty list of blocks, or nothing at all');
     } else {
       const seen = new Set<string>([def.stageName ?? 'main']);
-      def.stages.forEach((s, i) => {
-        const stage = s as unknown as Record<string, unknown>;
-        if (!isObj(stage)) return bad(`Stage #${i + 1}`, 'an object');
-        const at = `Stage ${isStr(stage.name) ? `"${stage.name}"` : `#${i + 1}`}`;
+
+      const checkStage = (stage: Record<string, unknown>, label: string) => {
+        const at = `Stage ${isStr(stage.name) ? `"${stage.name}"` : label}`;
         if (!isStr(stage.name)) bad(`${at}'s "name"`, 'a name, stored on every row of the block');
         else if (seen.has(stage.name)) {
           err(`Two blocks are called "${stage.name}", so their rows could not be told apart.`);
@@ -335,6 +334,45 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
           }
         }
         if (!Array.isArray(stage.store)) bad(`${at}'s "store"`, 'a list of fields to save');
+      };
+
+      def.stages.forEach((s, i) => {
+        const entry = s as unknown as Record<string, unknown>;
+        if (!isObj(entry)) return bad(`Stage #${i + 1}`, 'an object');
+
+        // A plain block, or a group that repeats its own blocks once per drawn item.
+        if (entry.forEach === undefined) return checkStage(entry, `#${i + 1}`);
+
+        const at = `Stage group #${i + 1}`;
+        if (!isStr(entry.forEach)) {
+          bad(`${at}'s "forEach"`, 'the name of the pool to repeat over');
+        } else if (!def.pools?.[entry.forEach]) {
+          err(`${at} repeats over pool "${entry.forEach}", which this experiment does not have.`);
+        } else if (def.pools[entry.forEach].length === 0) {
+          err(`${at} repeats over pool "${entry.forEach}", which is empty, so its blocks would never run.`);
+        }
+
+        if (!isStr(entry.as) || !entry.as) {
+          bad(`${at}'s "as"`, 'a name for the drawn item, so its blocks can refer to it');
+        }
+        if (entry.take !== undefined
+            && (!Number.isInteger(entry.take) || (entry.take as number) < 1)) {
+          bad(`${at}'s "take"`, 'a whole number of at least 1');
+        } else if (isStr(entry.forEach) && typeof entry.take === 'number'
+                   && entry.take > (def.pools?.[entry.forEach]?.length ?? 0)) {
+          // The same silent shortfall as a factor sampling more than its pool holds: the
+          // experiment would simply run fewer passes than it says, and nothing would show it.
+          err(`${at} takes ${entry.take} items from pool "${entry.forEach}", which holds only ${def.pools?.[entry.forEach]?.length ?? 0}.`);
+        }
+
+        if (!Array.isArray(entry.stages) || entry.stages.length === 0) {
+          bad(`${at}'s "stages"`, 'at least one block to repeat');
+        } else {
+          entry.stages.forEach((inner, j) => {
+            if (!isObj(inner)) return bad(`${at}, block #${j + 1}`, 'an object');
+            checkStage(inner as Record<string, unknown>, `#${j + 1} of ${at}`);
+          });
+        }
       });
     }
   }

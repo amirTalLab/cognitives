@@ -13,7 +13,7 @@ import { FlaskConical, Check } from 'lucide-react';
 import { ExperimentDefinition } from '@/lib/experiment-runtime/schema';
 import { getDefinition } from '@/lib/experiment-runtime/registry';
 import { Runner, TrialRow } from '@/lib/experiment-runtime/Runner';
-import { buildTrials } from '@/lib/experiment-runtime/trials';
+import { buildTrials, planStages } from '@/lib/experiment-runtime/trials';
 
 // 'main' is the definition's own design — the first block. 'stageIntro' and 'stageRun'
 // walk whatever `stages` lists after it: DRM's recall, serial order's distractor, SRT's
@@ -31,8 +31,13 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   const [language, setLanguage] = useState<'he' | 'en'>('he');
   const [name, setName] = useState('');
   const [rows, setRows] = useState<TrialRow[]>([]);
-  // Which of `def.stages` is next. The definition's own design is the block before them.
+  // Which block of the plan is next. Index 0 is the definition's own design.
   const [stageIdx, setStageIdx] = useState(0);
+
+  // The blocks this participant will run, with any stage groups already expanded. Drawn
+  // once: a group picks its order at random, so asking again mid-run would give a different
+  // one and a participant could study one list and then be tested on another.
+  const plan = useMemo(() => (def ? planStages(def) : []), [def]);
 
   // For the practice-complete screen. Counted from the design, since the main block's runner
   // has not been built yet when that screen is up.
@@ -142,7 +147,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   /** After a block: on to the next stage if there is one, otherwise the thank-you screen. */
   const afterBlock = (completed: TrialRow[], nextIdx: number) => {
     setRows(previous => [...previous, ...completed]);
-    if (def.stages && nextIdx <= def.stages.length) {
+    if (nextIdx < plan.length) {
       setStageIdx(nextIdx);
       setStage('stageIntro');
     } else {
@@ -155,14 +160,14 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
       <Runner key="main" definition={def} language={language}
         // Named only when there is more than one block, so a single-block experiment's
         // rows keep exactly the payload they had before stages existed.
-        stage={def.stages?.length ? (def.stageName ?? 'main') : undefined}
+        stage={plan.length > 1 ? (def.stageName ?? 'main') : undefined}
         onComplete={completed => afterBlock(completed, 1)} />
     );
   }
 
   // Between blocks: what is about to happen, and a button to start it when ready.
   if (stage === 'stageIntro') {
-    const next = def.stages?.[stageIdx - 1];
+    const next = plan[stageIdx];
     if (!next) return null;
     return (
       <main style={{ height: '100dvh' }} className="bg-[#0f172a] flex flex-col items-center justify-center gap-8 px-6">
@@ -186,10 +191,13 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   }
 
   if (stage === 'stageRun') {
-    const current = def.stages?.[stageIdx - 1];
+    const current = plan[stageIdx];
     if (!current) return null;
     return (
-      <Runner key={`stage-${current.name}`} definition={def} design={current} stage={current.name}
+      // Keyed by position, not by name: a stage group runs the same named block several
+      // times, and a key that repeated would leave the previous pass's trials on screen.
+      <Runner key={`stage-${stageIdx}`} definition={def} design={current.design}
+        stage={current.stage} context={current.context} repetition={current.repetition}
         language={language}
         onComplete={completed => afterBlock(completed, stageIdx + 1)} />
     );

@@ -41,8 +41,12 @@ export type Bound<T> = T | `{${string}}`;
  * Word superiority needs 24 word pairs; Stroop needs colour words; DRM needs themed lists.
  * Keeping them as pools rather than inlining them in factor levels means a factor can
  * SAMPLE (take 20 of 24, differently per participant) instead of using all of them.
+ *
+ * An item may hold a list of items itself, so a pool entry can be a whole themed LIST —
+ * DRM's "SLEEP" with its ten words and its critical lure. A stage group then draws one such
+ * list per repetition and its blocks draw their trials from inside it.
  */
-export type PoolItem = Record<string, string | number | boolean>;
+export type PoolItem = Record<string, string | number | boolean | PoolItem[]>;
 
 // ─── Factors ──────────────────────────────────────────────────────────────────
 
@@ -278,6 +282,32 @@ export interface Stage {
   practice?: ExperimentDefinition['practice'];
   trial: ExperimentDefinition['trial'];
   store: string[];
+}
+
+/**
+ * A run of blocks repeated once per item drawn from a pool.
+ *
+ * DRM is why: it studies a themed list, fills a delay with arithmetic, asks for recall, and
+ * then does the whole thing again with the next list — five times. Writing those fifteen
+ * blocks out one by one would work, but it would fix the order of the lists for everybody,
+ * and DRM shuffles them per participant precisely so that list identity is not confounded
+ * with how far into the session it appeared. A flat list of blocks cannot say that.
+ *
+ * The drawn item is named by `as` and is in scope for every block in the group: a display
+ * can show `{list.theme}`, a factor can draw its trials from `{list.words}`, and `store` can
+ * keep `list.theme` on every row so a chart can tell the lists apart.
+ */
+export interface StageGroup {
+  /** The pool to repeat over — one pass through the blocks per item. */
+  forEach: string;
+  /** Names the drawn item inside the blocks, e.g. "list" for `{list.theme}`. */
+  as: string;
+  /** A fresh order per participant. True when absent, which is the reason this exists. */
+  shuffle?: boolean;
+  /** Use only this many of the pool's items. All of them when absent. */
+  take?: number;
+  /** The blocks to run, in order, once per drawn item. */
+  stages: Stage[];
 }
 
 /**
@@ -717,8 +747,11 @@ export interface ExperimentDefinition {
    *
    * The design above is the first block and these follow it, so an experiment without them
    * runs exactly as it always did — which is why the design fields stay required.
+   *
+   * An entry may be a StageGroup instead of a block, which repeats its own blocks once per
+   * item drawn from a pool.
    */
-  stages?: Stage[];
+  stages?: (Stage | StageGroup)[];
 
   /**
    * What "correct" means when the task has no right answer.

@@ -44,6 +44,13 @@ interface RunnerProps {
   design?: TrialDesign;
   /** Stored on every row, so a chart can tell the blocks apart. Omitted when there is one. */
   stage?: string;
+  /**
+   * Values in scope for every trial of this block — the item a stage group drew for this
+   * pass. DRM's study block gets the themed list it is about to present.
+   */
+  context?: Record<string, unknown>;
+  /** Which pass through a stage group this is, stored so the passes can be told apart. */
+  repetition?: number;
   language: 'he' | 'en';
   practice?: boolean;
   onComplete: (rows: TrialRow[]) => void;
@@ -84,11 +91,12 @@ function keyName(e: KeyboardEvent): string {
 type Feedback = { correct: boolean | null; message?: { en: string; he: string } };
 
 export function Runner({
-  definition, design: stageDesign, stage, language, practice = false, onComplete, onSaveFailure,
+  definition, design: stageDesign, stage, context, repetition, language,
+  practice = false, onComplete, onSaveFailure,
 }: RunnerProps) {
   // One block: the definition's own design unless a stage supplies its own.
   const design: TrialDesign = stageDesign ?? definition;
-  const [trials] = useState<Trial[]>(() => buildTrials(design, { practice }));
+  const [trials] = useState<Trial[]>(() => buildTrials(design, { practice, context }));
   const [trialIdx, setTrialIdx] = useState(0);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [feedback, setFeedback] = useState<null | Feedback>(null);
@@ -206,8 +214,13 @@ export function Runner({
     // milliseconds since the block began as though it were a response time.
     const rt = early || wasTimedOut || passive ? null : Math.round(performance.now() - clock.current);
     // The stage name travels with every row, so one results table can hold a study block
-    // and a recall block and a chart can still ask about one of them.
-    const payload = { ...payloadOf(design, trial), ...(stage ? { stage } : {}) };
+    // and a recall block and a chart can still ask about one of them. The repetition comes
+    // too where a group ran the same block more than once, so the passes can be told apart.
+    const payload = {
+      ...payloadOf(design, trial),
+      ...(stage ? { stage } : {}),
+      ...(repetition !== undefined ? { repetition } : {}),
+    };
 
     // An early press the definition does not record is not a trial at all: it shows "too
     // early" and moves on, keeping nothing — as the hand-built experiments do.
@@ -273,7 +286,7 @@ export function Runner({
       return;
     }
     advance();
-  }, [definition, design, stage, trial, practice, steps, advance, onSaveFailure]);
+  }, [definition, design, stage, repetition, trial, practice, steps, advance, onSaveFailure]);
 
   // A block measured in time: it ends when the clock runs out, mid-trial if need be. The
   // trial in flight is abandoned rather than recorded — nobody answered it, and a filled

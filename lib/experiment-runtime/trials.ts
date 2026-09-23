@@ -6,7 +6,9 @@
 
 // Type-only import: see the note in validate.ts — scripts/definition.mjs loads this
 // module directly under Node's type stripping.
-import type { Bound, ExperimentDefinition, Factor, PoolItem, TrialDesign } from './schema';
+import type {
+  Bound, ExperimentDefinition, Factor, PoolItem, Stage, StageGroup, TrialDesign,
+} from './schema';
 
 /** One trial: the factor values chosen for it, plus its place in the run. */
 export interface Trial {
@@ -88,26 +90,54 @@ export function shuffle<T>(items: T[], rng: () => number = Math.random): T[] {
   return out;
 }
 
+/**
+ * The pool a factor draws from.
+ *
+ * Usually a name from the definition's own `pools`. Inside a stage group it may instead be
+ * a reference like `"{list.words}"`, which reads the list drawn for this repetition — the
+ * trials of DRM's study block come from whichever themed list this pass got.
+ */
+function poolFor(
+  factor: Factor,
+  pools: Record<string, PoolItem[]> | undefined,
+  context: Record<string, unknown>,
+): PoolItem[] {
+  const from = factor.from!;
+  if (from.startsWith('{')) {
+    const found = resolve<unknown>(from, context);
+    return Array.isArray(found) ? found as PoolItem[] : [];
+  }
+  return pools?.[from] ?? [];
+}
+
 /** The levels a factor contributes: explicit, or drawn from a pool. */
 function levelsOf(
   factor: Factor,
   pools: Record<string, PoolItem[]> | undefined,
   rng: () => number,
+  context: Record<string, unknown> = {},
 ): unknown[] {
   if (factor.levels) return factor.levels;
   if (!factor.from) return [];
 
-  const pool = pools?.[factor.from] ?? [];
+  const pool = poolFor(factor, pools, context);
   // Sampling is per participant, so two people see different subsets of the same pool —
   // which is what the hand-written experiments do to avoid item-specific effects.
   return factor.sample ? shuffle(pool, rng).slice(0, factor.sample) : pool;
 }
 
 /** Cartesian product of the crossed factors. */
-function cross(factors: Factor[], pools: Record<string, PoolItem[]> | undefined, rng: () => number) {
-  let rows: Record<string, unknown>[] = [{}];
+function cross(
+  factors: Factor[],
+  pools: Record<string, PoolItem[]> | undefined,
+  rng: () => number,
+  context: Record<string, unknown>,
+) {
+  // Seeded with the group's drawn item rather than an empty row, so it is in scope for
+  // everything that follows — exclusions, derived factors, displays and `store` alike.
+  let rows: Record<string, unknown>[] = [{ ...context }];
   for (const factor of factors) {
-    const levels = levelsOf(factor, pools, rng);
+    const levels = levelsOf(factor, pools, rng, context);
     if (levels.length === 0) continue;
     rows = rows.flatMap(row => levels.map(level => ({ ...row, [factor.name]: level })));
   }
@@ -135,10 +165,20 @@ export function excluded(row: Record<string, unknown>, patterns: Record<string, 
  */
 export function buildTrials(
   def: TrialDesign,
-  opts: { practice?: boolean; rng?: () => number } = {},
+  opts: {
+    practice?: boolean;
+    rng?: () => number;
+    /**
+     * Values in scope for every trial of this block — the item a stage group drew for this
+     * repetition. Present in each trial's values, so displays, `store` and a factor's `from`
+     * can all reach it, and absent for every block that is not inside a group.
+     */
+    context?: Record<string, unknown>;
+  } = {},
 ): Trial[] {
   const rng = opts.rng ?? Math.random;
   const practice = opts.practice ?? false;
+  const context = opts.context ?? {};
 
   const derived = def.factors.filter(f => f.derivedFrom);
   // A fixed practice set: the named factor draws every item of the practice pool instead of
@@ -152,7 +192,7 @@ export function buildTrials(
       : f));
   const balanced = def.factors.filter(f => f.counterbalance && !f.derivedFrom);
 
-  let rows = cross(crossed, def.pools, rng);
+  let rows = cross(crossed, def.pools, rng, context);
 
   // Dropped here, on the bare cross: before repetition so the work is done once, and
   // before counterbalancing so that alternates evenly over the trials that survive rather
@@ -180,7 +220,7 @@ export function buildTrials(
   if (!fixedOrder) rows = shuffle(rows, rng);
 
   for (const factor of balanced) {
-    const levels = levelsOf(factor, def.pools, rng);
+    const levels = levelsOf(factor, def.pools, rng, context);
     if (levels.length === 0) continue;
     rows = rows.map((row, i) => ({ ...row, [factor.name]: levels[i % levels.length] }));
   }
@@ -212,6 +252,79 @@ export function buildTrials(
     values,
     seed: Math.floor(Math.random() * 2 ** 30) + index,
   }));
+}
+
+// ─── Planning the blocks of a run ─────────────────────────────────────────────
+
+/** Tells a group from a plain block. Here rather than in schema.ts, which stays types-only. */
+export function isStageGroup(entry: Stage | StageGroup): entry is StageGroup {
+  return (entry as StageGroup).forEach !== undefined;
+}
+
+/** One block of a run, in the order it will happen. */
+export interface PlannedBlock {
+  design: TrialDesign;
+  /** Stored on every row of this block, so a chart can say which block it is about. */
+  stage: string;
+  title?: { en: string; he: string };
+  instructions?: { en: string; he: string };
+  /** The item this pass of a group drew. Empty for a block outside any group. */
+  context: Record<string, unknown>;
+  /** Which pass through the group this is, from 1. Absent outside a group. */
+  repetition?: number;
+}
+
+/**
+ * The blocks a participant will actually run, groups expanded.
+ *
+ * Done ONCE per participant rather than looked up as the run goes along, because a group
+ * draws its order at random: asking twice would give two different orders, and DRM would
+ * study one list and then test another. The plan is the record of what this participant got.
+ *
+ * The definition's own design is always the first block, so an experiment with no stages
+ * gets a one-element plan and runs exactly as it always did.
+ */
+export function planStages(
+  def: ExperimentDefinition,
+  rng: () => number = Math.random,
+): PlannedBlock[] {
+  const blocks: PlannedBlock[] = [
+    { design: def, stage: def.stageName ?? 'main', context: {} },
+  ];
+
+  for (const entry of def.stages ?? []) {
+    if (!isStageGroup(entry)) {
+      blocks.push({
+        design: entry,
+        stage: entry.name,
+        title: entry.title,
+        instructions: entry.instructions,
+        context: {},
+      });
+      continue;
+    }
+
+    const pool = def.pools?.[entry.forEach] ?? [];
+    // Shuffled unless told otherwise: a fresh order per participant is the reason a group
+    // exists at all, so that which list you studied is not confounded with when you studied it.
+    const ordered = entry.shuffle === false ? [...pool] : shuffle(pool, rng);
+    const drawn = entry.take ? ordered.slice(0, entry.take) : ordered;
+
+    drawn.forEach((item, i) => {
+      for (const stage of entry.stages) {
+        blocks.push({
+          design: stage,
+          stage: stage.name,
+          title: stage.title,
+          instructions: stage.instructions,
+          context: { [entry.as]: item },
+          repetition: i + 1,
+        });
+      }
+    });
+  }
+
+  return blocks;
 }
 
 // ─── Timeouts, early responses and feedback ───────────────────────────────────
@@ -277,7 +390,11 @@ export function expandRecall(def: TrialDesign, trial: Trial, typedAnswer: string
   const firstAt = new Map<string, number>();
   order.forEach((word, i) => { if (!firstAt.has(word)) firstAt.set(word, i + 1); });
   const typed = new Set(order);
-  const studied = def.pools?.[spec.against] ?? [];
+  // `against` names a pool, or — inside a stage group — points at the list drawn for this
+  // repetition, so DRM's recall is scored against whichever themed list was just studied.
+  const studied = spec.against.startsWith('{')
+    ? (resolve<unknown>(spec.against, trial.values) as PoolItem[] | undefined) ?? []
+    : def.pools?.[spec.against] ?? [];
   // The trial's own stored fields travel too — which list was studied, which block — so a
   // chart can ask about one list without the pool having to repeat it on every item.
   const context = payloadOf(def, trial);

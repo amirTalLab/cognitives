@@ -27,7 +27,7 @@ registerHooks({
 });
 
 const { validate } = await import('../lib/experiment-runtime/validate.ts');
-const { buildTrials, isCorrect, payloadOf, resolve, excluded, seededRandom, shuffle, expandRecall } =
+const { buildTrials, isCorrect, payloadOf, resolve, excluded, seededRandom, shuffle, expandRecall, planStages } =
   await import('../lib/experiment-runtime/trials.ts');
 const { aggregate, generateMockRows, seriesNames, measureLabel, sem } =
   await import('../lib/experiment-runtime/aggregate.ts');
@@ -968,4 +968,165 @@ test('an intrusion records its output position too, so it can be placed in the s
   });
   const rows = expandRecall(def, oneTrial(def), 'bed, banana');
   assert.equal(rows.find(r => r.payload.intrusion).payload.outputPosition, 2);
+});
+
+// ── L. Blocks repeated once per drawn item ────────────────────────────────────
+
+const LISTS = [
+  { theme: 'SLEEP', lure: 'sleep', words: [{ word: 'bed', pos: 1 }, { word: 'rest', pos: 2 }] },
+  { theme: 'CHAIR', lure: 'chair', words: [{ word: 'table', pos: 1 }, { word: 'sit', pos: 2 }] },
+  { theme: 'NEEDLE', lure: 'needle', words: [{ word: 'thread', pos: 1 }, { word: 'pin', pos: 2 }] },
+];
+
+/** DRM's shape in miniature: study a themed list, then recall it, once per list. */
+function grouped(over = {}) {
+  return design({
+    pools: { lists: LISTS },
+    stageName: 'intro',
+    stages: [{
+      forEach: 'lists',
+      as: 'list',
+      stages: [
+        {
+          name: 'study',
+          factors: [{ name: 'item', from: '{list.words}' }],
+          repetitions: 1,
+          order: 'fixed',
+          trial: {
+            phases: [{ name: 'word', display: { kind: 'text', text: '{item.word}' }, durationMs: 500 }],
+            response: { kind: 'none' },
+            correct: { kind: 'none' },
+          },
+          store: ['item.word', 'list.theme'],
+        },
+        {
+          name: 'recall',
+          factors: [{ name: 'probe', levels: ['now'] }],
+          repetitions: 1,
+          trial: {
+            phases: [{ name: 'say', display: { kind: 'text', text: 'Recall {list.theme}' }, awaitsResponse: true, startsClock: true }],
+            response: { kind: 'wordList' },
+            correct: { kind: 'none' },
+            recall: { against: '{list.words}', match: 'word' },
+          },
+          store: ['list.theme'],
+        },
+      ],
+    }],
+    ...over,
+  });
+}
+
+test('a stage group is valid', () => {
+  const issues = validate(grouped());
+  assert.deepEqual(issues.filter(i => i.severity === 'error'), [], JSON.stringify(issues));
+});
+
+test('a group runs its blocks once per item of the pool', () => {
+  const plan = planStages(grouped(), seededRandom(4));
+  // The definition's own design, then study+recall for each of three lists.
+  assert.equal(plan.length, 1 + 3 * 2);
+  assert.deepEqual(plan.map(b => b.stage), ['intro', 'study', 'recall', 'study', 'recall', 'study', 'recall']);
+});
+
+test('each pass carries its own drawn item, and the passes are numbered', () => {
+  const plan = planStages(grouped(), seededRandom(4)).slice(1);
+  const themes = plan.map(b => b.context.list.theme);
+  // Study and recall of one pass see the SAME list — the bug that would test someone on a
+  // list they never studied.
+  assert.equal(themes[0], themes[1]);
+  assert.equal(themes[2], themes[3]);
+  assert.deepEqual(plan.map(b => b.repetition), [1, 1, 2, 2, 3, 3]);
+  assert.deepEqual([...new Set(themes)].sort(), ['CHAIR', 'NEEDLE', 'SLEEP']);
+});
+
+test('the order of the lists differs between participants', () => {
+  const orderFor = seed =>
+    planStages(grouped(), seededRandom(seed)).slice(1).map(b => b.context.list.theme).join(',');
+  const orders = new Set([1, 2, 3, 4, 5, 6, 7, 8].map(orderFor));
+  assert.ok(orders.size > 1, `every participant got the same order: ${[...orders][0]}`);
+});
+
+test('a group can be told to keep the pool order instead', () => {
+  const def = grouped();
+  def.stages[0].shuffle = false;
+  const themes = planStages(def, seededRandom(9)).slice(1).map(b => b.context.list.theme);
+  assert.deepEqual(themes, ['SLEEP', 'SLEEP', 'CHAIR', 'CHAIR', 'NEEDLE', 'NEEDLE']);
+});
+
+test('a group can use only some of its pool', () => {
+  const def = grouped();
+  def.stages[0].take = 2;
+  assert.equal(planStages(def, seededRandom(2)).length, 1 + 2 * 2);
+});
+
+test('a block inside a group draws its trials from the list that pass received', () => {
+  const plan = planStages(grouped(), seededRandom(4));
+  const study = plan.find(b => b.stage === 'study');
+  const trials = buildTrials(study.design, { context: study.context });
+  const theme = study.context.list.theme;
+  const expected = LISTS.find(l => l.theme === theme).words.map(w => w.word);
+  assert.deepEqual(trials.map(t => t.values.item.word), expected);
+});
+
+test('the drawn item is in scope for what each row stores', () => {
+  const plan = planStages(grouped(), seededRandom(4));
+  const study = plan.find(b => b.stage === 'study');
+  const trial = buildTrials(study.design, { context: study.context })[0];
+  const payload = payloadOf(study.design, trial);
+  assert.equal(payload.list_theme, study.context.list.theme);
+  assert.ok(payload.item_word);
+});
+
+test('recall inside a group is scored against the list that pass studied', () => {
+  const plan = planStages(grouped(), seededRandom(4));
+  const recall = plan.find(b => b.stage === 'recall');
+  const trial = buildTrials(recall.design, { context: recall.context })[0];
+  const words = recall.context.list.words.map(w => w.word);
+  const rows = expandRecall(recall.design, trial, words[0]);
+  assert.equal(rows.length, 2);
+  assert.equal(rows.find(r => r.payload.word === words[0]).response, 'recalled');
+  assert.equal(rows.find(r => r.payload.word === words[1]).response, 'missed');
+});
+
+test('an experiment with no stages still plans exactly one block', () => {
+  const plan = planStages(design());
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].stage, 'main');
+  assert.deepEqual(plan[0].context, {});
+});
+
+test('a group repeating over a pool that does not exist is refused', () => {
+  const def = grouped();
+  def.stages[0].forEach = 'nope';
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /does not have/.test(m)), messages.join(' | '));
+});
+
+test('a group taking more items than its pool holds is refused, not silently shortened', () => {
+  const def = grouped();
+  def.stages[0].take = 9;
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /holds only 3/.test(m)), messages.join(' | '));
+});
+
+test('a group with no blocks to repeat is refused', () => {
+  const def = grouped();
+  def.stages[0].stages = [];
+  assert.doesNotThrow(() => validate(def));
+  assert.ok(validate(def).some(i => i.severity === 'error'));
+});
+
+test('a block inside a group is checked like any other', () => {
+  const def = grouped();
+  delete def.stages[0].stages[0].store;
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /"store"/.test(m)), messages.join(' | '));
+});
+
+test('a group whose block shares a name with another block is refused', () => {
+  const def = grouped();
+  def.stages[0].stages[1].name = 'study';
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /could not be told apart/.test(m)), messages.join(' | '));
 });

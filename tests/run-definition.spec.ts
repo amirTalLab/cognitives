@@ -862,6 +862,116 @@ test.describe('definition runtime — practice, saving and endings', () => {
     }
   });
 
+  // DRM's shape: study a themed list, recall it, then do it again with the next list. The
+  // order of the lists is drawn per participant, so the thing that must hold is that the
+  // recall block of a pass is scored against the list that same pass studied.
+  test('a stage group runs once per list, and each recall matches the list just studied', async ({ page }) => {
+    const lists = [
+      { theme: 'SLEEP', words: [{ word: 'BED' }, { word: 'REST' }] },
+      { theme: 'CHAIR', words: [{ word: 'TABLE' }, { word: 'SIT' }] },
+    ];
+    const def = {
+      version: 1, slug: 'e2eGroups', title: 'Lists', titleHe: 'רשימות', category: 'MEMORY',
+      instructions: { en: 'Ready?', he: 'מוכנים?' },
+      pools: { lists },
+      stageName: 'intro',
+      factors: [{ name: 'go', levels: ['start'] }],
+      repetitions: 1,
+      trial: {
+        phases: [{ name: 'ask', display: { kind: 'text', text: 'Begin' }, awaitsResponse: true, startsClock: true }],
+        response: { kind: 'choice', options: [{ value: 'ok', label: 'Begin' }] },
+        correct: { kind: 'none' },
+      },
+      store: ['go'],
+      stages: [{
+        forEach: 'lists',
+        as: 'list',
+        stages: [
+          {
+            name: 'study',
+            title: { en: 'Study', he: 'למידה' },
+            factors: [{ name: 'item', from: '{list.words}' }],
+            repetitions: 1,
+            order: 'fixed',
+            trial: {
+              phases: [
+                { name: 'word', display: { kind: 'text', text: '{item.word}' }, durationMs: 300 },
+                { name: 'gap', display: { kind: 'blank' }, durationMs: 80 },
+              ],
+              response: { kind: 'none' },
+              correct: { kind: 'none' },
+            },
+            itiMs: 80,
+            store: ['item.word', 'list.theme'],
+          },
+          {
+            name: 'recall',
+            title: { en: 'Recall', he: 'היזכרות' },
+            factors: [{ name: 'probe', levels: ['now'] }],
+            repetitions: 1,
+            trial: {
+              phases: [{ name: 'say', display: { kind: 'text', text: 'Type what you remember' }, awaitsResponse: true, startsClock: true }],
+              response: { kind: 'wordList' },
+              correct: { kind: 'none' },
+              recall: { against: '{list.words}', match: 'word' },
+            },
+            store: ['list.theme'],
+          },
+        ],
+      }],
+      dashboard: {
+        charts: [{
+          title: 'Recall', kind: 'bar', groupBy: 'list_theme',
+          measure: 'proportion', ofResponse: 'recalled', filter: { stage: 'recall' },
+        }],
+      },
+    };
+
+    const saved = await runPreview(page, def);
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    // Two passes: study, then recall, then the same again for the other list.
+    const seen: string[] = [];
+    for (let pass = 0; pass < 2; pass++) {
+      await expect(page.getByRole('heading', { name: 'Study' })).toBeVisible({ timeout: 10_000 });
+      await page.getByRole('button', { name: 'Continue' }).click();
+
+      // Whichever list this pass drew, remember its first word so the recall can use it.
+      const first = page.locator('main').getByText(/^(BED|REST|TABLE|SIT)$/).first();
+      await expect(first).toBeVisible({ timeout: 10_000 });
+      seen.push((await first.textContent())!.trim());
+
+      await expect(page.getByRole('heading', { name: 'Recall' })).toBeVisible({ timeout: 10_000 });
+      await page.getByRole('button', { name: 'Continue' }).click();
+
+      const box = page.locator('main input');
+      await box.fill(seen[pass]);
+      await box.press('Enter');
+      await page.getByRole('button', { name: /Done|סיימתי/ }).click();
+    }
+
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+
+    if (await rowsSent(saved, 9)) {
+      const recall = saved.filter(r => (r.payload as Record<string, unknown>).stage === 'recall');
+      // Both lists were run, each exactly once.
+      const themes = recall.map(r => (r.payload as Record<string, unknown>).list_theme);
+      expect([...new Set(themes)].sort()).toEqual(['CHAIR', 'SLEEP']);
+      expect(recall).toHaveLength(4);
+
+      // The word typed in each pass was scored against that pass's own list.
+      for (const word of seen) {
+        const row = recall.find(r => (r.payload as Record<string, unknown>).word === word);
+        expect(row, `${word} was not scored in any recall block`).toBeDefined();
+        expect(row!.response).toBe('recalled');
+      }
+
+      // And the passes are numbered, so they can be told apart.
+      expect([...new Set(recall.map(r => (r.payload as Record<string, unknown>).repetition))].sort())
+        .toEqual([1, 2]);
+    }
+  });
+
   test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {
     const saved = await runPreview(page, speeded('e2eDiscardEarly', 'go', {
       phases: [
