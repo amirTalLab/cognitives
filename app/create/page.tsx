@@ -22,6 +22,7 @@ import { AssetManifest, ExperimentDefinition } from '@/lib/experiment-runtime/sc
 import { uploadAssets } from '@/lib/experiment-runtime/assets';
 import { ValidationIssue } from '@/lib/experiment-runtime/validate';
 import { putPreview } from '@/lib/experiment-runtime/preview-store';
+import DesignEditor from './DesignEditor';
 import {
   listPublished, loadDefinition, publishDefinition, PublishedSummary,
 } from '@/lib/experiment-runtime/store';
@@ -695,6 +696,16 @@ export default function CreateProjectPage() {
   function updateInstructions(lang: 'en' | 'he', text: string) {
     if (!definition) return;
     const next = { ...definition, instructions: { ...definition.instructions, [lang]: text } };
+    setDefinition(next);
+    putPreview(next);
+  }
+
+  /**
+   * A hand edit to the design's numbers — repetitions, practice, the pause between trials.
+   * Same path as updateInstructions, for the same reason: changing a digit is not worth a
+   * paid refine. DesignEditor builds the edited definition; this only stores it.
+   */
+  function updateDesign(next: ExperimentDefinition) {
     setDefinition(next);
     putPreview(next);
   }
@@ -1373,6 +1384,25 @@ export default function CreateProjectPage() {
                     One language is empty — participants who choose it will see no instructions at all.
                   </p>
                 )}
+                {finishResult && (
+                  <p className="text-xs text-amber-400 mt-3">
+                    Already published — press Finish &amp; publish again so students see the change.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Trial counts and timing — edited by hand for the same reason as the instructions.
+                Disabled mid-call for the same reason too: a refine reply replaces the lot. */}
+            {definition && (
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
+                <h2 className="font-semibold text-gray-200 mb-1">Trials &amp; timing</h2>
+                <p className="text-sm text-gray-400 mb-4">
+                  How long the experiment is. Edit the numbers directly — free, no AI involved. The count shown is
+                  what the experiment actually builds, and the design is re-checked after every change. Update
+                  preview, above, runs it.
+                </p>
+                <DesignEditor definition={definition} onChange={updateDesign} disabled={!!busy} />
                 {finishResult && (
                   <p className="text-xs text-amber-400 mt-3">
                     Already published — press Finish &amp; publish again so students see the change.
