@@ -36,22 +36,54 @@ same/different, present/absent, numeric estimate, rating scale, free text, drawi
 `is_practice`, `reaction_time_ms`, `is_correct`, `response`) plus a per-paradigm payload.
 
 **Dashboard** — bar by condition with SEM error bars, line by level, scatter of individual
-vs group, histogram; every chart behind a Reveal button.
+vs group, histogram, one point per participant placed by two measures (`xy`); the figures a
+paper reported drawn beside the class's own (`original`); every chart behind a Reveal button.
+
+**Block structure** — an experiment may be a sequence of blocks, and a run of blocks may
+repeat once per item drawn from a pool, in an order drawn per participant. A block can
+present without asking (a study list), be bounded by a clock rather than a trial count (a
+filled delay), keep its trials in a fixed order, and score a typed recall list into a row
+per studied item.
 
 ### What the 16 never needed
 
 1. **Trial history** — the next trial depending on preceding ones
 2. **Adaptive difficulty** — staircases, spans that grow until failure
-3. **Withheld responses** — "correct" meaning *do not press*
-4. **Block structure** — blocked designs with block-level instructions and feedback
+3. ~~**Withheld responses**~~ — built, see below
+4. ~~**Block structure**~~ — built, see below
 5. **Audio** — generated tones, stereo presentation
 6. **Within-trial sequences** — RSVP streams, alternating displays
 
-> **Update:** withheld responses are now supported — `timeoutMs` on a response phase,
-> with `trial.earlyFrom` for too-early presses and `trial.feedback` for per-outcome
-> messages. They were built to port Posner cueing (`lib/experiment-runtime/ports.ts`),
-> whose catch trials need them. Go/No-Go is therefore buildable; stop-signal still needs
-> an adaptive stop-signal delay.
+> **Update — withheld responses.** `timeoutMs` on a response phase, with `trial.earlyFrom`
+> for too-early presses and `trial.feedback` for per-outcome messages. Built to port Posner
+> cueing, whose catch trials need them. Go/No-Go is buildable; stop-signal still needs an
+> adaptive stop-signal delay.
+>
+> **Update — block structure.** Built to port DRM, which is five repeats of
+> study → filled delay → free recall, followed by one recognition test. An experiment may
+> now be a SEQUENCE of blocks (`stages`), and a run of blocks may REPEAT once per item drawn
+> from a pool (`forEach` / `as`), in an order drawn per participant. Each block is a design
+> in its own right — its own factors, phases, response and stored fields — and every row
+> carries the block it came from, so one results table holds them all and a chart can ask
+> about one of them.
+>
+> This is the largest single widening so far, because several things a block needs came with
+> it, each of which is independently useful:
+>
+> - `response: {kind: "none"}` — a block that PRESENTS and asks nothing, for a study list
+> - `endsAfterMs` — a block measured in TIME, for a filled delay that must last the same for
+>   a fast participant as a slow one
+> - `order: "fixed"` — no shuffle, where the order IS the manipulation (a study list's serial
+>   positions, a repeating motor sequence)
+> - `trial.recall` — one typed list scored into a row per studied item, so a serial-position
+>   curve or a false-recall rate is an ordinary chart
+> - `sample` + `per` — stratified draws, e.g. two probes at every serial position
+> - `fromEach` — one item set composed of several pools, which is what a recognition test is
+> - multi-value `expect` and `ofResponse` — one button carrying a decision AND a confidence
+> - `Stage.autoAdvanceMs` — pacing between blocks, including none at all
+>
+> The implicit association test becomes buildable on this (its blocks are the mapping
+> switches). Digit span still needs adaptive difficulty, not block structure.
 
 ---
 
@@ -60,7 +92,7 @@ vs group, histogram; every chart behind a Reveal button.
 ✅ buildable with the model as-is · ⚙ needs one of the gaps above ·
 ◐ buildable as a declared simplification · ❌ out of scope
 
-### ✅ Buildable now — 29
+### ✅ Buildable now — 31
 
 | Paradigm | Notes |
 |---|---|
@@ -94,8 +126,10 @@ vs group, histogram; every chart behind a Reveal button.
 | Remote associates | in repo, free text |
 | Alternative uses | in repo, timed free text |
 | Two-step task | in repo — proves nested within-trial stages work |
+| Go/No-Go | withheld response, built for Posner cueing |
+| Implicit association test | its blocks are the mapping switches |
 
-### ⚙ Needs one of the six gaps — 12
+### ⚙ Needs one of the remaining gaps — 10
 
 | Paradigm | Missing |
 |---|---|
@@ -103,17 +137,15 @@ vs group, histogram; every chart behind a Reveal button.
 | N-back | trial history |
 | Iowa gambling task | trial history + running score feedback |
 | Probabilistic reversal learning | trial history |
-| Go/No-Go | withheld response |
-| Stop-signal | withheld response + adaptive SSD |
+| Stop-signal | adaptive stop-signal delay |
 | Digit span / Corsi | adaptive span + ordered-sequence response |
 | Weber / JND | adaptive staircase |
-| Implicit association test | block structure with mapping switches |
 | Dichotic listening | stereo audio |
 | Attentional blink | RSVP stream within a trial |
 | Change blindness | alternating display within a trial |
 
-**Trial history alone unlocks 4.** Adaptive difficulty unlocks 3 (one shared with
-withheld responses). Those two are worth building first.
+**Trial history alone unlocks 4**, and is now the single largest remaining gap. Adaptive
+difficulty unlocks 3. Those two are what is left worth building.
 
 ### ◐ Buildable as a declared simplification — 4
 
@@ -143,12 +175,17 @@ decides whether the simplification is acceptable.
 
 | | Count | Share |
 |---|---|---|
-| Buildable now | 29 | 59% |
-| + the six gaps | 41 | 84% |
+| Buildable now | 31 | 63% |
+| + the remaining gaps | 41 | 84% |
 | + declared simplifications | 45 | 92% |
 | Out of scope | 4 | 8% |
 
-**59% with the model as it stands. 92% after six additive features.**
+**63% with the model as it stands. 92% after the remaining additive features.**
+
+Two of the original six gaps are closed — withheld responses and block structure — which
+moved Go/No-Go and the implicit association test into "buildable now". The prediction that
+these would be ADDITIVE held: neither required rethinking the factors-crossed-and-shuffled
+core, and every experiment built before them runs unchanged.
 
 Two caveats worth keeping in view. This is a catalogue of *classic* paradigms, so it is
 biased toward things that became classic partly because they are simple to run — real
