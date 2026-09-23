@@ -15,7 +15,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { ExperimentDefinition, ResponseSpec, ResponseStep, TrialDesign } from './schema';
 import {
-  buildTrials, EARLY_RESPONSE, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf, phaseDuration, resolve, SHOWN, Trial,
+  buildTrials, EARLY_RESPONSE, expandRecall, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf,
+  phaseDuration, resolve, SHOWN, Trial,
 } from './trials';
 import { DisplayView, SEED_KEY, ASSET_BASE_KEY } from './DisplayView';
 import { saveTrial } from './store';
@@ -211,37 +212,47 @@ export function Runner({
     // An early press the definition does not record is not a trial at all: it shows "too
     // early" and moves on, keeping nothing — as the hand-built experiments do.
     const kept = !(early && design.trial.recordEarly === false);
-    if (kept) {
-      rows.current.push({
-        trial_index: trial.index,
-        is_practice: practice,
-        response: primary,
-        is_correct: correct,
-        reaction_time_ms: rt,
-        payload,
-        ...(Object.keys(extra).length ? { extra } : {}),
-      });
-    }
+
+    // Free recall is one answer about many items, so it writes a row per studied word rather
+    // than one row holding the typed list. Every other block emits its single row, which is
+    // the one-element case of the same loop.
+    const recalled = early ? null : expandRecall(design, trial, primary);
+    const emitted: TrialRow[] = (recalled ?? [{ response: primary, payload: {} }]).map(part => ({
+      trial_index: trial.index,
+      is_practice: practice,
+      // Recall rows are not right or wrong — "recalled" is the measure, and scoring the
+      // critical lure as an error would invert what DRM is about.
+      is_correct: recalled ? null : correct,
+      // Nor is there a reaction time per word: one answer covered all of them.
+      reaction_time_ms: recalled ? null : rt,
+      response: part.response,
+      payload: { ...payload, ...part.payload },
+      ...(!recalled && Object.keys(extra).length ? { extra } : {}),
+    }));
+
+    if (kept) rows.current.push(...emitted);
 
     // Saved per trial rather than in a batch at the end, so a participant who closes the
     // tab halfway still contributes the trials they finished. Practice is written too,
     // flagged, because a dropout pattern during practice is worth being able to see —
     // unless the definition says practice is not recorded.
     if (kept && !(practice && design.practice?.record === false)) {
-      void saveTrial({
-        slug: definition.slug,
-        sessionId: sessionStorage.getItem(`${definition.slug}_session_id`) ?? 'unknown',
-        participantName: sessionStorage.getItem(`${definition.slug}_name`) ?? 'anonymous',
-        trialIndex: trial.index,
-        isPractice: practice,
-        response: primary,
-        isCorrect: correct,
-        reactionTimeMs: rt,
-        payload: { ...payload, ...extra },
-        // Which published version this run used, so a later refine cannot quietly mix its
-        // results with these. Undefined for a built-in or a preview.
-        definitionRevision: definition.revision ?? null,
-      }).then(ok => { if (!ok) onSaveFailure?.(); });
+      for (const row of emitted) {
+        void saveTrial({
+          slug: definition.slug,
+          sessionId: sessionStorage.getItem(`${definition.slug}_session_id`) ?? 'unknown',
+          participantName: sessionStorage.getItem(`${definition.slug}_name`) ?? 'anonymous',
+          trialIndex: row.trial_index,
+          isPractice: practice,
+          response: row.response,
+          isCorrect: row.is_correct,
+          reactionTimeMs: row.reaction_time_ms,
+          payload: { ...row.payload, ...(row.extra ?? {}) },
+          // Which published version this run used, so a later refine cannot quietly mix its
+          // results with these. Undefined for a built-in or a preview.
+          definitionRevision: definition.revision ?? null,
+        }).then(ok => { if (!ok) onSaveFailure?.(); });
+      }
     }
 
     answers.current = {};

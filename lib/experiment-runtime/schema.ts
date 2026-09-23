@@ -303,6 +303,38 @@ export interface ResponseSets {
 }
 
 /**
+ * Turns one typed recall list into a row per studied item.
+ *
+ * Free recall collects one answer but the data is per WORD: whether the item at serial
+ * position seven came back, whether the critical lure did. Stored as a single row holding
+ * "bed,rest,sleep" none of that is reachable — a chart would have to re-derive it, the
+ * study list would have to be repeated in the dashboard spec, and the CSV export would be a
+ * comma-blob rather than something analysable.
+ *
+ * So the block writes one row per item of `against`, each answered "recalled" or "missed",
+ * carrying that item's own fields. A serial-position curve is then an ordinary proportion
+ * chart grouped by the position field, and DRM's lure is simply another item in the pool
+ * with its own type — no new aggregation anywhere.
+ *
+ * Matching ignores surrounding space and case, and the typed list may be separated by
+ * commas, semicolons or spaces, since participants use all three.
+ */
+export interface RecallScoring {
+  /** The pool holding what was studied — one row comes back per entry. */
+  against: string;
+  /** Which field of a pool item holds the word to compare against what was typed. */
+  match: string;
+  /**
+   * Also write a row for each typed word matching nothing, marked `intrusion`.
+   *
+   * Worth having wherever intrusions are part of the finding — DRM lives on them — and
+   * worth leaving off where they are only noise, since they are participant-supplied text
+   * going into the results table.
+   */
+  intrusions?: boolean;
+}
+
+/**
  * What counts as correct.
  *
  * `expression` compares against factor values: `"{targetPresent} ? 'present' : 'absent'"`
@@ -614,6 +646,10 @@ export interface ExperimentDefinition {
      */
     response: ResponseSpec | ResponseStep[] | ResponseSets;
     correct: CorrectRule;
+    /**
+     * Expands a typed recall list into a row per studied item. For a `wordList` response.
+     */
+    recall?: RecallScoring;
     /** Inter-trial interval. */
     itiMs?: number;
     /**

@@ -27,7 +27,7 @@ registerHooks({
 });
 
 const { validate } = await import('../lib/experiment-runtime/validate.ts');
-const { buildTrials, isCorrect, payloadOf, resolve, excluded, seededRandom, shuffle } =
+const { buildTrials, isCorrect, payloadOf, resolve, excluded, seededRandom, shuffle, expandRecall } =
   await import('../lib/experiment-runtime/trials.ts');
 const { aggregate, generateMockRows, seriesNames, measureLabel, sem } =
   await import('../lib/experiment-runtime/aggregate.ts');
@@ -806,4 +806,140 @@ test('a later block may be the timed one', () => {
   const def = design({ stages: [stage({ name: 'distractor', endsAfterMs: 'soon' })] });
   assert.doesNotThrow(() => validate(def));
   assert.ok(validate(def).some(i => i.severity === 'error' && /endsAfterMs/.test(i.message)));
+});
+
+// ── K. Free recall, scored per studied item ───────────────────────────────────
+
+const STUDIED = [
+  { word: 'bed', serialPosition: 1, itemType: 'studied' },
+  { word: 'rest', serialPosition: 2, itemType: 'studied' },
+  { word: 'awake', serialPosition: 3, itemType: 'studied' },
+  { word: 'sleep', serialPosition: 0, itemType: 'lure' },
+];
+
+/** A recall block: one typed list, scored against what was studied. */
+function recallBlock(over = {}) {
+  return design({
+    pools: { studied: STUDIED },
+    factors: [{ name: 'listTheme', levels: ['SLEEP'] }],
+    repetitions: 1,
+    trial: {
+      phases: [{ name: 'recall', display: { kind: 'text', text: 'Type what you remember' }, awaitsResponse: true, startsClock: true }],
+      response: { kind: 'wordList' },
+      correct: { kind: 'none' },
+      recall: { against: 'studied', match: 'word' },
+    },
+    store: ['listTheme'],
+    dashboard: {
+      charts: [{ title: 'c', kind: 'bar', groupBy: 'serialPosition', measure: 'proportion', ofResponse: 'recalled' }],
+    },
+    ...over,
+  });
+}
+
+const oneTrial = def => buildTrials(def, {})[0];
+
+test('a recall block is valid', () => {
+  const issues = validate(recallBlock());
+  assert.deepEqual(issues.filter(i => i.severity === 'error'), [], JSON.stringify(issues));
+});
+
+test('one typed list becomes one row per studied item', () => {
+  const def = recallBlock();
+  const rows = expandRecall(def, oneTrial(def), 'bed,awake');
+  assert.equal(rows.length, 4);
+  assert.deepEqual(
+    rows.map(r => [r.payload.word, r.response]),
+    [['bed', 'recalled'], ['rest', 'missed'], ['awake', 'recalled'], ['sleep', 'missed']],
+  );
+});
+
+test('the critical lure is just another item, and is caught when recalled', () => {
+  const def = recallBlock();
+  const rows = expandRecall(def, oneTrial(def), 'bed, sleep');
+  const lure = rows.find(r => r.payload.itemType === 'lure');
+  assert.equal(lure.response, 'recalled');
+});
+
+test('each row carries the item fields a chart groups by', () => {
+  const def = recallBlock();
+  const row = expandRecall(def, oneTrial(def), 'rest').find(r => r.payload.word === 'rest');
+  assert.equal(row.payload.serialPosition, 2);
+  assert.equal(row.payload.itemType, 'studied');
+  // ...and the trial's own stored fields, so one list can be told from another.
+  assert.equal(row.payload.listTheme, 'SLEEP');
+});
+
+test('words are matched ignoring case and surrounding space', () => {
+  const def = recallBlock();
+  const rows = expandRecall(def, oneTrial(def), '  BED , Rest ');
+  assert.deepEqual(rows.filter(r => r.response === 'recalled').map(r => r.payload.word), ['bed', 'rest']);
+});
+
+test('a typed list may be separated by commas, semicolons or spaces', () => {
+  const def = recallBlock();
+  for (const typed of ['bed,rest', 'bed; rest', 'bed rest', 'bed,  rest;']) {
+    const got = expandRecall(def, oneTrial(def), typed).filter(r => r.response === 'recalled').length;
+    assert.equal(got, 2, `failed to split ${JSON.stringify(typed)}`);
+  }
+});
+
+test('a near miss is not counted as a recall, since guessing at intent would inflate the rate', () => {
+  const def = recallBlock();
+  const rows = expandRecall(def, oneTrial(def), 'beds');
+  assert.equal(rows.filter(r => r.response === 'recalled').length, 0);
+});
+
+test('intrusions are kept only where the definition asks for them', () => {
+  const plain = recallBlock();
+  assert.equal(expandRecall(plain, oneTrial(plain), 'bed,banana').length, 4);
+
+  const kept = recallBlock({
+    trial: { ...recallBlock().trial, recall: { against: 'studied', match: 'word', intrusions: true } },
+  });
+  const rows = expandRecall(kept, oneTrial(kept), 'bed,banana');
+  assert.equal(rows.length, 5);
+  const intrusion = rows.find(r => r.payload.intrusion);
+  assert.equal(intrusion.payload.word, 'banana');
+  assert.equal(intrusion.response, 'recalled');
+});
+
+test('an empty answer still yields a row per studied item, all missed', () => {
+  const def = recallBlock();
+  const rows = expandRecall(def, oneTrial(def), '');
+  assert.equal(rows.length, 4);
+  assert.ok(rows.every(r => r.response === 'missed'));
+});
+
+test('a repeated word is not counted twice', () => {
+  const def = recallBlock();
+  const rows = expandRecall(def, oneTrial(def), 'bed, bed, bed');
+  assert.equal(rows.filter(r => r.response === 'recalled').length, 1);
+});
+
+test('a block with no recall rule keeps its single row', () => {
+  assert.equal(expandRecall(design(), buildTrials(design(), {})[0], 'anything'), null);
+});
+
+test('recall scored against a pool that does not exist is refused', () => {
+  const def = recallBlock({ trial: { ...recallBlock().trial, recall: { against: 'nope', match: 'word' } } });
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /does not have/.test(m)), messages.join(' | '));
+});
+
+test('recall matching a field no studied item has is refused', () => {
+  const def = recallBlock({ trial: { ...recallBlock().trial, recall: { against: 'studied', match: 'spelling' } } });
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /nothing could ever be recalled/.test(m)), messages.join(' | '));
+});
+
+test('scoring recall while collecting no word list says so', () => {
+  const def = recallBlock({
+    trial: {
+      ...recallBlock().trial,
+      response: { kind: 'choice', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] },
+    },
+  });
+  const messages = validate(def).map(i => i.message);
+  assert.ok(messages.some(m => /no typed words to score/.test(m)), messages.join(' | '));
 });

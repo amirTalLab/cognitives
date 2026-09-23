@@ -535,6 +535,25 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     err('This block asks for no response, so no press can be too early. Remove "trial.earlyFrom".');
   }
 
+  // Recall scoring compares typed words against a pool. Every way of getting that wrong
+  // fails the same silent way — nothing matches, every item reads as "missed", and the
+  // result looks like a class that remembered nothing rather than like a broken definition.
+  const recall = def.trial.recall;
+  if (recall !== undefined) {
+    if (!isObj(recall) || !isStr(recall.against) || !isStr(recall.match)) {
+      bad('"trial.recall"', 'an object naming the studied pool ("against") and the field holding each word ("match")');
+    } else {
+      const studied = def.pools?.[recall.against];
+      if (!studied) {
+        err(`Recall is scored against pool "${recall.against}", which this experiment does not have.`);
+      } else if (studied.length === 0) {
+        err(`Recall is scored against pool "${recall.against}", which is empty, so every word would count as an intrusion.`);
+      } else if (!studied.some(item => isStr(item?.[recall.match]) && String(item[recall.match]).trim() !== '')) {
+        err(`Recall matches on "${recall.match}", but no item in pool "${recall.against}" has that field, so nothing could ever be recalled.`);
+      }
+    }
+  }
+
   // A per-trial form is checked through its first set: every set binds to the same phases,
   // and the options of all of them were shape-checked above.
   const primaryResponse = !Array.isArray(def.trial.response) && 'sets' in def.trial.response
@@ -567,6 +586,12 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     if (!steps.some(s => s.phase === phase)) {
       err(`Phase "${phase}" awaits a response but no response is defined for it.`);
     }
+  }
+
+  // Checked here rather than beside the rest of the recall rules, which run before `steps`
+  // has been worked out.
+  if (recall !== undefined && steps.length > 0 && !steps.some(s => s.kind === 'wordList')) {
+    warn('Recall is scored but nothing collects a word list, so there would be no typed words to score.');
   }
 
   for (const phase of def.trial.phases) {

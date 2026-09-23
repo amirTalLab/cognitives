@@ -237,6 +237,66 @@ export const EARLY_RESPONSE = 'early';
  */
 export const SHOWN = 'shown';
 
+/** A studied item that came back in free recall, and one that did not. */
+export const RECALLED = 'recalled';
+export const MISSED = 'missed';
+
+/** One row produced by expanding a recall answer. */
+export interface RecallRow {
+  response: string;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Compares a typed word with a studied one.
+ *
+ * Case and surrounding space only — no stemming and no near-miss matching. A participant
+ * who writes "pillows" for "pillow" is scored as an intrusion, which is what the hand-built
+ * experiments do and what a marker would have to decide anyway; guessing at intent here
+ * would silently inflate recall rates and nobody would see it happen.
+ */
+function normalise(word: string): string {
+  return word.trim().toLowerCase();
+}
+
+/**
+ * Turns one typed recall list into a row per studied item.
+ *
+ * Returns null when the block is not a recall block, so the caller keeps its single-row
+ * path. See RecallScoring for why the expansion happens here rather than in the dashboard.
+ */
+export function expandRecall(def: TrialDesign, trial: Trial, typedAnswer: string): RecallRow[] | null {
+  const spec = def.trial.recall;
+  if (!spec) return null;
+
+  // Commas, semicolons or spaces: participants use all three, and the hand-built DRM
+  // already accepted any of them.
+  const typed = new Set(typedAnswer.split(/[\s,;]+/).map(normalise).filter(Boolean));
+  const studied = def.pools?.[spec.against] ?? [];
+  // The trial's own stored fields travel too — which list was studied, which block — so a
+  // chart can ask about one list without the pool having to repeat it on every item.
+  const context = payloadOf(def, trial);
+
+  const rows: RecallRow[] = [];
+  const matched = new Set<string>();
+
+  for (const item of studied) {
+    const word = normalise(String(item[spec.match] ?? ''));
+    const came = word !== '' && typed.has(word);
+    if (came) matched.add(word);
+    rows.push({ response: came ? RECALLED : MISSED, payload: { ...context, ...item } });
+  }
+
+  if (spec.intrusions) {
+    for (const word of typed) {
+      if (matched.has(word)) continue;
+      rows.push({ response: RECALLED, payload: { ...context, [spec.match]: word, intrusion: true } });
+    }
+  }
+
+  return rows;
+}
+
 export interface Outcome {
   correct: boolean | null;
   timedOut: boolean;

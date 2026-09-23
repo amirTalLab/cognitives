@@ -778,6 +778,90 @@ test.describe('definition runtime — practice, saving and endings', () => {
     expect(saved.every(r => r.response === 'odd')).toBe(true);
   });
 
+  // The whole shape DRM and serial order are built from: study a list, then recall it. One
+  // typed answer has to arrive as a row per studied word, or the serial-position curve and
+  // the lure rate have nothing to group by.
+  test('a typed recall list is saved as one row per studied word', async ({ page }) => {
+    const studied = [
+      { word: 'BED', serialPosition: 1, itemType: 'studied' },
+      { word: 'REST', serialPosition: 2, itemType: 'studied' },
+      { word: 'SLEEP', serialPosition: 0, itemType: 'lure' },
+    ];
+    const def = {
+      version: 1, slug: 'e2eRecall', title: 'Recall', titleHe: 'היזכרות', category: 'MEMORY',
+      instructions: { en: 'Remember the words.', he: 'זכרו את המילים.' },
+      stageName: 'study',
+      pools: { studied },
+      // The study block shows the two real words — never the lure, which is the point.
+      factors: [{ name: 'item', from: 'studied' }],
+      exclude: [{ 'item.itemType': 'lure' }],
+      repetitions: 1,
+      order: 'fixed',
+      trial: {
+        phases: [
+          { name: 'word', display: { kind: 'text', text: '{item.word}' }, durationMs: 400 },
+          { name: 'blank', display: { kind: 'blank' }, durationMs: 100 },
+        ],
+        response: { kind: 'none' },
+        correct: { kind: 'none' },
+      },
+      store: ['item.word'],
+      stages: [{
+        name: 'recall',
+        title: { en: 'Recall', he: 'היזכרות' },
+        instructions: { en: 'Type what you remember.', he: 'הקלידו מה שזכרתם.' },
+        pools: { studied },
+        factors: [{ name: 'listTheme', levels: ['SLEEP'] }],
+        repetitions: 1,
+        trial: {
+          phases: [{ name: 'recall', display: { kind: 'text', text: 'What do you remember?' }, awaitsResponse: true, startsClock: true }],
+          response: { kind: 'wordList' },
+          correct: { kind: 'none' },
+          recall: { against: 'studied', match: 'word', intrusions: true },
+        },
+        store: ['listTheme'],
+      }],
+      dashboard: {
+        charts: [{
+          title: 'Recall by position', kind: 'bar', groupBy: 'serialPosition',
+          measure: 'proportion', ofResponse: 'recalled', filter: { stage: 'recall' },
+        }],
+      },
+    };
+
+    const saved = await runPreview(page, def);
+
+    await expect(page.getByText('BED')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'Recall' })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Recall one studied word, miss the other, and volunteer the lure plus an intrusion.
+    const box = page.locator('main input');
+    for (const word of ['bed', 'sleep', 'banana']) {
+      await box.fill(word);
+      await box.press('Enter');
+    }
+    await page.getByRole('button', { name: /Done|סיימתי/ }).click();
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+
+    if (await rowsSent(saved, 6)) {
+      const recall = saved.filter(r => (r.payload as Record<string, unknown>).stage === 'recall');
+      const byWord = Object.fromEntries(
+        recall.map(r => [(r.payload as Record<string, unknown>).word, r]),
+      );
+      expect(byWord.BED.response).toBe('recalled');
+      expect(byWord.REST.response).toBe('missed');
+      expect(byWord.SLEEP.response).toBe('recalled');
+      expect((byWord.SLEEP.payload as Record<string, unknown>).itemType).toBe('lure');
+      // The typed word matching nothing is kept as an intrusion.
+      expect(byWord.banana.response).toBe('recalled');
+      expect((byWord.banana.payload as Record<string, unknown>).intrusion).toBe(true);
+      // Not right or wrong, and no reaction time — one answer covered every word.
+      expect(recall.every(r => r.is_correct === null)).toBe(true);
+      expect(recall.every(r => r.reaction_time_ms === null)).toBe(true);
+    }
+  });
+
   test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {
     const saved = await runPreview(page, speeded('e2eDiscardEarly', 'go', {
       phases: [
