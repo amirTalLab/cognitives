@@ -676,6 +676,68 @@ test.describe('definition runtime — practice, saving and endings', () => {
     }
   });
 
+  // A study list asks nothing: each word is shown and the trial ends by itself. Worth an
+  // end-to-end test rather than an offline one because the failure was never in the data —
+  // the phase index walked off the end of the list and the runner rendered nothing for ever,
+  // which no amount of checking the built trials would have shown.
+  test('a block that asks nothing plays its phases, ends by itself, and records what was shown', async ({ page }) => {
+    const def = {
+      version: 1, slug: 'e2ePassive', title: 'Study list', titleHe: 'רשימה', category: 'MEMORY',
+      instructions: { en: 'Remember these words.', he: 'זכרו את המילים.' },
+      stageName: 'study',
+      factors: [{ name: 'word', levels: ['BED', 'REST', 'AWAKE'] }],
+      repetitions: 1,
+      order: 'fixed',
+      trial: {
+        phases: [
+          { name: 'word', display: { kind: 'text', text: '{word}' }, durationMs: 400 },
+          { name: 'blank', display: { kind: 'blank' }, durationMs: 100 },
+        ],
+        response: { kind: 'none' },
+        correct: { kind: 'none' },
+      },
+      itiMs: 100,
+      store: ['word'],
+      stages: [{
+        name: 'recall',
+        title: { en: 'Recall', he: 'היזכרות' },
+        instructions: { en: 'Which did you see?', he: 'מה ראיתם?' },
+        factors: [{ name: 'probe', levels: ['BED'] }],
+        repetitions: 1,
+        trial: {
+          phases: [{ name: 'ask', display: { kind: 'text', text: 'Saw {probe}?' }, awaitsResponse: true, startsClock: true }],
+          response: { kind: 'choice', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+          correct: { kind: 'none' },
+        },
+        store: ['probe'],
+      }],
+      dashboard: { charts: [{ title: 'Shown', kind: 'bar', groupBy: 'word', measure: 'count' }] },
+    };
+
+    const saved = await runPreview(page, def);
+
+    // The words play themselves, in the order written, with nothing to press.
+    await expect(page.getByText('BED')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('main button')).toHaveCount(0);
+    await expect(page.getByText('AWAKE')).toBeVisible({ timeout: 10_000 });
+
+    // The block ended on its own — this is the assertion the deadlock would have failed.
+    await expect(page.getByRole('heading', { name: 'Recall' })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Yes' }).click();
+    await expect(thanks(page)).toBeVisible({ timeout: 10_000 });
+
+    if (await rowsSent(saved, 4)) {
+      const shown = saved.filter(r => (r.payload as Record<string, unknown>).stage === 'study');
+      expect(shown.map(r => (r.payload as Record<string, unknown>).word)).toEqual(['BED', 'REST', 'AWAKE']);
+      // Presented, not answered: a recorded reaction time here would be the milliseconds
+      // since the block began, dressed up as a response.
+      expect(shown.every(r => r.response === 'shown')).toBe(true);
+      expect(shown.every(r => r.reaction_time_ms === null)).toBe(true);
+      expect(shown.every(r => r.is_correct === null)).toBe(true);
+    }
+  });
+
   test('a too-early press can be discarded: the message shows and nothing is saved', async ({ page }) => {
     const saved = await runPreview(page, speeded('e2eDiscardEarly', 'go', {
       phases: [

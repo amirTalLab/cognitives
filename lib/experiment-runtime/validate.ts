@@ -488,9 +488,26 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
 
   // ── Phases and responses ───────────────────────────────────────────────────
   const responsePhases = def.trial.phases.filter(p => p.awaitsResponse).map(p => p.name);
-  if (responsePhases.length === 0) err('No phase collects a response.');
-  if (!def.trial.phases.some(p => p.startsClock)) {
+  // A study presentation asks nothing and so has no response phase — that is the point of
+  // it. Every other trial needs one, or it would play its phases and then wait for an answer
+  // it never offered any way to give.
+  const passive = !Array.isArray(def.trial.response)
+    && !('sets' in def.trial.response)
+    && def.trial.response.kind === 'none';
+
+  if (passive && responsePhases.length > 0) {
+    err(`This block asks for no response, but phase "${responsePhases[0]}" awaits one. Remove "awaitsResponse", or give the block a response.`);
+  } else if (!passive && responsePhases.length === 0) {
+    err('No phase collects a response.');
+  }
+  if (!passive && !def.trial.phases.some(p => p.startsClock)) {
     warn('No phase starts the reaction-time clock, so RT will be measured from the response phase.');
+  }
+  if (passive && def.trial.correct?.kind !== 'none') {
+    err('This block asks for no response, so there is nothing to score. Its "trial.correct" must be {"kind": "none"}.');
+  }
+  if (passive && def.trial.earlyFrom !== undefined) {
+    err('This block asks for no response, so no press can be too early. Remove "trial.earlyFrom".');
   }
 
   // A per-trial form is checked through its first set: every set binds to the same phases,

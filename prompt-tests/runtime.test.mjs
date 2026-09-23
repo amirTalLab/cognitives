@@ -676,3 +676,71 @@ test('a block may set its own order independently of the first one', () => {
   assert.doesNotThrow(() => validate(def));
   assert.ok(validate(def).some(i => i.severity === 'error' && /"order"/.test(i.message)));
 });
+
+// ── I. Blocks that ask nothing ────────────────────────────────────────────────
+
+/** A study presentation: three phases, no response, nothing to score. */
+function study(over = {}) {
+  return design({
+    factors: [{ name: 'word', levels: ['bed', 'rest', 'awake'] }],
+    repetitions: 1,
+    order: 'fixed',
+    trial: {
+      phases: [
+        { name: 'fixation', display: { kind: 'fixation' }, durationMs: 500 },
+        { name: 'word', display: { kind: 'text', text: '{word}' }, durationMs: 2000 },
+        { name: 'blank', display: { kind: 'blank' }, durationMs: 250 },
+      ],
+      response: { kind: 'none' },
+      correct: { kind: 'none' },
+    },
+    store: ['word'],
+    dashboard: { charts: [{ title: 'c', kind: 'bar', groupBy: 'word', measure: 'count' }] },
+    ...over,
+  });
+}
+
+test('a block that asks nothing is valid, and needs no response phase', () => {
+  const issues = validate(study());
+  assert.deepEqual(issues.filter(i => i.severity === 'error'), [], JSON.stringify(issues));
+});
+
+test('a block that asks nothing still builds its trials in order', () => {
+  assert.deepEqual(buildTrials(study(), {}).map(t => t.values.word), ['bed', 'rest', 'awake']);
+});
+
+test('asking nothing while a phase awaits a response is refused, since it could never end', () => {
+  const def = study();
+  def.trial.phases[1].awaitsResponse = true;
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /awaits one/.test(m)), messages.join(' | '));
+});
+
+test('a block that asks nothing cannot claim to score an answer', () => {
+  const def = study({ trial: { ...study().trial, correct: { kind: 'matchesFactor', factor: 'word' } } });
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /nothing to score/.test(m)), messages.join(' | '));
+});
+
+test('a block that asks nothing has no early window, since no press can be early', () => {
+  const def = study({ trial: { ...study().trial, earlyFrom: 'fixation' } });
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /too early/.test(m)), messages.join(' | '));
+});
+
+test('a block that does ask something still requires a phase to collect it', () => {
+  const def = study({
+    trial: {
+      ...study().trial,
+      response: { kind: 'choice', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] },
+      correct: { kind: 'none' },
+    },
+  });
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /No phase collects a response/.test(m)), messages.join(' | '));
+});
+
+test('a block that asks nothing is not nagged about the reaction-time clock', () => {
+  const messages = validate(study()).map(i => i.message);
+  assert.ok(!messages.some(m => /reaction-time clock/.test(m)), messages.join(' | '));
+});

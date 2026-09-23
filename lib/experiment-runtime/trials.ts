@@ -227,6 +227,16 @@ export const NO_RESPONSE = 'none';
 /** The response recorded when the participant answers before the response phase began. */
 export const EARLY_RESPONSE = 'early';
 
+/**
+ * The response recorded for a trial that asks nothing — a study-list presentation.
+ *
+ * Its own value rather than NO_RESPONSE, which means a response phase that ran out: on a
+ * catch trial that is the participant's answer and may be the correct one, whereas nothing
+ * was ever asked here. Collapsing the two would make a study row indistinguishable from a
+ * miss in the exported CSV.
+ */
+export const SHOWN = 'shown';
+
 export interface Outcome {
   correct: boolean | null;
   timedOut: boolean;

@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { ExperimentDefinition, ResponseSpec, ResponseStep, TrialDesign } from './schema';
 import {
-  buildTrials, EARLY_RESPONSE, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf, phaseDuration, resolve, Trial,
+  buildTrials, EARLY_RESPONSE, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf, phaseDuration, resolve, SHOWN, Trial,
 } from './trials';
 import { DisplayView, SEED_KEY, ASSET_BASE_KEY } from './DisplayView';
 import { saveTrial } from './store';
@@ -68,6 +68,9 @@ function responseSteps(def: TrialDesign, trial?: Trial): ResponseStep[] {
   }
 
   if (Array.isArray(spec)) return spec;
+  // A study presentation asks nothing, so there is no step to bind to a phase. Everything
+  // downstream reads this as "no response expected" rather than needing its own flag.
+  if ((spec as ResponseSpec).kind === 'none') return [];
   const phase = def.trial.phases.find(p => p.awaitsResponse)?.name ?? 'response';
   return [{ ...(spec as ResponseSpec), phase }];
 }
@@ -154,8 +157,11 @@ export function Runner({
 
     const given = answers.current;
     const first = steps[0];
-    const primary = early ? EARLY_RESPONSE : (given[first.phase] ?? '');
-    const correct = early ? false : isCorrect(design, trial, primary);
+    // No step at all is a trial that asks nothing: it ends when its phases run out, with
+    // "shown" recorded and no answer to score.
+    const passive = first === undefined;
+    const primary = early ? EARLY_RESPONSE : passive ? SHOWN : (given[first.phase] ?? '');
+    const correct = passive ? null : early ? false : isCorrect(design, trial, primary);
 
     // Practice that teaches the response mapping rather than sampling the design: a wrong
     // answer keeps this same trial on screen with the right option marked, and the clock
@@ -188,9 +194,11 @@ export function Runner({
       }
     }
 
-    // No reaction time when nothing was timed: a timeout has none, and a press during the
-    // cue measured from a clock that has not started yet would be a negative or stale number.
-    const rt = early || wasTimedOut ? null : Math.round(performance.now() - clock.current);
+    // No reaction time when nothing was timed: a timeout has none, a press during the cue
+    // measured from a clock that has not started yet would be a negative or stale number,
+    // and a passive trial never started a clock at all — reading it there would record the
+    // milliseconds since the block began as though it were a response time.
+    const rt = early || wasTimedOut || passive ? null : Math.round(performance.now() - clock.current);
     // The stage name travels with every row, so one results table can hold a study block
     // and a recall block and a chart can still ask about one of them.
     const payload = { ...payloadOf(design, trial), ...(stage ? { stage } : {}) };
@@ -250,6 +258,14 @@ export function Runner({
     }
     advance();
   }, [definition, design, stage, trial, practice, steps, advance, onSaveFailure]);
+
+  // A trial that asks nothing ends when its last phase has played. Without this the phase
+  // index walks past the end of the list, `phase` becomes undefined, and the runner renders
+  // nothing for ever — a silent deadlock rather than a visible error.
+  useEffect(() => {
+    if (phase || !trial || feedback || iti || steps.length > 0) return;
+    finishTrial();
+  }, [phase, trial, feedback, iti, steps.length, finishTrial]);
 
   // Timed phases advance themselves; response phases wait for input. Idle during the ITI so
   // the old trial's phases do not keep running while the screen is blank.
@@ -462,7 +478,13 @@ function ResponseView({ step, values, rtl, onAnswer, highlight }: {
     return <FreeInput step={step} rtl={rtl} onAnswer={onAnswer} />;
   }
 
-  return <WordListInput rtl={rtl} onAnswer={onAnswer} max={step.maxWords} />;
+  // Named rather than left as a fall-through: "none" now shares this union, and a
+  // fall-through would have shown a word-list box to a trial that asks nothing.
+  if (step.kind === 'wordList') {
+    return <WordListInput rtl={rtl} onAnswer={onAnswer} max={step.maxWords} />;
+  }
+
+  return null;
 }
 
 function FreeInput({ step, rtl, onAnswer }: {

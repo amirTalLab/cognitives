@@ -192,7 +192,20 @@ export type ResponseSpec =
   | { kind: 'number'; min?: number; max?: number; unit?: string }
   | { kind: 'text'; multiline?: boolean; placeholder?: string }
   /** Free recall of a list — DRM, serial position. */
-  | { kind: 'wordList'; maxWords?: number };
+  | { kind: 'wordList'; maxWords?: number }
+  /**
+   * Nothing is asked: the trial presents its phases and ends by itself.
+   *
+   * A study list is the case — DRM and serial order show each word for two seconds and
+   * collect nothing, because the memory is measured later, in the recall block. The row is
+   * still written, with the response "shown" and no reaction time, so the dashboard can say
+   * what was presented and in what position.
+   *
+   * Declared rather than inferred from a missing `response`: every dropped field would
+   * otherwise become a block that silently collects no data, which is precisely the failure
+   * that is hardest to notice afterwards.
+   */
+  | { kind: 'none' };
 
 /**
  * One trial can collect more than one response.
