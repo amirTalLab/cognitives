@@ -121,9 +121,26 @@ function levelsOf(
   if (!factor.from) return [];
 
   const pool = poolFor(factor, pools, context);
+  if (!factor.sample) return pool;
+
+  // Stratified: that many for each distinct value of the named field, rather than that many
+  // overall. Drawing 20 items at random from 50 would leave some serial positions probed
+  // four times and others not at all, and the curve those produce is not the one the design
+  // asks for.
+  if (factor.per) {
+    const strata = new Map<string, PoolItem[]>();
+    for (const item of pool) {
+      const key = String(lookup(factor.per, item) ?? '');
+      const bucket = strata.get(key);
+      if (bucket) bucket.push(item);
+      else strata.set(key, [item]);
+    }
+    return [...strata.values()].flatMap(items => shuffle(items, rng).slice(0, factor.sample));
+  }
+
   // Sampling is per participant, so two people see different subsets of the same pool —
   // which is what the hand-written experiments do to avoid item-specific effects.
-  return factor.sample ? shuffle(pool, rng).slice(0, factor.sample) : pool;
+  return shuffle(pool, rng).slice(0, factor.sample);
 }
 
 /** Cartesian product of the crossed factors. */
@@ -268,6 +285,8 @@ export interface PlannedBlock {
   stage: string;
   title?: { en: string; he: string };
   instructions?: { en: string; he: string };
+  /** The intro screen moves on by itself after this long, rather than waiting for a press. */
+  autoAdvanceMs?: number;
   /** The item this pass of a group drew. Empty for a block outside any group. */
   context: Record<string, unknown>;
   /** Which pass through the group this is, from 1. Absent outside a group. */
@@ -299,6 +318,7 @@ export function planStages(
         stage: entry.name,
         title: entry.title,
         instructions: entry.instructions,
+        autoAdvanceMs: entry.autoAdvanceMs,
         context: {},
       });
       continue;
@@ -317,6 +337,7 @@ export function planStages(
           stage: stage.name,
           title: stage.title,
           instructions: stage.instructions,
+          autoAdvanceMs: stage.autoAdvanceMs,
           context: { [entry.as]: item },
           repetition: i + 1,
         });

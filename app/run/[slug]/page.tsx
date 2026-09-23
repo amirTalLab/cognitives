@@ -6,14 +6,14 @@
 // four stages, driven by data. Adding an experiment adds a definition, not a route — which
 // is what makes the whole approach scale to many lecturers without a deploy each time.
 
-import { use, useEffect, useMemo, useState, FormEvent } from 'react';
+import { use, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FlaskConical, Check } from 'lucide-react';
 import { ExperimentDefinition } from '@/lib/experiment-runtime/schema';
 import { getDefinition } from '@/lib/experiment-runtime/registry';
 import { Runner, TrialRow } from '@/lib/experiment-runtime/Runner';
-import { buildTrials, planStages } from '@/lib/experiment-runtime/trials';
+import { buildTrials, planStages, type PlannedBlock } from '@/lib/experiment-runtime/trials';
 
 // 'main' is the definition's own design — the first block. 'stageIntro' and 'stageRun'
 // walk whatever `stages` lists after it: DRM's recall, serial order's distractor, SRT's
@@ -165,29 +165,12 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
     );
   }
 
-  // Between blocks: what is about to happen, and a button to start it when ready.
+  // Between blocks: what is about to happen, and a button to start it when ready — or, for
+  // a block that is simply the next beat of a rhythm, a screen that passes by itself.
   if (stage === 'stageIntro') {
     const next = plan[stageIdx];
     if (!next) return null;
-    return (
-      <main style={{ height: '100dvh' }} className="bg-[#0f172a] flex flex-col items-center justify-center gap-8 px-6">
-        <div className="text-center max-w-xl" dir={rtl ? 'rtl' : 'ltr'}>
-          <Check className="w-10 h-10 text-purple-400 mx-auto mb-4" />
-          {next.title && (
-            <h2 className="text-3xl font-bold text-gray-100 mb-3">{rtl ? next.title.he : next.title.en}</h2>
-          )}
-          {next.instructions && (
-            <p className="text-gray-300 leading-relaxed whitespace-pre-line">
-              {rtl ? next.instructions.he : next.instructions.en}
-            </p>
-          )}
-        </div>
-        <button onClick={() => setStage('stageRun')}
-          className="px-10 py-4 bg-purple-500 hover:bg-purple-400 text-white font-bold text-xl rounded-xl touch-manipulation">
-          {rtl ? 'המשך' : 'Continue'}
-        </button>
-      </main>
-    );
+    return <StageIntro block={next} rtl={rtl} onDone={() => setStage('stageRun')} />;
   }
 
   if (stage === 'stageRun') {
@@ -253,6 +236,53 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
           {rtl ? 'סיום' : 'Done'}
         </button>
       </motion.div>
+    </main>
+  );
+}
+
+/**
+ * The screen between two blocks.
+ *
+ * Waits for a Continue press, unless the block asks to move on by itself — DRM's "List 3 —
+ * get ready" and its three-second breaks are part of the pacing, and turning each of them
+ * into a button press would hand the participant ten untimed rests the design never gave
+ * them.
+ */
+function StageIntro({ block, rtl, onDone }: {
+  block: PlannedBlock;
+  rtl: boolean;
+  onDone: () => void;
+}) {
+  // Through a ref so the timer is not restarted by the parent handing down a fresh callback
+  // — which would leave a self-advancing screen up for longer than it asked for, or for ever.
+  const done = useRef(onDone);
+  done.current = onDone;
+
+  useEffect(() => {
+    if (!block.autoAdvanceMs) return;
+    const timer = setTimeout(() => done.current(), block.autoAdvanceMs);
+    return () => clearTimeout(timer);
+  }, [block.autoAdvanceMs]);
+
+  return (
+    <main style={{ height: '100dvh' }} className="bg-[#0f172a] flex flex-col items-center justify-center gap-8 px-6">
+      <div className="text-center max-w-xl" dir={rtl ? 'rtl' : 'ltr'}>
+        <Check className="w-10 h-10 text-purple-400 mx-auto mb-4" />
+        {block.title && (
+          <h2 className="text-3xl font-bold text-gray-100 mb-3">{rtl ? block.title.he : block.title.en}</h2>
+        )}
+        {block.instructions && (
+          <p className="text-gray-300 leading-relaxed whitespace-pre-line">
+            {rtl ? block.instructions.he : block.instructions.en}
+          </p>
+        )}
+      </div>
+      {!block.autoAdvanceMs && (
+        <button onClick={onDone}
+          className="px-10 py-4 bg-purple-500 hover:bg-purple-400 text-white font-bold text-xl rounded-xl touch-manipulation">
+          {rtl ? 'המשך' : 'Continue'}
+        </button>
+      )}
     </main>
   );
 }

@@ -1130,3 +1130,65 @@ test('a group whose block shares a name with another block is refused', () => {
   const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
   assert.ok(messages.some(m => /could not be told apart/.test(m)), messages.join(' | '));
 });
+
+// ── M. Stratified sampling and self-advancing screens ─────────────────────────
+
+test('sampling per a field takes that many at each level, not that many overall', () => {
+  const words = [];
+  for (let list = 1; list <= 5; list++) {
+    for (let pos = 1; pos <= 10; pos++) words.push({ word: `l${list}p${pos}`, serialPosition: pos, list });
+  }
+  const def = design({
+    pools: { studied: words },
+    factors: [{ name: 'item', from: 'studied', sample: 2, per: 'serialPosition' }],
+    repetitions: 1,
+    trial: { ...design().trial, correct: { kind: 'none' } },
+    store: ['item.word'],
+    dashboard: { charts: [{ title: 'c', kind: 'bar', groupBy: 'item.serialPosition', measure: 'count' }] },
+  });
+
+  const trials = buildTrials(def, { rng: seededRandom(11) });
+  assert.equal(trials.length, 20, 'expected two words at each of ten positions');
+
+  const perPosition = new Map();
+  for (const t of trials) {
+    const pos = t.values.item.serialPosition;
+    perPosition.set(pos, (perPosition.get(pos) ?? 0) + 1);
+  }
+  assert.deepEqual([...perPosition.keys()].sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.ok([...perPosition.values()].every(n => n === 2), `uneven: ${[...perPosition.entries()]}`);
+});
+
+test('a stratified draw still differs between participants', () => {
+  const words = [];
+  for (let list = 1; list <= 5; list++) {
+    for (let pos = 1; pos <= 10; pos++) words.push({ word: `l${list}p${pos}`, serialPosition: pos, list });
+  }
+  const def = design({
+    pools: { studied: words },
+    factors: [{ name: 'item', from: 'studied', sample: 2, per: 'serialPosition' }],
+    repetitions: 1,
+    trial: { ...design().trial, correct: { kind: 'none' } },
+    store: ['item.word'],
+    dashboard: { charts: [{ title: 'c', kind: 'bar', groupBy: 'item.word', measure: 'count' }] },
+  });
+  const drawFor = seed =>
+    buildTrials(def, { rng: seededRandom(seed) }).map(t => t.values.item.word).sort().join(',');
+  assert.ok(new Set([1, 2, 3, 4, 5].map(drawFor)).size > 1, 'every participant drew the same words');
+});
+
+test('a block can ask its intro screen to pass by itself', () => {
+  const def = design({
+    stages: [stage({ name: 'second', autoAdvanceMs: 2000 })],
+  });
+  assert.deepEqual(validate(def).filter(i => i.severity === 'error'), []);
+  assert.equal(planStages(def)[1].autoAdvanceMs, 2000);
+});
+
+test('a block inside a group carries its self-advancing screen too', () => {
+  const def = grouped();
+  def.stages[0].stages[0].autoAdvanceMs = 1500;
+  const study = planStages(def, seededRandom(3)).filter(b => b.stage === 'study');
+  assert.ok(study.length > 0);
+  assert.ok(study.every(b => b.autoAdvanceMs === 1500));
+});

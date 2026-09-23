@@ -64,6 +64,17 @@ export interface Factor {
   /** With `from`: take this many items per participant rather than all of them. */
   sample?: number;
   /**
+   * With `sample`: take that many for EACH distinct value of this field, instead of that
+   * many overall.
+   *
+   * DRM's recognition test is the case. It probes two studied words at every serial
+   * position, each drawn from a different list, so that the serial-position curve is not
+   * estimated from one or two lists that happened to win a lottery. `sample: 2` alone would
+   * take two words in total; `sample: 2, per: "serialPosition"` takes two at each position,
+   * which is the design.
+   */
+  per?: string;
+  /**
    * Or compute the value from other factors, via a lookup table.
    *
    * Not every value in a design is independent. A Posner cue appears on the target's side
@@ -272,6 +283,16 @@ export interface Stage {
   /** Shown on a short screen before the block starts. Skipped when absent. */
   title?: { en: string; he: string };
   instructions?: { en: string; he: string };
+  /**
+   * Move on by itself after this long, instead of waiting for a Continue button.
+   *
+   * A block that begins a new phase of the task wants the button — the participant reads
+   * what is about to change and starts when ready. A block that is simply the next item in
+   * a rhythm does not: DRM shows "List 3 — get ready" for two seconds and a three-second
+   * break between lists, and turning those into ten button presses would change the pace of
+   * the session and give the participant five untimed rests the design never gave them.
+   */
+  autoAdvanceMs?: number;
 
   pools?: Record<string, PoolItem[]>;
   factors: Factor[];
