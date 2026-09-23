@@ -16,7 +16,8 @@ type Exp = { id: string; title: string; titleHe: string; icon: React.ElementType
 
 const EXPERIMENTS: Exp[] = [
   { id: 'summaryStats',    title: 'Ensemble Perception',     titleHe: 'תפיסת מכלול',        icon: BarChart2, color: 'text-orange-400'  },
-  { id: 'CompositeFace',   title: 'Composite Face Task',     titleHe: 'משימת פנים מורכבות', icon: Users,     color: 'text-pink-400'    },
+  // Ported. app/CompositeFace/ still serves its own rows at /CompositeFace/teacher.
+  { id: 'CompositeFace',   title: 'Composite Face Task',     titleHe: 'משימת פנים מורכבות', icon: Users,     color: 'text-pink-400', href: '/run/CompositeFace' },
   // Ported. app/wordSuperiority/ still serves its own table at /wordSuperiority/teacher.
   { id: 'wordSuperiority', title: 'Word Superiority Effect', titleHe: 'אפקט עליונות המילה', icon: Type,      color: 'text-teal-400', href: '/run/wordSuperiority' },
   { id: 'visualSearch',    title: 'Visual Search',           titleHe: 'חיפוש חזותי',        icon: Search,    color: 'text-rose-400'    },

@@ -824,7 +824,9 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   if (def.practice?.from) {
     const { factor, pool } = def.practice.from;
     const target = def.factors.find(f => f.name === factor);
-    if (!target || !target.from) {
+    // `fromEach` counts: a factor composed of several pools is still drawn from pools, and
+    // swapping the whole set for a practice pool is exactly as meaningful there.
+    if (!target || (!target.from && !target.fromEach)) {
       err(`"practice.from" names "${factor}", which is not a factor drawn from a pool.`);
     }
     const items = def.pools?.[pool];

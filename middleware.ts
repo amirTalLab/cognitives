@@ -109,5 +109,6 @@ export const config = {
     '/run/drm/:path*',
     '/run/serialOrder/:path*',
     '/run/srt/:path*',
+    '/run/CompositeFace/:path*',
   ],
 };

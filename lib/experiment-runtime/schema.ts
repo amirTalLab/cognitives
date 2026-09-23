@@ -141,6 +141,30 @@ export type Display =
    */
   | { kind: 'image'; src: Bound<string>; size?: Bound<number>; rotation?: Bound<number> }
   /**
+   * Two pictures cut at the same height and joined into one — the top of one above the
+   * bottom of another, with the lower half optionally slid sideways.
+   *
+   * The composite face effect IS this display. Two unrelated half-faces, aligned, fuse into
+   * a face you cannot help seeing as one person, which makes judging the top half alone
+   * surprisingly hard; sliding the bottom half sideways breaks the fusion and the difficulty
+   * disappears. `pair` cannot express it — the halves must be flush, not side by side — and
+   * nothing else in this list joins two images into a single object.
+   *
+   * `cut` is the fraction from the top where they meet, and `offset` is how far the lower
+   * half moves, as a fraction of the width. The container stays the same size whatever the
+   * offset, so the composite sits exactly where the whole face sat.
+   */
+  | {
+      kind: 'composite';
+      top: Bound<string>;
+      bottom: Bound<string>;
+      /** Where to cut, as a fraction from the top. 0.55 puts it at the nose. */
+      cut?: Bound<number>;
+      /** How far to slide the lower half, as a fraction of the width. 0 is aligned. */
+      offset?: Bound<number>;
+      size?: Bound<number>;
+    }
+  /**
    * A generated array of items in a box — visual search, ensemble perception.
    * The renderer lays them out with non-overlapping random positions.
    */

@@ -1751,3 +1751,117 @@ test('a one-item assignment pool says it is not a between-subject manipulation',
   const messages = validate(def).map(i => i.message);
   assert.ok(messages.some(m => /not a between-subject manipulation/.test(m)), messages.join(' | '));
 });
+
+// ── R. Composite face ─────────────────────────────────────────────────────────
+
+const CF = ports.COMPOSITE_FACE_PORT;
+const cfTrials = seed => buildTrials(CF, { rng: seededRandom(seed) });
+
+test('forty trials: twenty aligned, ten of each misalignment', () => {
+  const counts = {};
+  for (const t of cfTrials(9)) {
+    counts[t.values.item.condition] = (counts[t.values.item.condition] ?? 0) + 1;
+  }
+  assert.deepEqual(counts, { aligned: 20, 'small-misaligned': 10, 'large-misaligned': 10 });
+});
+
+test('each condition is split evenly between same and different', () => {
+  const counts = {};
+  for (const t of cfTrials(9)) {
+    const key = `${t.values.item.condition}/${t.values.item.answer}`;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  assert.deepEqual(counts, {
+    'aligned/same': 10, 'aligned/different': 10,
+    'small-misaligned/same': 5, 'small-misaligned/different': 5,
+    'large-misaligned/same': 5, 'large-misaligned/different': 5,
+  });
+});
+
+test('a same trial shows the studied face on top; a different trial never does', () => {
+  for (const t of cfTrials(9)) {
+    const { study, top, bottom, answer } = t.values.item;
+    if (answer === 'same') assert.equal(top, study, 'a same trial did not show the studied face');
+    else assert.notEqual(top, study, 'a different trial showed the studied face on top');
+    // The bottom half is always someone else, or there is no composite to see past.
+    assert.notEqual(bottom, top, 'both halves are the same person');
+    assert.notEqual(bottom, study, 'the bottom half is the studied face');
+  }
+});
+
+test('only the aligned condition has its halves flush; the others are slid', () => {
+  const offsets = {};
+  for (const t of cfTrials(9)) offsets[t.values.item.condition] = t.values.item.offset;
+  assert.equal(offsets.aligned, 0);
+  assert.ok(offsets['small-misaligned'] > 0);
+  assert.ok(offsets['large-misaligned'] > offsets['small-misaligned'],
+    'the large misalignment is not larger than the small one');
+});
+
+test('the composite is cut at the nose and stays the size of the studied face', () => {
+  const test = CF.trial.phases.find(p => p.name === 'test');
+  assert.equal(test.display.kind, 'composite');
+  assert.equal(test.display.cut, 0.55);
+  const study = CF.trial.phases.find(p => p.name === 'study');
+  assert.equal(test.display.size, study.display.size);
+});
+
+test('the face is shown for 800ms, after a 500ms fixation and before a 500ms blank', () => {
+  const at = name => CF.trial.phases.find(p => p.name === name);
+  assert.equal(at('fixation').durationMs, 500);
+  assert.equal(at('study').durationMs, 800);
+  assert.equal(at('blank').durationMs, 500);
+  assert.equal(CF.trial.itiMs, 300);
+  // The judgement waits; nothing else on the trial does.
+  assert.equal(at('test').awaitsResponse, true);
+});
+
+test('answering with what the trial actually shows is correct', () => {
+  const trials = cfTrials(9);
+  const same = trials.find(t => t.values.item.answer === 'same');
+  const diff = trials.find(t => t.values.item.answer === 'different');
+  assert.equal(isCorrect(CF, same, 'same'), true);
+  assert.equal(isCorrect(CF, same, 'different'), false);
+  assert.equal(isCorrect(CF, diff, 'different'), true);
+});
+
+test('two participants do not see the same forty faces', () => {
+  const facesFor = seed => cfTrials(seed).map(t => t.values.item.study).join();
+  assert.notEqual(facesFor(1), facesFor(2));
+});
+
+test('practice is six trials from faces the main experiment never uses', () => {
+  const practice = buildTrials(CF, { practice: true, rng: seededRandom(4) });
+  assert.equal(practice.length, 6);
+  const mainFaces = new Set(cfTrials(9).flatMap(t =>
+    [t.values.item.study, t.values.item.top, t.values.item.bottom]));
+  for (const t of practice) {
+    assert.ok(!mainFaces.has(t.values.item.study),
+      `practice previewed ${t.values.item.study}, which the main block also uses`);
+  }
+});
+
+test('every face a trial names is one the site actually serves', () => {
+  const served = new Set(
+    readdirSync(join(process.cwd(), 'public', 'faces'))
+      .filter(f => f.endsWith('.jpg'))
+      .map(f => `/faces/${f}`),
+  );
+  const all = [...cfTrials(9), ...buildTrials(CF, { practice: true, rng: seededRandom(4) })];
+  for (const t of all) {
+    for (const key of ['study', 'top', 'bottom']) {
+      assert.ok(served.has(t.values.item[key]),
+        `${t.values.item[key]} is not in public/faces, so it would 404 in front of a class`);
+    }
+  }
+});
+
+test('mock data shows the composite effect: aligned is the hard condition', () => {
+  const rows = generateMockRows(CF);
+  const byCondition = Object.fromEntries(
+    aggregate(CF.dashboard.charts[0], rows).map(p => [String(p.group), p.value]),
+  );
+  const aligned = byCondition['Aligned'];
+  const large = byCondition['Misaligned (large)'];
+  assert.ok(large > aligned + 10, `aligned ${aligned}% is not clearly worse than misaligned ${large}%`);
+});

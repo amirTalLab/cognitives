@@ -1422,3 +1422,56 @@ test.describe('Serial reaction time, the ported experiment', () => {
     await expect(page.locator('.recharts-pie').first()).toBeVisible({ timeout: 10_000 });
   });
 });
+
+// The composite display is the whole reason this port needed new runtime code, and it is
+// pure geometry — two halves flush, the lower one slid. Only a browser can check that.
+test.describe('Composite face, the ported experiment', () => {
+  test('a face, then a composite whose halves are flush and the same size as the face', async ({ page }) => {
+    await page.route('**/rest/v1/experiment_results*', route =>
+      route.fulfill({ status: 201, contentType: 'application/json', body: '[]' }));
+
+    await page.goto('/run/CompositeFace');
+    await page.getByPlaceholder(/Name|שם/).fill('E2E CF');
+    await page.getByRole('button', { name: /Begin|התחלה/ }).click();
+
+    // Practice first, as the original has.
+    const faces = page.locator('main img');
+    await expect(faces.first()).toBeVisible({ timeout: 10_000 });
+
+    // The composite: two images stacked, not side by side.
+    await expect(faces).toHaveCount(2, { timeout: 10_000 });
+    const boxes = await faces.evaluateAll(els => els.map(el => {
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width) };
+    }));
+    expect(boxes[0].width, 'the halves are different widths').toBe(boxes[1].width);
+
+    // Their containers are what is clipped, so compare those: one sits below the other.
+    const halves = await page.locator('main img').evaluateAll(els => els.map(el => {
+      const r = (el.parentElement as HTMLElement).getBoundingClientRect();
+      return { top: Math.round(r.top), left: Math.round(r.left), height: Math.round(r.height) };
+    }));
+    expect(halves[1].top, 'the lower half is not below the upper one').toBeGreaterThan(halves[0].top);
+    // Flush: the lower half starts exactly where the upper one ends.
+    expect(Math.abs((halves[0].top + halves[0].height) - halves[1].top))
+      .toBeLessThanOrEqual(1);
+
+    await expect(page.getByRole('button', { name: /Same|אותו אדם/ })).toBeVisible();
+  });
+
+  test('the teacher dashboard draws every figure from mock data', async ({ page }) => {
+    await page.route('**/rest/v1/**', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await page.addInitScript(() => sessionStorage.setItem('ss_teacher_authed', '1'));
+    await page.goto('/run/CompositeFace/teacher');
+
+    await page.getByRole('button', { name: 'Mock Data' }).click();
+
+    // Exact: a third chart is titled "Accuracy by alignment and correct answer", so a
+    // substring match finds two headings and resolves to neither.
+    await expect(page.getByText('Accuracy by alignment', { exact: true }))
+      .toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('The composite effect, per participant')).toBeVisible();
+    await expect(page.locator('.recharts-surface')).toHaveCount(5, { timeout: 15_000 });
+  });
+});

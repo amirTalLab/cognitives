@@ -193,6 +193,37 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
       );
     }
 
+    // Two pictures cut at the same height and joined flush. Both halves are absolutely
+    // placed inside a fixed square, so the composite occupies exactly the space a whole
+    // image would — a container that grew with the offset would move the face on screen and
+    // give the misalignment away before anyone looked at it.
+    case 'composite': {
+      const size = Number(resolve(node.size, values) ?? 240);
+      const cut = Number(resolve(node.cut, values) ?? 0.55);
+      const offset = Math.round(size * Number(resolve(node.offset, values) ?? 0));
+      const topH = Math.round(size * cut);
+      const src = (v: unknown) => assetUrl(String(resolve(v as string, values) ?? ''), values[ASSET_BASE_KEY]);
+      const whole: React.CSSProperties = {
+        width: size, height: size, objectFit: 'cover', display: 'block',
+      };
+      return (
+        <div style={{ position: 'relative', width: size, height: size, flexShrink: 0, userSelect: 'none' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, width: size, height: topH, overflow: 'hidden' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- src is data-driven */}
+            <img src={src(node.top)} alt="" draggable={false} style={whole} />
+          </div>
+          {/* The lower half is what slides; pulled up by the cut so its own image lines up. */}
+          <div style={{
+            position: 'absolute', top: topH, left: offset,
+            width: size, height: size - topH, overflow: 'hidden',
+          }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- src is data-driven */}
+            <img src={src(node.bottom)} alt="" draggable={false} style={{ ...whole, marginTop: -topH }} />
+          </div>
+        </div>
+      );
+    }
+
     case 'pair':
       return (
         <div className="flex items-center" style={{ gap: node.gap ?? 40 }}>
