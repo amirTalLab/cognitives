@@ -943,3 +943,29 @@ test('scoring recall while collecting no word list says so', () => {
   const messages = validate(def).map(i => i.message);
   assert.ok(messages.some(m => /no typed words to score/.test(m)), messages.join(' | '));
 });
+
+test('a recalled word records where it came in the answer, for lag analyses', () => {
+  const def = recallBlock();
+  const rows = expandRecall(def, oneTrial(def), 'awake, bed');
+  const at = word => rows.find(r => r.payload.word === word).payload.outputPosition;
+  assert.equal(at('awake'), 1);
+  assert.equal(at('bed'), 2);
+  // A word that never came has no output position — null, never zero, which a chart would
+  // otherwise read as having been recalled first.
+  assert.equal(at('rest'), null);
+});
+
+test('a word repeated in the answer keeps the position it first came in', () => {
+  const def = recallBlock();
+  const rows = expandRecall(def, oneTrial(def), 'bed, rest, bed');
+  assert.equal(rows.find(r => r.payload.word === 'bed').payload.outputPosition, 1);
+  assert.equal(rows.find(r => r.payload.word === 'rest').payload.outputPosition, 2);
+});
+
+test('an intrusion records its output position too, so it can be placed in the sequence', () => {
+  const def = recallBlock({
+    trial: { ...recallBlock().trial, recall: { against: 'studied', match: 'word', intrusions: true } },
+  });
+  const rows = expandRecall(def, oneTrial(def), 'bed, banana');
+  assert.equal(rows.find(r => r.payload.intrusion).payload.outputPosition, 2);
+});

@@ -270,8 +270,13 @@ export function expandRecall(def: TrialDesign, trial: Trial, typedAnswer: string
   if (!spec) return null;
 
   // Commas, semicolons or spaces: participants use all three, and the hand-built DRM
-  // already accepted any of them.
-  const typed = new Set(typedAnswer.split(/[\s,;]+/).map(normalise).filter(Boolean));
+  // already accepted any of them. Kept as a LIST, not a set: the order words come out in is
+  // itself data — lag analyses of free recall are entirely about which word followed which —
+  // and a set would throw it away before anyone could ask.
+  const order = typedAnswer.split(/[\s,;]+/).map(normalise).filter(Boolean);
+  const firstAt = new Map<string, number>();
+  order.forEach((word, i) => { if (!firstAt.has(word)) firstAt.set(word, i + 1); });
+  const typed = new Set(order);
   const studied = def.pools?.[spec.against] ?? [];
   // The trial's own stored fields travel too — which list was studied, which block — so a
   // chart can ask about one list without the pool having to repeat it on every item.
@@ -284,13 +289,21 @@ export function expandRecall(def: TrialDesign, trial: Trial, typedAnswer: string
     const word = normalise(String(item[spec.match] ?? ''));
     const came = word !== '' && typed.has(word);
     if (came) matched.add(word);
-    rows.push({ response: came ? RECALLED : MISSED, payload: { ...context, ...item } });
+    rows.push({
+      response: came ? RECALLED : MISSED,
+      // `outputPosition` is where this word came in the answer — first, second, third. Null
+      // for one that never came, which a chart must skip rather than read as position zero.
+      payload: { ...context, ...item, outputPosition: came ? firstAt.get(word)! : null },
+    });
   }
 
   if (spec.intrusions) {
     for (const word of typed) {
       if (matched.has(word)) continue;
-      rows.push({ response: RECALLED, payload: { ...context, [spec.match]: word, intrusion: true } });
+      rows.push({
+        response: RECALLED,
+        payload: { ...context, [spec.match]: word, intrusion: true, outputPosition: firstAt.get(word)! },
+      });
     }
   }
 
