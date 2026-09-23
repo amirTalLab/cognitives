@@ -106,5 +106,6 @@ export const config = {
     // The definition port of posnerCueing shares its slug, so the one lock covers both
     // versions — locking Posner cannot leave the /run copy open to students.
     '/run/posnerCueing/:path*',
+    '/run/drm/:path*',
   ],
 };

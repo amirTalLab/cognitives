@@ -301,6 +301,10 @@ export interface Stage {
    * a rhythm does not: DRM shows "List 3 — get ready" for two seconds and a three-second
    * break between lists, and turning those into ten button presses would change the pace of
    * the session and give the participant five untimed rests the design never gave them.
+   *
+   * ZERO means no screen at all, not one that vanishes instantly — DRM's arithmetic runs
+   * straight into its recall, and a screen flashing between them would be a pause the
+   * original does not have.
    */
   autoAdvanceMs?: number;
 

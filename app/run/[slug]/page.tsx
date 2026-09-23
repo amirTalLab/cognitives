@@ -149,7 +149,10 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
     setRows(previous => [...previous, ...completed]);
     if (nextIdx < plan.length) {
       setStageIdx(nextIdx);
-      setStage('stageIntro');
+      // Zero means no intro screen at all, not one that vanishes instantly: DRM's arithmetic
+      // runs straight into its recall, and a screen flashing between them would be a pause
+      // the original does not have.
+      setStage(plan[nextIdx].autoAdvanceMs === 0 ? 'stageRun' : 'stageIntro');
     } else {
       setStage('thanks');
     }

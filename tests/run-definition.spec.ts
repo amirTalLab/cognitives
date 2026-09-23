@@ -1252,3 +1252,62 @@ test.describe('definition runtime — teacher dashboard across versions', () => 
     await expect(page.getByRole('button', { name: 'All versions' })).toHaveCount(0);
   });
 });
+
+// DRM end to end is fifteen minutes, so this walks the parts a browser can break: the
+// passive study block (which deadlocked before it could end itself), the clock-bounded
+// filler, and the timed recall box that has to submit what was typed rather than discard it.
+test.describe('DRM, the ported experiment', () => {
+  test('practice plays its words, the filler counts down, and recall keeps what was typed', async ({ page }) => {
+    const saved: Record<string, unknown>[] = [];
+    await page.route('**/rest/v1/experiment_results*', async route => {
+      saved.push(JSON.parse(route.request().postData() ?? '{}'));
+      await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
+    });
+
+    await page.goto('/run/drm');
+    await page.getByPlaceholder(/Name|שם/).fill('E2E DRM');
+    await page.getByRole('button', { name: /Begin|התחלה/ }).click();
+
+    // Three practice words, shown and not asked about.
+    await expect(page.getByText('apple')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('main button')).toHaveCount(0);
+    await expect(page.getByText('grape')).toBeVisible({ timeout: 10_000 });
+
+    // The filler arrives by itself and is measured in seconds, not trials.
+    // Exact: "זוגי" is a substring of "אי-זוגי", so a loose match finds both buttons.
+    const even = page.getByRole('button', { name: /^(Even|זוגי)$/ });
+    await expect(even).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/^\d+s$/).first()).toBeVisible();
+    await even.click();
+
+    // Recall: a countdown and a box. Type a word and finish early.
+    await expect(page.locator('main input')).toBeVisible({ timeout: 20_000 });
+    await page.locator('main input').fill('apple');
+    await page.locator('main input').press('Enter');
+    await page.getByRole('button', { name: /Done|סיימתי/ }).click();
+
+    // The first real list follows, announced and starting on its own.
+    await expect(page.getByRole('heading', { name: /Get ready|התכונני/ })).toBeVisible({ timeout: 15_000 });
+
+    await page.waitForTimeout(500);
+    const practice = saved.filter(r => r.payload && (r.payload as Record<string, unknown>).stage === 'practiceRecall');
+    expect(practice.length, 'recall wrote no rows').toBeGreaterThan(0);
+    const recalled = practice.find(r => (r.payload as Record<string, unknown>).word === 'apple');
+    expect(recalled?.response, 'the typed word was not scored as recalled').toBe('recalled');
+  });
+
+  test('the teacher dashboard draws every figure from mock data', async ({ page }) => {
+    await page.route('**/rest/v1/**', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await page.addInitScript(() => sessionStorage.setItem('ss_teacher_authed', '1'));
+    await page.goto('/run/drm/teacher');
+
+    await page.getByRole('button', { name: 'Mock Data' }).click();
+
+    await expect(page.getByText('Figure 1: Recognition Rates by Item Type (DRM Classic Contrast)'))
+      .toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Figure 7: Math Task Performance (Individual)')).toBeVisible();
+    // Every figure drew something rather than an empty frame.
+    await expect(page.locator('.recharts-surface')).toHaveCount(7, { timeout: 15_000 });
+  });
+});
