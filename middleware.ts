@@ -108,5 +108,6 @@ export const config = {
     '/run/posnerCueing/:path*',
     '/run/drm/:path*',
     '/run/serialOrder/:path*',
+    '/run/srt/:path*',
   ],
 };

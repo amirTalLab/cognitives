@@ -271,6 +271,27 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     bad('"endsAfterMs"', 'a number of milliseconds above zero');
   }
 
+  // A between-subject condition drawn from nothing would leave every participant in no
+  // condition at all, and every reference to it blank — the kind of failure that looks like
+  // a design flaw rather than a typo.
+  if (def.assign !== undefined) {
+    if (!isObj(def.assign) || !isStr(def.assign.pool) || !isStr(def.assign.as) || !def.assign.as) {
+      bad('"assign"', 'an object naming the pool to draw from ("pool") and a name for it ("as")');
+    } else {
+      const pool = def.pools?.[def.assign.pool];
+      if (!pool) {
+        err(`Participants are assigned from pool "${def.assign.pool}", which this experiment does not have.`);
+      } else if (pool.length === 0) {
+        err(`Participants are assigned from pool "${def.assign.pool}", which is empty, so nobody would be in any condition.`);
+      } else if (pool.length === 1) {
+        warn(`Every participant is assigned the only item in pool "${def.assign.pool}", so this is not a between-subject manipulation.`);
+      }
+      if (def.factors.some(f => f.name === def.assign!.as)) {
+        err(`"${def.assign.as}" is both an assigned condition and a factor, so one would silently overwrite the other.`);
+      }
+    }
+  }
+
   def.store.forEach((key, i) => { if (!isStr(key)) bad(`Entry #${i + 1} of "store"`, 'a string'); });
 
   def.trial.phases.forEach((p, i) => {
@@ -469,6 +490,16 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     const at = `Chart ${label(i, c.title)}`;
     if (!isStr(c.groupBy)) bad(`${at}'s "groupBy"`, 'a factor name');
     if (!isStr(c.measure)) bad(`${at}'s "measure"`, 'a measure name');
+    // A kind the renderer does not know falls through to a bar chart, which looks like a
+    // design choice rather than a typo. Named here so it reads as the mistake it is.
+    if (c.kind !== undefined
+        && !['bar', 'line', 'scatter', 'histogram', 'xy', 'pie'].includes(String(c.kind))) {
+      bad(`${at}'s "kind"`, 'one of bar, line, scatter, histogram, xy or pie');
+    }
+    // A pie divides one whole, so it needs counts to divide — an average has no whole.
+    if (c.kind === 'pie' && c.measure !== 'count') {
+      err(`${at} is a pie, so it must measure "count" — a pie divides one whole, and an average of "${c.measure}" has no whole to divide.`);
+    }
     if (c.seriesBy !== undefined && !isStr(c.seriesBy)) bad(`${at}'s "seriesBy"`, 'a factor name');
     if (c.filter !== undefined && !isObj(c.filter)) bad(`${at}'s "filter"`, 'an object of field values');
     if (c.correctOnly !== undefined && typeof c.correctOnly !== 'boolean') bad(`${at}'s "correctOnly"`, 'true or false');
@@ -551,7 +582,11 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   for (const factor of def.factors) {
     if (factor.derivedFrom) {
       for (const source of factor.derivedFrom) {
-        if (!factorNames.has(source)) {
+        // A dotted source names a FIELD of a pool-drawn factor — "item.location" — so the
+        // factor is the part before the dot. Requiring the whole path to be a factor name
+        // rejected every design that derives from a pool item, which is most of them once a
+        // pool is reached through a stage group or an assignment.
+        if (!factorNames.has(source.split('.')[0])) {
           err(`Factor "${factor.name}" is derived from "${source}", which is not a factor.`);
         }
       }
@@ -578,8 +613,13 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
       // A "{list.words}" reference is resolved from the item a stage group drew, so there is
       // no pool of that name to find and nothing to check until the run.
       if (name.startsWith('{')) {
-        if (!def.stages?.some(s => (s as { forEach?: unknown }).forEach !== undefined)) {
-          err(`Factor "${factor.name}" draws from "${name}", which only means something inside a stage group, and this experiment has none.`);
+        // Resolved at run time from an item this experiment draws — either the one a stage
+        // group drew for this pass, or the one assigned to this participant. With neither,
+        // there is nothing for the reference to name and the factor would find no levels.
+        const drawsItems = def.assign !== undefined
+          || !!def.stages?.some(s => (s as { forEach?: unknown }).forEach !== undefined);
+        if (!drawsItems) {
+          err(`Factor "${factor.name}" draws from "${name}", which only means something inside a stage group or with "assign", and this experiment has neither.`);
         }
         return;
       }

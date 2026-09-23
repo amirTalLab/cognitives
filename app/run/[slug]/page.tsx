@@ -118,7 +118,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
 
   if (stage === 'practice') {
     return (
-      <Runner key="practice" definition={def} language={language} practice
+      <Runner key="practice" definition={def} design={plan[0]?.design} context={plan[0]?.context}
+        language={language} practice
         onComplete={() => setStage('practiceDone')} />
     );
   }
@@ -159,11 +160,16 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   };
 
   if (stage === 'main') {
+    // Through the plan, like every other block. The first block used to be run from the
+    // definition directly, which meant it alone never received the between-subject item —
+    // so an experiment whose opening block draws from it built no trials at all.
+    const first = plan[0];
     return (
-      <Runner key="main" definition={def} language={language}
+      <Runner key="main" definition={def} design={first.design} context={first.context}
+        language={language}
         // Named only when there is more than one block, so a single-block experiment's
         // rows keep exactly the payload they had before stages existed.
-        stage={plan.length > 1 ? (def.stageName ?? 'main') : undefined}
+        stage={plan.length > 1 ? first.stage : undefined}
         onComplete={completed => afterBlock(completed, 1)} />
     );
   }

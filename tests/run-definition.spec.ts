@@ -1348,3 +1348,77 @@ test.describe('Serial position, the ported experiment', () => {
     await expect(page.locator('.recharts-surface')).toHaveCount(8, { timeout: 15_000 });
   });
 });
+
+// SRT is 648 trials, so this walks the part a browser can break: the four boxes laid out as
+// a diamond, the dot drawn inside the one that answers the trial, and a press moving
+// straight on with no gap.
+test.describe('Serial reaction time, the ported experiment', () => {
+  test('four boxes in a diamond, the dot in one of them, and a press moves straight on', async ({ page }) => {
+    const saved: Record<string, unknown>[] = [];
+    await page.route('**/rest/v1/experiment_results*', async route => {
+      saved.push(JSON.parse(route.request().postData() ?? '{}'));
+      await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
+    });
+
+    await page.goto('/run/srt');
+    await page.getByPlaceholder(/Name|שם/).fill('E2E SRT');
+    await page.getByRole('button', { name: /Begin|התחלה/ }).click();
+
+    const boxes = page.locator('main button');
+    await expect(boxes).toHaveCount(4, { timeout: 10_000 });
+
+    // A diamond, not a row: one box above the others, one below, two level in between.
+    const spots = await boxes.evaluateAll(els => els.map(el => {
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+    }));
+    const xs = spots.map(s => s.x);
+    const ys = spots.map(s => s.y);
+    expect(new Set(xs).size, 'all four boxes share too few columns for a diamond').toBeGreaterThan(1);
+    expect(Math.max(...ys) - Math.min(...ys), 'the boxes are not spread vertically').toBeGreaterThan(200);
+    expect(Math.max(...xs) - Math.min(...xs), 'the boxes are not spread horizontally').toBeGreaterThan(200);
+
+    // Exactly one box holds the dot, and pressing it is answering the trial.
+    const withDot = page.locator('main button svg');
+    await expect(withDot).toHaveCount(4);
+
+    for (let i = 0; i < 3; i++) {
+      const lit = await boxes.evaluateAll(els => els.findIndex(el => {
+        const fill = el.querySelector('svg circle, svg path')?.getAttribute('fill') ?? '';
+        return fill !== '' && fill !== 'transparent' && fill !== 'none';
+      }));
+      expect(lit, 'no box was showing the dot').toBeGreaterThanOrEqual(0);
+      await boxes.nth(lit).click();
+      await page.waitForTimeout(120);
+    }
+
+    await page.waitForTimeout(400);
+    expect(saved.length, 'presses were not recorded').toBeGreaterThanOrEqual(3);
+    const first = saved[0].payload as Record<string, unknown>;
+    expect(first.stage).toBe('block1');
+    expect(first.group_label === 'A' || first.group_label === 'B').toBe(true);
+    expect(saved.slice(0, 3).every(r => r.is_correct === true)).toBe(true);
+  });
+
+  test('the teacher dashboard draws every figure, including the awareness pie', async ({ page }) => {
+    await page.route('**/rest/v1/**', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await page.addInitScript(() => sessionStorage.setItem('ss_teacher_authed', '1'));
+    await page.goto('/run/srt/teacher');
+
+    await page.getByRole('button', { name: 'Mock Data' }).click();
+
+    await expect(page.getByText('Mean RT by Block (correct trials)')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Did participants notice a regularity?')).toBeVisible();
+    // Six, not seven: the pie draws nothing until it is revealed, which is the point of
+    // hiding a result a class is meant to predict first.
+    await expect(page.locator('.recharts-surface')).toHaveCount(6, { timeout: 15_000 });
+
+    // The pie is behind its own Reveal, like every other chart. Found by its card rather
+    // than by text position: several nested divs contain the heading, and only the card
+    // carries the button.
+    const pieCard = page.locator('div.rounded-2xl').filter({ hasText: 'Did participants notice' });
+    await pieCard.getByRole('button', { name: 'Reveal' }).click();
+    await expect(page.locator('.recharts-pie').first()).toBeVisible({ timeout: 10_000 });
+  });
+});

@@ -65,7 +65,13 @@ export function resolve<T>(value: Bound<T> | undefined, values: Record<string, u
  * reconstructable from the stored row.
  */
 export function seededRandom(seed: number) {
-  let s = (seed % 2147483646) + 1;
+  // The seed is scrambled before use. A bare Lehmer generator started at a small number
+  // returns a FIRST value proportional to it — seeded 1 to 12, every first draw is under
+  // 0.0001 — so anything decided on a single draw gives every seed the same answer. That
+  // surfaced as all twenty-four mock participants being assigned the same between-subject
+  // condition, which would have shown a counterbalanced chart with one of its two series
+  // permanently empty.
+  let s = ((Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) >>> 0) % 2147483646) + 1;
   return () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
 }
 
@@ -331,8 +337,16 @@ export function planStages(
   def: ExperimentDefinition,
   rng: () => number = Math.random,
 ): PlannedBlock[] {
+  // Drawn once, before anything else, and merged into every block's context — including the
+  // first. A between-subject condition that differed between blocks would not be one.
+  const assigned: Record<string, unknown> = {};
+  if (def.assign) {
+    const pool = def.pools?.[def.assign.pool] ?? [];
+    if (pool.length) assigned[def.assign.as] = shuffle(pool, rng)[0];
+  }
+
   const blocks: PlannedBlock[] = [
-    { design: def, source: def, stage: def.stageName ?? 'main', context: {} },
+    { design: def, source: def, stage: def.stageName ?? 'main', context: { ...assigned } },
   ];
 
   /**
@@ -356,7 +370,7 @@ export function planStages(
         title: entry.title,
         instructions: entry.instructions,
         autoAdvanceMs: entry.autoAdvanceMs,
-        context: {},
+        context: { ...assigned },
       });
       continue;
     }
@@ -376,7 +390,7 @@ export function planStages(
           title: stage.title,
           instructions: stage.instructions,
           autoAdvanceMs: stage.autoAdvanceMs,
-          context: { [entry.as]: item },
+          context: { ...assigned, [entry.as]: item },
           repetition: i + 1,
         });
       }

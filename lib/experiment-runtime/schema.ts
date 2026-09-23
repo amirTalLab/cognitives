@@ -210,8 +210,23 @@ export interface Phase {
 export type ResponseSpec =
   | {
       kind: 'choice';
-      options: { value: string; label: string; labelHe?: string; key?: string; display?: Display }[];
-      layout?: 'row' | 'column' | 'sides';
+      options: {
+        value: string;
+        label: string;
+        labelHe?: string;
+        key?: string;
+        display?: Display;
+        /**
+         * Where on screen this option sits, under `layout: 'positioned'`.
+         *
+         * For a task where the button's PLACE is the answer rather than its label. Serial
+         * reaction time is the case: four boxes in a diamond, a dot appears in one, and you
+         * press that one. A row of buttons reading up/left/right/down would be a different
+         * experiment — it would measure reading a direction word, not reacting to a place.
+         */
+        at?: 'left' | 'right' | 'top' | 'bottom' | 'center';
+      }[];
+      layout?: 'row' | 'column' | 'sides' | 'positioned';
     }
   | { kind: 'rating'; min: number; max: number; minLabel?: string; maxLabel?: string }
   | { kind: 'number'; min?: number; max?: number; unit?: string }
@@ -436,7 +451,11 @@ export interface MockSpec {
   /** Per-level departures from baseline — the effect itself. */
   effects?: {
     factor: string;
-    level: string;
+    /**
+     * The level this effect applies to. Compared as text, so a numeric level — a block
+     * number, a set size — may be written as the number it is rather than quoted.
+     */
+    level: string | number | boolean;
     rtDeltaMs?: number;
     /** Added to baseAccuracy, as a proportion: 0.1 means ten points higher. */
     accuracyDelta?: number;
@@ -509,7 +528,7 @@ export interface ChartSpec {
    * (say) their congruent RT against their incongruent RT, or their speed against their
    * accuracy. Every other kind plots one value per group.
    */
-  kind: 'bar' | 'line' | 'scatter' | 'histogram' | 'xy';
+  kind: 'bar' | 'line' | 'scatter' | 'histogram' | 'xy' | 'pie';
   /** What goes on the x axis — a factor name, or 'participant'. */
   groupBy: string;
   /**
@@ -668,6 +687,24 @@ export interface ExperimentDefinition {
 
   /** How many times the full cross of factors is repeated. */
   repetitions: number;
+
+  /**
+   * One item drawn per PARTICIPANT, in scope for every block of their run.
+   *
+   * Between-subject designs need something decided once and then held to: SRT teaches half
+   * the class one twelve-item sequence and half another, so that the reaction-time jump when
+   * the sequence changes cannot be a property of that particular sequence. A factor cannot
+   * say this — factors vary within a run, and a counterbalanced one alternates across the
+   * trial list rather than fixing a condition for the person.
+   *
+   * The drawn item is named by `as` and reaches everything the way a stage group's item
+   * does: a display shows `{group.label}`, a block draws its trials from `{group.blockOne}`,
+   * and `store` keeps `group.label` on every row so a chart can split the class by it —
+   * which is the whole reason to counterbalance rather than just pick one.
+   *
+   * Drawn once when the run starts, so it is the same in the last block as in the first.
+   */
+  assign?: { pool: string; as: string };
 
   /** Whether to shuffle the finished list. Shuffled when absent. */
   order?: TrialOrder;

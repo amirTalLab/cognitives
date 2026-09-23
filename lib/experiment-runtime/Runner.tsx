@@ -505,6 +505,38 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
     onClick: (e: React.MouseEvent) => { if (e.detail === 0) act(); },
   });
 
+  if (step.kind === 'choice' && step.layout === 'positioned') {
+    // The button's PLACE is the answer. Laid out with the same geometry as a `positioned`
+    // display (400px tall, ±180px from centre) so a button sits exactly where the stimulus
+    // it answers for appeared — if the two drifted apart the task would quietly become
+    // harder for every participant.
+    return (
+      <div style={{ position: 'relative', width: '100%', height: 400 }}>
+        {step.options.map((opt, i) => {
+          const at = String(resolve(opt.at, values) ?? 'center');
+          const style: React.CSSProperties = {
+            position: 'absolute',
+            left: at === 'left' ? 'calc(50% - 180px)' : at === 'right' ? 'calc(50% + 180px)' : '50%',
+            top: at === 'top' ? 'calc(50% - 180px)' : at === 'bottom' ? 'calc(50% + 180px)' : '50%',
+            transform: 'translate(-50%, -50%)',
+          };
+          const value = String(resolve(opt.value, values) ?? opt.value);
+          const marked = highlight != null && highlight === value;
+          return (
+            <button key={i} {...press(() => onAnswer(value))} style={style}
+              aria-label={String(resolve(rtl && opt.labelHe ? opt.labelHe : opt.label, values) ?? '')}
+              className={`w-20 h-20 rounded-lg border-2 touch-manipulation transition-colors
+                          active:scale-95 ${marked
+                            ? 'border-emerald-400 bg-emerald-400/20'
+                            : 'border-gray-500 bg-gray-100 hover:border-purple-400'}`}>
+              {opt.display && <DisplayView node={opt.display} values={values} />}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   if (step.kind === 'choice') {
     const wide = step.layout === 'column';
     return (

@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { FlaskConical } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ErrorBar, ReferenceLine, ResponsiveContainer,
+  Tooltip, Legend, ErrorBar, ReferenceLine, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import { verifyPassword } from '@/lib/auth';
 import type { ExperimentDefinition, ChartSpec } from './schema';
@@ -117,6 +117,42 @@ function ChartView({ chart, def, rows, revealed }: {
       )}
     </>
   );
+
+  // A share of a whole rather than a value per group — "how many of the class noticed?".
+  // A bar chart answers the same question, but a proportion of one population is the thing
+  // a pie is actually for, and it is what the hand-built dashboards drew.
+  if (chart.kind === 'pie') {
+    const slices = data.filter(d => Number(d.value) > 0);
+    const total = slices.reduce((sum, d) => sum + Number(d.value), 0);
+    return (
+      <>
+      {note}
+      {!revealed || total === 0 ? (
+        <div className="h-[300px] flex items-center justify-center text-gray-600 text-sm">
+          {total === 0 ? 'No answers yet' : 'Click Reveal to show'}
+        </div>
+      ) : (
+        <>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie data={slices} dataKey="value" nameKey="group" cx="50%" cy="50%" outerRadius={95}
+                label={({ name, value }) => `${name} (${Math.round((Number(value) / total) * 100)}%)`}>
+                {slices.map((d, i) => (
+                  <Cell key={String(d.group)} fill={SERIES_COLORS[i % SERIES_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151' }} />
+              <Legend verticalAlign="bottom" />
+            </PieChart>
+          </ResponsiveContainer>
+          <p className="text-xs text-gray-500 text-center">
+            {slices.map(d => `${d.group}: ${d.value}`).join(' · ')} (n={total})
+          </p>
+        </>
+      )}
+      </>
+    );
+  }
 
   if (chart.kind === 'line') {
     return (

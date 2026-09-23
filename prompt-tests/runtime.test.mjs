@@ -52,6 +52,19 @@ for (const file of readdirSync(EXPERIMENTS_DIR).filter(f => f.endsWith('.json'))
 
 const errorsOf = def => validate(def).filter(i => i.severity === 'error').map(i => i.message);
 
+/**
+ * The first block as the RUNTIME builds it.
+ *
+ * Not `buildTrials(def, {})`: an experiment using `assign` draws a between-subject item
+ * before anything else, and its first block reads its trials out of that item. Building the
+ * definition bare leaves every such factor with no levels — a failure of the test, not of
+ * the design.
+ */
+const firstBlock = (def, rng) => {
+  const block = planStages(def, rng)[0];
+  return buildTrials(block.design, { rng, context: block.context });
+};
+
 // ── A. Corpus sweep ───────────────────────────────────────────────────────────
 
 test('corpus is not empty', () => {
@@ -64,7 +77,7 @@ for (const [name, def] of CORPUS) {
   });
 
   test(`[${name}] builds trials`, () => {
-    const trials = buildTrials(def, {});
+    const trials = firstBlock(def);
     assert.ok(trials.length > 0, 'produced no trials');
 
     for (const trial of trials) {
@@ -89,7 +102,7 @@ for (const [name, def] of CORPUS) {
     walk(def.trial.phases);
     walk(def.trial.response);
 
-    const trial = buildTrials(def, {})[0];
+    const trial = firstBlock(def)[0];
     for (const ref of refs) {
       const value = resolve(`{${ref}}`, trial.values);
       assert.notEqual(value, undefined, `"{${ref}}" does not resolve`);
@@ -97,7 +110,7 @@ for (const [name, def] of CORPUS) {
   });
 
   test(`[${name}] scoring returns a definite answer`, () => {
-    const trials = buildTrials(def, {});
+    const trials = firstBlock(def);
     const rule = def.trial.correct;
     for (const trial of trials.slice(0, 20)) {
       const got = isCorrect(def, trial, 'anything');
@@ -107,7 +120,7 @@ for (const [name, def] of CORPUS) {
   });
 
   test(`[${name}] stored payload has every declared key`, () => {
-    const trial = buildTrials(def, {})[0];
+    const trial = firstBlock(def)[0];
     const payload = payloadOf(def, trial);
     for (const key of def.store) {
       const flat = key.replace(/\./g, '_');
@@ -1560,4 +1573,181 @@ test('every ported experiment is registered where the runtime looks for it', () 
       `${name} ("${port.slug}") is in PORTS but not in the registry's BUILT_IN, so /run/${port.slug} would answer "no experiment named ${port.slug}"`,
     );
   }
+});
+
+// ── Q. Serial reaction time ───────────────────────────────────────────────────
+
+const SRT = ports.SRT_PORT;
+const srtPlan = seed => planStages(SRT, seededRandom(seed));
+const srtBlocks = plan => plan.filter(b => /^block\d$/.test(b.stage));
+
+test('SRT runs six blocks, then awareness, priming and the generation test', () => {
+  assert.deepEqual(
+    srtPlan(5).map(b => b.stage),
+    ['block1', 'block2', 'block3', 'block4', 'block5', 'block6',
+      'awareness', 'generationPrime', 'generation'],
+  );
+});
+
+test('each block is the twelve-item sequence nine times over — 648 trials in all', () => {
+  const plan = srtPlan(5);
+  let total = 0;
+  for (const block of srtBlocks(plan)) {
+    const trials = buildTrials(block.design, { context: block.context });
+    assert.equal(trials.length, 108, `${block.stage} is not 108 trials`);
+    total += trials.length;
+  }
+  assert.equal(total, 648);
+});
+
+test('a block presents its sequence in order, repeating every twelve trials', () => {
+  const block = srtBlocks(srtPlan(5))[0];
+  const locations = buildTrials(block.design, { context: block.context })
+    .map(t => t.values.item.location);
+  const firstPass = locations.slice(0, 12);
+  for (let pass = 1; pass < 9; pass++) {
+    assert.deepEqual(locations.slice(pass * 12, pass * 12 + 12), firstPass, `pass ${pass + 1} differs`);
+  }
+});
+
+test('block five is a different sequence, and the others are the learned one', () => {
+  const plan = srtPlan(5);
+  for (const block of srtBlocks(plan)) {
+    const trials = buildTrials(block.design, { context: block.context });
+    const expected = block.stage === 'block5' ? 'interference' : 'main';
+    assert.ok(
+      trials.every(t => t.values.item.sequenceType === expected),
+      `${block.stage} should be the ${expected} sequence`,
+    );
+  }
+  const seqOf = name => {
+    const b = plan.find(x => x.stage === name);
+    return buildTrials(b.design, { context: b.context })
+      .slice(0, 12).map(t => t.values.item.location).join();
+  };
+  assert.notEqual(seqOf('block5'), seqOf('block4'));
+});
+
+test('a participant is assigned one sequence and keeps it for the whole run', () => {
+  const plan = srtPlan(5);
+  const labels = new Set(plan.map(b => b.context.group && b.context.group.label));
+  assert.equal(labels.size, 1, 'the assigned group changed partway through the run');
+  assert.ok(['A', 'B'].includes([...labels][0]));
+});
+
+test('the class is split between the two sequences, not all given one', () => {
+  const labels = new Set(
+    Array.from({ length: 12 }, (_, i) => planStages(SRT, seededRandom(i + 1))[0].context.group.label),
+  );
+  assert.deepEqual([...labels].sort(), ['A', 'B']);
+});
+
+test('whoever learned A meets B in block five, and the other way round', () => {
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    const plan = srtPlan(seed);
+    const take = name => {
+      const b = plan.find(x => x.stage === name);
+      return buildTrials(b.design, { context: b.context })
+        .slice(0, 12).map(t => t.values.item.location).join();
+    };
+    assert.notEqual(take('block5'), take('block1'), `seed ${seed} saw one sequence throughout`);
+  }
+});
+
+test('the dot is drawn in the box that answers the trial, and nowhere else', () => {
+  const block = srtBlocks(srtPlan(5))[0];
+  const places = { 4: 'top', 2: 'left', 3: 'right', 1: 'bottom' };
+  for (const trial of buildTrials(block.design, { context: block.context }).slice(0, 20)) {
+    const lit = Object.values(places).filter(at => trial.values[`dot_${at}`] !== 'transparent');
+    assert.deepEqual(lit, [places[trial.values.item.location]],
+      `trial at location ${trial.values.item.location} lit ${lit.join(', ')}`);
+  }
+});
+
+test('pressing the box the dot is in is correct; any other box is not', () => {
+  const block = srtBlocks(srtPlan(5))[0];
+  const trial = buildTrials(block.design, { context: block.context })[0];
+  assert.equal(isCorrect(block.design, trial, String(trial.values.item.location)), true);
+  const other = [1, 2, 3, 4].find(l => l !== trial.values.item.location);
+  assert.equal(isCorrect(block.design, trial, String(other)), false);
+});
+
+test('a trial times out after three seconds, with no gap before the next', () => {
+  const design = srtBlocks(srtPlan(5))[0].design;
+  assert.equal(design.trial.phases[0].timeoutMs, 3000);
+  assert.equal(design.trial.itiMs, 0);
+});
+
+test('the generation test asks for all twelve positions, primed with the last two', () => {
+  const plan = srtPlan(5);
+  const prime = plan.find(b => b.stage === 'generationPrime');
+  const generation = plan.find(b => b.stage === 'generation');
+
+  assert.equal(buildTrials(prime.design, { context: prime.context }).length, 2);
+  assert.equal(prime.design.trial.response.kind, 'none');
+
+  const probes = buildTrials(generation.design, { context: generation.context });
+  assert.equal(probes.length, 12);
+  assert.deepEqual(
+    probes.map(t => t.values.item.sequencePosition),
+    Array.from({ length: 12 }, (_, i) => i + 1),
+  );
+  assert.equal(new Set(probes.map(t => t.values.item.answer)).size, 4);
+});
+
+test('the awareness question is asked before the sequence is ever mentioned', () => {
+  const stages = srtPlan(5).map(b => b.stage);
+  assert.ok(stages.indexOf('awareness') < stages.indexOf('generationPrime'));
+  assert.equal(srtPlan(5).find(b => b.stage === 'awareness').design.trial.correct.kind, 'none');
+});
+
+test('mock data shows learning across blocks and the jump when the sequence changes', () => {
+  const rows = generateMockRows(SRT);
+  const byBlock = Object.fromEntries(
+    aggregate(SRT.dashboard.charts[0], rows).map(p => [String(p.group), p.value]),
+  );
+  assert.ok(byBlock['4'] < byBlock['1'], `block 4 (${byBlock['4']}) is not faster than block 1 (${byBlock['1']})`);
+  assert.ok(byBlock['5'] > byBlock['4'] + 50, `no jump at block 5: ${byBlock['4']} to ${byBlock['5']}`);
+  assert.ok(byBlock['6'] < byBlock['5'], 'block 6 did not recover');
+});
+
+test('the awareness pie counts answers rather than averaging them', () => {
+  const pie = SRT.dashboard.charts.find(c => c.kind === 'pie');
+  assert.equal(pie.measure, 'count');
+  const points = aggregate(pie, generateMockRows(SRT));
+  assert.ok(points.length > 0);
+  assert.ok(points.every(p => Number.isFinite(p.value)));
+});
+
+test('a pie that averages instead of counting is refused', () => {
+  const def = design({
+    dashboard: { charts: [{ title: 'c', kind: 'pie', groupBy: 'a', measure: 'meanRt' }] },
+  });
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /no whole to divide/.test(m)), messages.join(' | '));
+});
+
+test('a chart kind the renderer does not know is refused, not drawn as a bar', () => {
+  const def = design({
+    dashboard: { charts: [{ title: 'c', kind: 'donut', groupBy: 'a', measure: 'count' }] },
+  });
+  assert.ok(validate(def).some(i => i.severity === 'error' && /"kind"/.test(i.message)));
+});
+
+test('assigning from a pool that does not exist is refused', () => {
+  const def = design({ assign: { pool: 'nope', as: 'group' } });
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /does not have/.test(m)), messages.join(' | '));
+});
+
+test('an assignment that collides with a factor name is refused', () => {
+  const def = design({ pools: { g: [{ x: 1 }, { x: 2 }] }, assign: { pool: 'g', as: 'a' } });
+  const messages = validate(def).filter(i => i.severity === 'error').map(i => i.message);
+  assert.ok(messages.some(m => /silently overwrite/.test(m)), messages.join(' | '));
+});
+
+test('a one-item assignment pool says it is not a between-subject manipulation', () => {
+  const def = design({ pools: { g: [{ x: 1 }] }, assign: { pool: 'g', as: 'group' } });
+  const messages = validate(def).map(i => i.message);
+  assert.ok(messages.some(m => /not a between-subject manipulation/.test(m)), messages.join(' | '));
 });
