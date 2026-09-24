@@ -9,7 +9,7 @@
 
 import { getSupabase } from '@/lib/supabase';
 import { describeWriteError, storedPassword } from '@/lib/protected-writes';
-import { ResultRow } from './aggregate';
+import type { ResultRow } from './aggregate';
 import type { ExperimentDefinition } from './schema';
 
 const TABLE = 'experiment_results';

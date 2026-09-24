@@ -967,9 +967,10 @@ export default function CreateProjectPage() {
               <div className="mt-6 pt-5 border-t border-gray-800">
                 <h3 className="font-semibold text-gray-200 mb-1">Or edit one that is already live</h3>
                 <p className="text-xs text-gray-500 mb-4">
-                  Every experiment running on /run, whether it was generated here or ported from a
-                  hand-built page. Opens it on the Refine screen — free, no stage is run again.
-                  Publishing afterwards makes a new version, and the old one can always be restored.
+                  Every experiment on the homepage that runs on /run, whether it was generated here
+                  or ported from a hand-built page. Opens it on the Refine screen — free, no stage is
+                  run again. Publishing afterwards makes a new version, and the old one can always
+                  be restored.
                 </p>
                 <div className="flex flex-col gap-2">
                   {published.map(exp => (
@@ -987,11 +988,6 @@ export default function CreateProjectPage() {
                             : exp.revision ? ` · version ${exp.revision}` : ''}
                           {exp.category ? ` · ${exp.category}` : ''}
                         </p>
-                        {!exp.linked && (
-                          <p className="text-xs text-amber-400/70 mt-1">
-                            Published but not on the homepage — reachable only by its link.
-                          </p>
-                        )}
                       </div>
                       <button onClick={() => openPublished(exp)} disabled={!!busy} className={BTN}>
                         {openingPublished === exp.slug ? 'Opening…' : 'Edit'}

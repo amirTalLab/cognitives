@@ -407,15 +407,22 @@ test('a published experiment opens for editing on Refine, with no API call', asy
   // by the second one while everything else still reads empty.
   await page.route('**/rest/v1/**', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  // Published under a slug the homepage links, because that is the only kind the edit list
+  // offers: a row nobody can reach from the homepage is an abandoned draft, and listing it
+  // invites someone to refine an experiment no student will ever run.
+  const EDITED = { ...DEFINITION, slug: 'drm' };
   await page.route('**/rest/v1/experiment_definitions*', route => {
     const url = route.request().url();
     // maybeSingle() asks for one object; the listing asks for an array.
     const body = url.includes('slug=eq.')
-      ? JSON.stringify({ definition: DEFINITION, revision: 4 })
-      : JSON.stringify([{
-          slug: DEFINITION.slug, title: DEFINITION.title, category: 'MEMORY',
-          updated_at: new Date().toISOString(), revision: 4,
-        }]);
+      ? JSON.stringify({ definition: EDITED, revision: 4 })
+      : JSON.stringify([
+          { slug: EDITED.slug, title: EDITED.title, category: 'MEMORY',
+            updated_at: new Date().toISOString(), revision: 4 },
+          // And one that is published but linked nowhere, which must NOT appear below.
+          { slug: 'kanizsaWordPrime', title: 'Kanizsa word priming', category: 'PERCEPTION',
+            updated_at: new Date().toISOString(), revision: 1 },
+        ]);
     return route.fulfill({ status: 200, contentType: 'application/json', body });
   });
   await page.addInitScript(() => {
@@ -425,17 +432,22 @@ test('a published experiment opens for editing on Refine, with no API call', asy
 
   await page.goto('/create');
   await expect(page.getByRole('heading', { name: 'Or edit one that is already live' })).toBeVisible();
-  await expect(page.getByText(`/run/${DEFINITION.slug} · version 4 · MEMORY`)).toBeVisible();
+  // A published row wins over the built-in of the same slug, and says which version it is.
+  await expect(page.getByText(`/run/${EDITED.slug} · version 4 · MEMORY`)).toBeVisible();
 
   // The ported experiments are listed too, and they are the ones a class actually runs.
   // Before this, the list read published rows alone and none of them could be opened.
-  await expect(page.getByText('/run/drm · built in · editing publishes version 1')).toBeVisible();
   await expect(page.getByText('/run/visualSearch · built in · editing publishes version 1')).toBeVisible();
+  await expect(page.getByText('/run/srt · built in · editing publishes version 1')).toBeVisible();
+
+  // But nothing the homepage does not link, however live its row is.
+  await expect(page.getByText('/run/kanizsaWordPrime')).toBeHidden();
+  await expect(page.getByText('Kanizsa word priming')).toBeHidden();
 
   // Scoped to its own row: there is an Edit button per experiment now. Found by the card
   // class rather than by text depth — several nested divs contain the slug, and only the
   // card carries the button.
-  const row = page.locator('div.rounded-xl').filter({ hasText: `/run/${DEFINITION.slug} ·` });
+  const row = page.locator('div.rounded-xl').filter({ hasText: `/run/${EDITED.slug} ·` });
   await row.getByRole('button', { name: 'Edit' }).click();
 
   // The Refine screen, holding the live experiment — and saying what publishing again does.

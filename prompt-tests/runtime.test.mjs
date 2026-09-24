@@ -13,11 +13,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 
 registerHooks({
   resolve(specifier, context, next) {
+    // Next's "@/" alias, which node knows nothing about. Without this, any module the app
+    // imports by alias — the registry, and so the edit list — could not be tested at all.
+    if (specifier.startsWith('@/')) {
+      const target = join(process.cwd(), specifier.slice(2));
+      const withExt = existsSync(target) ? target : `${target}.ts`;
+      return next(pathToFileURL(withExt).href, context);
+    }
     if (specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier)) {
       const candidate = new URL(`${specifier}.ts`, context.parentURL);
       if (existsSync(fileURLToPath(candidate))) return next(`${specifier}.ts`, context);
@@ -35,6 +42,7 @@ const roundTrips = await import('../lib/experiment-runtime/round-trips.ts');
 const probe = await import('../lib/experiment-runtime/generality-probe.ts');
 const templates = await import('../lib/experiment-runtime/templates.ts');
 const ports = await import('../lib/experiment-runtime/ports.ts');
+const { editableFrom } = await import('../lib/experiment-runtime/registry.ts');
 
 /** Every definition in the repo, named. */
 const CORPUS = [];
@@ -2063,6 +2071,55 @@ test('the homepage no longer keeps its own copy of the catalogue', () => {
   assert.ok(
     !/const EXPERIMENTS\s*:/.test(homepageSource),
     'app/page.tsx declares its own EXPERIMENTS list again',
+  );
+});
+
+test('the edit list is exactly what the homepage links, and nothing else', () => {
+  // Three rows were published under slugs the homepage does not link: an abandoned demo and
+  // two near-identical generations of the same experiment. Listing them invited a lecturer
+  // to spend an afternoon refining an experiment no student can reach.
+  const rows = [
+    { slug: 'lexicalDecisionPairs', title: 'Lexical decision', category: 'language', revision: 5 },
+    { slug: 'boubaKikiDemo', title: 'Bouba/Kiki demo', category: 'perception', revision: 1 },
+    { slug: 'kanizsaWordPrime', title: 'Kanizsa prime', category: 'perception', revision: 1 },
+  ];
+  const listed = editableFrom(rows).map(e => e.slug);
+
+  assert.deepEqual(listed, [...catalogue.RUN_SLUGS],
+    'the edit list does not match the homepage catalogue, in its order');
+  for (const orphan of ['boubaKikiDemo', 'kanizsaWordPrime']) {
+    assert.ok(!listed.includes(orphan), `${orphan} is not on the homepage but is offered for editing`);
+  }
+});
+
+test('a published row supersedes the built-in it was refined from', () => {
+  // Which copy the Edit button opens is the difference between changing what students run
+  // and changing a starting point that has already been overridden.
+  const [ported] = catalogue.RUN_SLUGS;
+  const bare = editableFrom([]).find(e => e.slug === ported);
+  assert.equal(bare.builtIn, true, 'a port with no row should be marked as built in');
+  assert.equal(bare.revision, undefined);
+
+  const edited = editableFrom([
+    { slug: ported, title: 'Refined', category: 'memory', revision: 3 },
+  ]).find(e => e.slug === ported);
+  assert.equal(edited.builtIn, false, 'a port with a published row is no longer the built-in');
+  assert.equal(edited.revision, 3);
+  assert.equal(edited.title, 'Refined', 'the list shows the built-in title over the published one');
+});
+
+test('an unreachable database still lists every experiment that ships as code', () => {
+  // listPublished throwing is caught, not propagated, so a paused Supabase project degrades
+  // the list rather than emptying it. What drops out is only what exists solely as a row —
+  // and that one could not be opened with the database down anyway, so listing it would
+  // offer an Edit button that cannot work.
+  const listed = editableFrom([]).map(e => e.slug);
+  for (const port of ports.PORTS) {
+    assert.ok(listed.includes(port.slug), `${port.slug} ships as code but vanished with the database`);
+  }
+  assert.ok(
+    !listed.includes('lexicalDecisionPairs'),
+    'a published-only experiment cannot be listed when its row is unreachable',
   );
 });
 

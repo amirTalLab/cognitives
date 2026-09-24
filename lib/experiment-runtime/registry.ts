@@ -123,26 +123,33 @@ export interface EditableExperiment {
    * before the built-in of the same slug.
    */
   builtIn: boolean;
-  /** False for a published experiment the homepage does not link — reachable only by URL. */
-  linked: boolean;
 }
 
 /**
- * Everything editable, live experiments first.
+ * Everything on the homepage that a lecturer can edit, in homepage order.
  *
  * Two sources, because an experiment can be live in two ways. A PORTED one ships as code
  * and has no published row until someone edits it; a GENERATED one is a row from the start.
  * Listing only the rows — which is what /create did — meant none of the ported experiments
  * could be edited at all, even though they are the ones a class actually runs.
  *
- * The homepage catalogue decides what counts as live, so an experiment becomes editable at
- * the moment its card is pointed at /run, and the next port needs nothing done to appear
- * here. Published rows the catalogue does not link are still listed, marked, and last:
- * they are reachable by URL, so hiding them would leave something live that nobody can
- * open — but they are not what a lecturer is looking for.
+ * The homepage catalogue is the ONLY source of what belongs here, so an experiment becomes
+ * editable at the moment its card is pointed at /run, and the next port needs nothing done
+ * to appear. A published row the catalogue does not link is deliberately left out: those
+ * are abandoned drafts and duplicate generations, and offering them for editing invites
+ * someone to spend an afternoon refining an experiment no student will ever reach. They
+ * still resolve at their own URL, and `npm run exp:unpublish <slug>` retires one for good.
  */
 export async function listEditable(): Promise<EditableExperiment[]> {
-  const published = await listPublished().catch(() => []);
+  // A database that cannot be reached is not an empty database: every built-in is still
+  // editable, it just shows as version-less until the row comes back.
+  return editableFrom(await listPublished().catch(() => []));
+}
+
+/** The pairing rule on its own, so it can be checked against rows without a database. */
+export function editableFrom(
+  published: { slug: string; title: string; category: string; revision?: number; updatedAt?: string }[],
+): EditableExperiment[] {
   const bySlug = new Map(published.map(row => [row.slug, row]));
 
   const live: EditableExperiment[] = [];
@@ -151,7 +158,6 @@ export async function listEditable(): Promise<EditableExperiment[]> {
     const builtIn = BUILT_IN.find(d => d.slug === slug);
     // Neither is an experiment whose card points nowhere; the registration tests catch it.
     if (!row && !builtIn) continue;
-    bySlug.delete(slug);
     live.push({
       slug,
       title: row?.title ?? builtIn?.title ?? slug,
@@ -159,19 +165,8 @@ export async function listEditable(): Promise<EditableExperiment[]> {
       revision: row?.revision,
       updatedAt: row?.updatedAt,
       builtIn: !row,
-      linked: true,
     });
   }
 
-  const unlinked: EditableExperiment[] = [...bySlug.values()].map(row => ({
-    slug: row.slug,
-    title: row.title,
-    category: row.category,
-    revision: row.revision,
-    updatedAt: row.updatedAt,
-    builtIn: false,
-    linked: false,
-  }));
-
-  return [...live, ...unlinked];
+  return live;
 }
