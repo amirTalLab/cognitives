@@ -326,7 +326,7 @@ export interface Phase {
  */
 export type ResponseSpec =
   | {
-      kind: 'choice';
+      kind: 'choice' | 'multiSelect';
       options: {
         value: string;
         label: string;
@@ -343,9 +343,39 @@ export type ResponseSpec =
          */
         at?: 'left' | 'right' | 'top' | 'bottom' | 'center';
       }[];
+      /**
+       * Take the options from a LIST in the trial's data instead of the fixed list above.
+       *
+       * For a questionnaire, or anything whose alternatives belong to the item rather than
+       * to the task: twenty reasoning questions each with their own answers cannot share one
+       * set of buttons, and writing twenty blocks to give each its own would fix the order
+       * for every participant.
+       *
+       * Point it at a list of `{ value, label, labelHe }` objects — `"{q.options}"`. When it
+       * resolves to a list, `options` above is ignored and may be left empty.
+       *
+       * `multiSelect` is the same control with more than one answer allowed; it records the
+       * chosen values joined by commas, in the order the options were offered, so two people
+       * choosing the same cards produce the same string.
+       */
+      optionsFrom?: string;
       layout?: 'row' | 'column' | 'sides' | 'positioned';
     }
-  | { kind: 'rating'; min: number; max: number; minLabel?: string; maxLabel?: string }
+  | {
+      kind: 'rating';
+      min: number;
+      max: number;
+      /**
+       * Bound, because on a questionnaire the ends of the scale belong to the question.
+       *
+       * The `He` siblings work like `textHe` on a text display: used on a Hebrew run, and
+       * optional, so a scale labelled with numbers or symbols needs only one form.
+       */
+      minLabel?: Bound<string>;
+      maxLabel?: Bound<string>;
+      minLabelHe?: Bound<string>;
+      maxLabelHe?: Bound<string>;
+    }
   /**
    * A continuous scale, dragged rather than picked — for answers that are a MAGNITUDE.
    *
@@ -378,7 +408,8 @@ export type ResponseSpec =
       submitLabel?: { en: string; he: string };
       preview?: Display;
     }
-  | { kind: 'number'; min?: number; max?: number; unit?: string }
+  /** `unit` is bound, because on a questionnaire it belongs to the question: millions, %, days. */
+  | { kind: 'number'; min?: number; max?: number; unit?: Bound<string>; unitHe?: Bound<string> }
   | { kind: 'text'; multiline?: boolean; placeholder?: string }
   /** Free recall of a list — DRM, serial position. */
   | { kind: 'wordList'; maxWords?: number }

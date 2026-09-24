@@ -16,7 +16,7 @@ import { motion } from 'framer-motion';
 import type { ExperimentDefinition, ResponseSpec, ResponseStep, TrialDesign } from './schema';
 import {
   buildTrials, EARLY_RESPONSE, expandRecall, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf,
-  phaseDuration, resolve, SHOWN, Trial,
+  lookup, phaseDuration, resolve, SHOWN, Trial,
 } from './trials';
 import { DisplayView, SEED_KEY, ASSET_BASE_KEY, LANGUAGE_KEY } from './DisplayView';
 import { PHASE_COMPONENT_MAP } from './components';
@@ -92,6 +92,19 @@ function responseSteps(def: TrialDesign, trial?: Trial): ResponseStep[] {
  */
 function typedStep(step: ResponseStep | undefined): boolean {
   return step?.kind === 'text' || step?.kind === 'number' || step?.kind === 'wordList';
+}
+
+/**
+ * One end of a scale, or a unit, in the language of the run.
+ *
+ * The `He` form is optional: a scale labelled with numbers or a unit like "%" needs one
+ * form, and a questionnaire's "Not at all willing" needs two.
+ */
+function scaleLabel(
+  label: unknown, labelHe: unknown, rtl: boolean, values: Record<string, unknown>,
+): string {
+  const chosen = rtl && labelHe !== undefined ? labelHe : label;
+  return String(resolve(chosen as never, values) ?? '');
 }
 
 /** A keyboard event's key, in the spelling definitions use for `key`. */
@@ -546,6 +559,22 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
     onClick: (e: React.MouseEvent) => { if (e.detail === 0) act(); },
   });
 
+  // A questionnaire's alternatives belong to the question, not to the task, so they can come
+  // from the trial's own data. Falls back to the declared list, which is what every
+  // experiment before this used.
+  const options = (() => {
+    if (step.kind !== 'choice' && step.kind !== 'multiSelect') return [];
+    if (step.optionsFrom) {
+      const list = lookup(step.optionsFrom.replace(/^\{|\}$/g, ''), values);
+      if (Array.isArray(list) && list.length) return list as typeof step.options;
+    }
+    return step.options ?? [];
+  })();
+
+  if (step.kind === 'multiSelect') {
+    return <MultiSelectInput options={options} rtl={rtl} values={values} onAnswer={onAnswer} />;
+  }
+
   if (step.kind === 'choice' && step.layout === 'positioned') {
     // The button's PLACE is the answer. Laid out with the same geometry as a `positioned`
     // display (400px tall, ±180px from centre) so a button sits exactly where the stimulus
@@ -553,7 +582,7 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
     // harder for every participant.
     return (
       <div style={{ position: 'relative', width: '100%', height: 400 }}>
-        {step.options.map((opt, i) => {
+        {options.map((opt, i) => {
           const at = String(resolve(opt.at, values) ?? 'center');
           const style: React.CSSProperties = {
             position: 'absolute',
@@ -583,7 +612,7 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
     return (
       <div className={wide ? 'flex flex-col gap-3 w-full max-w-md' : 'flex gap-6 flex-wrap justify-center'}
         style={wide ? undefined : dir}>
-        {step.options.map((opt, i) => {
+        {options.map((opt, i) => {
           const label = String(resolve(rtl && opt.labelHe ? opt.labelHe : opt.label, values) ?? '');
           const value = String(resolve(opt.value, values) ?? opt.value);
           // Marked, not disabled: the participant still has to press it themselves, which is
@@ -618,7 +647,8 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
         </div>
         {(step.minLabel || step.maxLabel) && (
           <div className="flex justify-between w-full text-xs text-gray-500" style={dir}>
-            <span>{step.minLabel}</span><span>{step.maxLabel}</span>
+            <span>{scaleLabel(step.minLabel, step.minLabelHe, rtl, values)}</span>
+            <span>{scaleLabel(step.maxLabel, step.maxLabelHe, rtl, values)}</span>
           </div>
         )}
       </div>
@@ -630,7 +660,7 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
   }
 
   if (step.kind === 'number' || step.kind === 'text') {
-    return <FreeInput step={step} rtl={rtl} onAnswer={onAnswer} deadlineMs={deadlineMs} />;
+    return <FreeInput step={step} rtl={rtl} values={values} onAnswer={onAnswer} deadlineMs={deadlineMs} />;
   }
 
   // Named rather than left as a fall-through: "none" now shares this union, and a
@@ -734,9 +764,56 @@ function SliderInput({ step, rtl, values, onAnswer }: {
   );
 }
 
-function FreeInput({ step, rtl, onAnswer, deadlineMs }: {
+/**
+ * More than one answer allowed, confirmed with a button.
+ *
+ * Wason's card task is why: "which cards must you turn over" has a set as its answer, and
+ * offering it one card at a time would turn a reasoning problem into four separate ones.
+ * Recorded as the chosen values joined by commas IN THE ORDER THE OPTIONS WERE OFFERED, so
+ * two people who picked the same cards produce the same string and a chart can group them.
+ */
+function MultiSelectInput({ options, rtl, values, onAnswer }: {
+  options: { value: string; label: string; labelHe?: string }[];
+  rtl: boolean;
+  values: Record<string, unknown>;
+  onAnswer: (v: string) => void;
+}) {
+  const [chosen, setChosen] = useState<string[]>([]);
+  const valueOf = (opt: { value: string }) => String(resolve(opt.value, values) ?? opt.value);
+
+  return (
+    <div className="flex flex-col gap-3 w-full max-w-md" dir={rtl ? 'rtl' : 'ltr'}>
+      {options.map((opt, i) => {
+        const value = valueOf(opt);
+        const picked = chosen.includes(value);
+        return (
+          <button key={i}
+            onClick={() => setChosen(prev =>
+              prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])}
+            className={`px-5 py-3 rounded-xl border-2 text-start text-lg touch-manipulation transition-colors ${picked
+              ? 'border-purple-400 bg-purple-400/10 text-gray-100'
+              : 'border-gray-700 text-gray-300 hover:border-purple-400'}`}>
+            <span className="inline-block w-5">{picked ? '✓' : ''}</span>
+            {String(resolve(rtl && opt.labelHe ? opt.labelHe : opt.label, values) ?? '')}
+          </button>
+        );
+      })}
+      <button
+        onClick={() => onAnswer(options.map(valueOf).filter(v => chosen.includes(v)).join(','))}
+        disabled={chosen.length === 0}
+        className={`mt-2 py-3 rounded-xl font-bold touch-manipulation ${chosen.length
+          ? 'bg-purple-500 hover:bg-purple-400 text-white'
+          : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}>
+        {rtl ? 'אישור' : 'Confirm'}
+      </button>
+    </div>
+  );
+}
+
+function FreeInput({ step, rtl, values, onAnswer, deadlineMs }: {
   step: Extract<ResponseSpec, { kind: 'number' } | { kind: 'text' }>;
   rtl: boolean;
+  values: Record<string, unknown>;
   onAnswer: (v: string) => void;
   deadlineMs?: number;
 }) {
@@ -748,16 +825,17 @@ function FreeInput({ step, rtl, onAnswer, deadlineMs }: {
     return (
       <div className="w-full max-w-md flex flex-col gap-3">
         <Countdown ms={left} />
-        <FreeInputForm step={step} rtl={rtl} value={value} setValue={setValue} onAnswer={onAnswer} />
+        <FreeInputForm step={step} rtl={rtl} values={values} value={value} setValue={setValue} onAnswer={onAnswer} />
       </div>
     );
   }
-  return <FreeInputForm step={step} rtl={rtl} value={value} setValue={setValue} onAnswer={onAnswer} />;
+  return <FreeInputForm step={step} rtl={rtl} values={values} value={value} setValue={setValue} onAnswer={onAnswer} />;
 }
 
-function FreeInputForm({ step, rtl, value, setValue, onAnswer }: {
+function FreeInputForm({ step, rtl, values, value, setValue, onAnswer }: {
   step: Extract<ResponseSpec, { kind: 'number' } | { kind: 'text' }>;
   rtl: boolean;
+  values: Record<string, unknown>;
   value: string;
   setValue: (v: string) => void;
   onAnswer: (v: string) => void;
@@ -772,6 +850,13 @@ function FreeInputForm({ step, rtl, value, setValue, onAnswer }: {
         placeholder={step.kind === 'text' ? step.placeholder : undefined}
         className="flex-1 px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 outline-none focus:border-purple-400"
       />
+      {/* The unit belongs to the question — millions, %, agorot — and without it an
+          estimate is ambiguous by exactly the factor the question is about. */}
+      {step.kind === 'number' && (step.unit || step.unitHe) && (
+        <span className="self-center text-gray-400 text-sm whitespace-nowrap">
+          {scaleLabel(step.unit, step.unitHe, rtl, values)}
+        </span>
+      )}
       <button type="submit" className="px-6 py-3 bg-purple-500 hover:bg-purple-400 text-white font-semibold rounded-lg touch-manipulation">
         {rtl ? 'שלח' : 'Submit'}
       </button>

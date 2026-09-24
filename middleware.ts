@@ -113,5 +113,6 @@ export const config = {
     '/run/visualSearch/:path*',
     '/run/mentalRep/:path*',
     '/run/summaryStats/:path*',
+    '/run/logics/:path*',
   ],
 };

@@ -1,4 +1,4 @@
-import { QuestionDef, QuestionUnit, AnchoringBlock, Group } from '@/types/logics';
+import type { QuestionDef, QuestionUnit, AnchoringBlock, Group } from '@/types/logics';
 
 // ── Availability (Set 1) — all SHARED ────────────────────────────────────────
 

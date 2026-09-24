@@ -34,7 +34,7 @@ registerHooks({
 });
 
 const { validate } = await import('../lib/experiment-runtime/validate.ts');
-const { buildTrials, isCorrect, payloadOf, resolve, excluded, seededRandom, shuffle, expandRecall, planStages } =
+const { buildTrials, correctRuleFor, isCorrect, payloadOf, resolve, excluded, seededRandom, shuffle, expandRecall, planStages } =
   await import('../lib/experiment-runtime/trials.ts');
 const { aggregate, generateMockRows, seriesNames, measureLabel, sem, statValue, pearson } =
   await import('../lib/experiment-runtime/aggregate.ts');
@@ -139,10 +139,14 @@ for (const [name, def] of CORPUS) {
 
   test(`[${name}] scoring returns a definite answer`, () => {
     const trials = firstBlock(def);
-    const rule = def.trial.correct;
+    const correct = def.trial.correct;
     for (const trial of trials.slice(0, 20)) {
       const got = isCorrect(def, trial, 'anything');
       assert.ok(got === true || got === false || got === null, `scoring returned ${got}`);
+      // A block may carry one rule per kind of trial — a reasoning battery mixes questions
+      // that have a right answer with questions that only ask what you think. Null is the
+      // right answer for the second kind, so the rule for THIS trial is what to check.
+      const rule = correctRuleFor(correct, trial);
       if (rule.kind !== 'none') assert.notEqual(got, null, 'a scored task returned null');
     }
   });
@@ -2801,4 +2805,217 @@ test('no definition in the repo reaches for the hatch without needing it', () =>
     }
   }
   assert.ok(used.length <= 3, `components are in use by ${used.length} phases: ${used.join(', ')}`);
+});
+
+// ── AA. Reasoning biases ──────────────────────────────────────────────────────
+//
+// Twenty-three questions, seven of them SPLIT: the same question asked two ways, one
+// wording per participant, because seeing both is what makes a framing effect disappear.
+// The questions are imported from lib/logics/questions.ts rather than copied, so most of
+// what could go wrong here is in the wiring — which wording a participant gets, which
+// questions are scored, and whether the answer key still matches the one the hand-built
+// dashboard uses.
+
+const LOGICS = ports.PORTS.find(p => p.slug === 'logics');
+const logicsPlan = () => planStages(LOGICS, seededRandom(13));
+const logicsBlock = name => logicsPlan().find(b => b.stage === name);
+const originalQuestions = await import('../lib/logics/questions.ts');
+
+test('logics runs all 23 questions the original asks', () => {
+  const rng = seededRandom(13);
+  const plan = planStages(LOGICS, rng);
+  const counts = plan.map(b => buildTrials(b.design, { rng, context: b.context }).length);
+  assert.deepEqual(plan.map(b => b.stage), ['questions', 'ruleDiscovery', 'anchoring', 'multiplication']);
+  assert.deepEqual(counts, [19, 1, 2, 1]);
+  assert.equal(counts.reduce((a, b) => a + b, 0), 23);
+});
+
+test('every question in the original reaches the port, and none is invented', () => {
+  // The text is imported, not copied — this checks nothing was dropped on the way through.
+  const asked = new Set();
+  const rng = seededRandom(13);
+  for (const block of planStages(LOGICS, rng)) {
+    for (const trial of buildTrials(block.design, { rng, context: block.context })) {
+      asked.add(trial.values.q.code);
+    }
+  }
+
+  const expected = new Set([
+    ...originalQuestions.SINGLE_QUESTIONS.map(q => q.code),
+    originalQuestions.Q_RULE.code,
+    ...originalQuestions.ANCHORING_BLOCKS.map(b => b.code),
+  ]);
+  assert.deepEqual([...asked].sort(), [...expected].sort());
+});
+
+test('a participant is given one wording of a split question, never both', () => {
+  // The whole design of the framing and anchoring questions. A participant who saw "90%
+  // survive" and "10% die" would notice they are the same fact, and there would be no effect
+  // left to measure.
+  const questions = logicsBlock('questions');
+  const trials = buildTrials(questions.design, { rng: seededRandom(4), context: questions.context });
+  const group = questions.context.group.label;
+  assert.ok(group === 'A' || group === 'B');
+
+  const display = LOGICS.trial.phases[0].display;
+  assert.equal(display.kind, 'switch');
+  assert.equal(display.by, 'group.label');
+  // Each branch reads that group's wording and nothing else.
+  assert.match(display.cases.A.text, /textAEn/);
+  assert.match(display.cases.B.text, /textBEn/);
+
+  // And every question carries both wordings, equal where it does not split, so the branch
+  // is safe on questions that have only one form.
+  for (const trial of trials) {
+    const q = trial.values.q;
+    assert.ok(q.textAEn && q.textBEn, `${q.code} is missing a wording`);
+    const original = originalQuestions.SINGLE_QUESTIONS.find(o => o.code === q.code);
+    if (original && !original.split) {
+      assert.equal(q.textAEn, q.textBEn, `${q.code} does not split but has two wordings`);
+    }
+  }
+});
+
+test('the split questions are exactly the ones the original splits', () => {
+  const split = originalQuestions.SINGLE_QUESTIONS.filter(q => q.split).map(q => q.code);
+  const questions = logicsBlock('questions');
+  const trials = buildTrials(questions.design, { rng: seededRandom(6), context: questions.context });
+  for (const trial of trials) {
+    const q = trial.values.q;
+    const differs = q.textAEn !== q.textBEn;
+    assert.equal(differs, split.includes(q.code),
+      `${q.code} ${differs ? 'has' : 'lacks'} two wordings, which does not match the original`);
+  }
+});
+
+test('the answer key still matches the dashboard it came from', () => {
+  // The right answers have always lived in app/logics/teacher/page.tsx. Copied into the port
+  // so the definition can score a trial as it happens, and checked here, because two copies
+  // of an answer key that drift apart is a class being marked against the wrong one.
+  const teacher = readFileSync(join(process.cwd(), 'app', 'logics', 'teacher', 'page.tsx'), 'utf8');
+  const portSource = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'ports', 'logics.ts'), 'utf8');
+
+  // The multiple-choice answers, written in the dashboard as `correct: 'same'`.
+  for (const [, code, answer] of teacher.matchAll(/code: '(Q-[A-Z0-9-]+)'[^}]*?correct: '([^']+)'/g)) {
+    assert.match(portSource, new RegExp(`'${code}': '${answer}'`),
+      `the dashboard marks ${code} correct as "${answer}" and the port does not`);
+  }
+
+  // The reflection answers, written as a table of accepted spellings.
+  const crt = (teacher.split('const CRT_CORRECT')[1] ?? '').split('};')[0];
+  for (const [, code, answers] of crt.matchAll(/'(Q-CRT-\d)': \[([^\]]+)\]/g)) {
+    const first = answers.split(',')[0].trim();
+    assert.ok(portSource.includes(`'${code}': ${first}`) || portSource.includes(`'${code}': [${first}`),
+      `the dashboard marks ${code} correct as ${first} and the port does not`);
+  }
+});
+
+test('a question with a right answer is scored and an opinion is not', () => {
+  // A battery that scored the framing questions would report a class as wrong for having a
+  // preference. One rule per kind of trial is what makes both possible in one block.
+  const questions = logicsBlock('questions');
+  const trials = buildTrials(questions.design, { rng: seededRandom(8), context: questions.context });
+
+  const reflection = trials.find(t => t.values.q.set === 'reflection');
+  const framing = trials.find(t => t.values.q.set === 'framing');
+  assert.ok(reflection && framing, 'expected both a scored and an unscored question');
+
+  assert.equal(isCorrect(LOGICS, reflection, 'nonsense'), false);
+  assert.equal(isCorrect(LOGICS, framing, 'nonsense'), null, 'an opinion was scored');
+
+  // And the right answer really is right.
+  const bat = trials.find(t => t.values.q.code === 'Q-CRT-1');
+  assert.equal(isCorrect(LOGICS, bat, '5'), true);
+  assert.equal(isCorrect(LOGICS, bat, '10'), false, 'the tempting answer counted as correct');
+});
+
+test('the reflection questions accept the word as well as the number', () => {
+  const questions = logicsBlock('questions');
+  const trials = buildTrials(questions.design, { rng: seededRandom(10), context: questions.context });
+  const race = trials.find(t => t.values.q.code === 'Q-CRT-4');
+  for (const answer of ['2', 'second', 'שני']) {
+    assert.equal(isCorrect(LOGICS, race, answer), true, `"${answer}" should count as correct`);
+  }
+  assert.equal(isCorrect(LOGICS, race, '1'), false);
+});
+
+test('each question brings its own options', () => {
+  // Twenty questions cannot share one set of buttons, and twenty blocks to give each its own
+  // would fix the order for every participant.
+  const questions = logicsBlock('questions');
+  const trials = buildTrials(questions.design, { rng: seededRandom(12), context: questions.context });
+  const choices = trials.filter(t => t.values.q.type === 'multiple-choice');
+  assert.ok(choices.length >= 5);
+
+  for (const trial of choices) {
+    const options = trial.values.q.options;
+    assert.ok(options.length >= 2, `${trial.values.q.code} offers fewer than two answers`);
+    for (const option of options) {
+      assert.ok(option.value && option.label && option.labelHe,
+        `${trial.values.q.code} has an option missing a value or a label`);
+    }
+  }
+  // And the response reads them from the item rather than from a fixed list.
+  assert.equal(LOGICS.trial.response.sets['multiple-choice'].optionsFrom, '{q.options}');
+});
+
+test('the card task is a multi-select, and its answer is a set', () => {
+  // "Which cards must you turn over" has a set as its answer. Offered one at a time it would
+  // become four separate problems, and the finding is about which combination people pick.
+  const questions = logicsBlock('questions');
+  const trials = buildTrials(questions.design, { rng: seededRandom(14), context: questions.context });
+  const cards = trials.find(t => t.values.q.code === 'Q-WASON-A');
+  assert.equal(cards.values.q.type, 'multi-select');
+  assert.equal(LOGICS.trial.response.sets['multi-select'].kind, 'multiSelect');
+
+  // Scored against the one set that could actually falsify the rule.
+  assert.equal(isCorrect(LOGICS, cards, 'E,7'), true);
+  assert.equal(isCorrect(LOGICS, cards, 'E,4'), false, 'the confirming choice counted as correct');
+});
+
+test('an anchoring block asks the judgement before the estimate', () => {
+  // The order is the manipulation: the judgement exists only to put a number in mind, and
+  // the estimate that follows is the measure. Reversed, there is no anchor.
+  const anchoring = logicsBlock('anchoring');
+  const [judgement, estimate] = anchoring.design.trial.phases;
+  assert.equal(judgement.name, 'judgement');
+  assert.equal(estimate.name, 'estimate');
+  assert.ok(!judgement.startsClock, 'the clock should time the estimate, not the anchor');
+  assert.ok(estimate.startsClock);
+
+  const steps = anchoring.design.trial.response;
+  assert.equal(steps[0].phase, 'judgement');
+  assert.equal(steps[1].kind, 'number');
+  assert.equal(steps[1].phase, 'estimate');
+});
+
+test('the multiplication block shows the product for five seconds and does not wait', () => {
+  // Long enough to read, too short to calculate — which is the condition the effect needs.
+  const block = logicsBlock('multiplication');
+  const [view, estimate] = block.design.trial.phases;
+  assert.equal(view.durationMs, 5000);
+  assert.ok(!view.awaitsResponse, 'the view must move on by itself');
+  assert.ok(estimate.awaitsResponse);
+});
+
+test('the rule task is the only phase in the battery that is code', () => {
+  const rule = logicsBlock('ruleDiscovery');
+  assert.equal(rule.design.trial.phases[0].component, 'wasonRuleDiscovery');
+
+  const coded = [];
+  for (const block of logicsPlan()) {
+    for (const phase of block.design.trial.phases) {
+      if (phase.component) coded.push(`${block.stage}.${phase.name}`);
+    }
+  }
+  assert.deepEqual(coded, ['ruleDiscovery.rule']);
+});
+
+test('the port declares what it does differently from the original', () => {
+  // The original shuffles all 23 into one sequence; this cannot, because the shape of a
+  // trial differs between them. Declared rather than quietly done, so a lecturer can judge it.
+  assert.ok(LOGICS.simplifications?.length, 'the port claims to be identical, and it is not');
+  const text = LOGICS.simplifications.map(s => `${s.what} ${s.why}`).join(' ');
+  assert.match(text, /shuffle/i);
 });

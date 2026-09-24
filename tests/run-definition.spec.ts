@@ -1826,3 +1826,113 @@ test.describe('a phase that is code', () => {
     await expect(page.getByText(/needs a component named .noSuchComponent./)).toBeVisible({ timeout: 10_000 });
   });
 });
+
+
+/** Opens a BUILT-IN experiment (no preview stub) in English, capturing every row it saves. */
+async function runBuiltIn(page: Page, slug: string): Promise<Saved> {
+  const saved: Saved = [];
+  await page.route("**/rest/v1/experiment_results**", async route => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      saved.push(...(Array.isArray(body) ? body : [body]));
+    }
+    return route.fulfill({ status: 201, contentType: "application/json", body: "[]" });
+  });
+  await open(page, `/run/${slug}`);
+  await page.getByRole("button", { name: "English" }).click();
+  await page.getByPlaceholder("Name").fill("E2E Tester");
+  await page.getByRole("button", { name: "Begin" }).click();
+  return saved;
+}
+
+test.describe("Reasoning biases, the ported battery", () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  /**
+   * A questionnaire is where per-item options either work or are silently empty.
+   *
+   * Nothing offline can see a button. Twenty questions each bring their own answers, one
+   * brings a multi-select, and each participant is given one wording of the split questions
+   * — all of which is invisible until it is on screen.
+   */
+  test('each question brings its own answers, and one takes several', async ({ page }) => {
+    const saved = await runBuiltIn(page, 'logics');
+
+    let sawMultiSelect = false;
+    let answered = 0;
+
+    // Through the first block: nineteen questions, in a shuffled order, so the test cannot
+    // know which is next and has to answer whatever is on screen.
+    for (let i = 0; i < 19; i++) {
+      const confirm = page.getByRole('button', { name: 'Confirm' });
+      const submit = page.getByRole('button', { name: 'Submit' });
+      const numberBox = page.locator('input[type="number"]');
+      const choices = page.locator('main button').filter({ hasNotText: /^(Confirm|Submit)$/ });
+
+      await expect(numberBox.or(choices.first())).toBeVisible({ timeout: 15_000 });
+
+      if (await numberBox.count() > 0) {
+        // A free-number question — the reflection test, or an estimate.
+        await numberBox.fill('5');
+        await submit.click();
+      } else if (await confirm.count() > 0) {
+        // The multi-select: tick two and confirm. Nothing else in this battery uses it.
+        sawMultiSelect = true;
+        await choices.nth(0).click();
+        await choices.nth(3).click();
+        await confirm.click();
+      } else {
+        // Multiple choice or a rating scale: every question brings its own buttons, so the
+        // only safe thing is to press the first.
+        await choices.first().click();
+      }
+      answered++;
+      await page.waitForTimeout(420);
+    }
+
+    expect(answered).toBe(19);
+    expect(sawMultiSelect, 'the card task never offered more than one answer').toBe(true);
+
+    // Rows carry which question was asked and which wording this participant was given —
+    // without the group, a split question's two halves cannot be told apart in the data.
+    if (await rowsSent(saved, 19)) {
+      const row = saved[0] as { payload?: Record<string, unknown> };
+      expect(String(row.payload?.q_code)).toMatch(/^Q-/);
+      expect(['A', 'B']).toContain(String(row.payload?.group_label));
+    }
+  });
+
+  test('a participant sees one wording of a split question, never both', async ({ page }) => {
+    // The framing questions are the same fact worded two ways. Someone shown both would
+    // notice, and there would be no effect left to measure.
+    await runBuiltIn(page, 'logics');
+
+    const bodies: string[] = [];
+    for (let i = 0; i < 19; i++) {
+      const main = page.locator('main');
+      await expect(main).toBeVisible({ timeout: 15_000 });
+      bodies.push((await main.innerText()).trim());
+
+      const numberBox = page.locator('input[type="number"]');
+      const confirm = page.getByRole('button', { name: 'Confirm' });
+      const choices = page.locator('main button').filter({ hasNotText: /^(Confirm|Submit)$/ });
+      if (await numberBox.count() > 0) {
+        await numberBox.fill('5');
+        await page.getByRole('button', { name: 'Submit' }).click();
+      } else if (await confirm.count() > 0) {
+        await choices.first().click();
+        await confirm.click();
+      } else {
+        await choices.first().click();
+      }
+      await page.waitForTimeout(420);
+    }
+
+    const seen = bodies.join('\n');
+    // The medical framing question, in its two forms. Exactly one may appear.
+    const survival = seen.includes('90% survival rate');
+    const mortality = seen.includes('10% mortality rate');
+    expect(survival || mortality, 'the framing question never appeared').toBe(true);
+    expect(survival && mortality, 'a participant was shown both wordings').toBe(false);
+  });
+});

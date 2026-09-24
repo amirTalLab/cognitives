@@ -48,7 +48,8 @@ export const EXPERIMENTS: Exp[] = [
   // Ported. app/serialOrder/ still serves its own rows at /serialOrder/teacher.
   { id: 'serialOrder',     title: 'Serial Position',        titleHe: 'זיכרון סדרתי',        icon: List,      color: 'text-sky-400', href: '/run/serialOrder' },
   { id: 'testingEffect',   title: 'Testing Effect',         titleHe: 'אפקט הבחינה',         icon: BookOpen,  color: 'text-blue-400'    },
-  { id: 'logics',          title: 'Reasoning Biases',       titleHe: 'הטיות בחשיבה',         icon: Lightbulb, color: 'text-yellow-400'  },
+  // Ported. app/logics/ still serves its own rows at /logics/teacher.
+  { id: 'logics',          title: 'Reasoning Biases',       titleHe: 'הטיות בחשיבה',         icon: Lightbulb, color: 'text-yellow-400', href: '/run/logics' },
   { id: 'creativity',      title: 'Creativity Battery',     titleHe: 'סוללת יצירתיות',       icon: Sparkles,  color: 'text-emerald-400' },
   { id: 'bRMS',             title: 'bRMS Emotion',           titleHe: 'bRMS רגש',              icon: Eye,       color: 'text-purple-400'  },
   // The card used to point at /run/flankerLetterTask, which exists nowhere — not published,

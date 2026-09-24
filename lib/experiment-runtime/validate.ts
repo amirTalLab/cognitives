@@ -873,7 +873,10 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     if (!responsePhases.includes(step.phase)) {
       err(`A response is bound to phase "${step.phase}", which does not await a response.`);
     }
-    if (step.kind === 'choice') {
+    // A questionnaire's options come from the item, and there is nothing to count here —
+    // the reference is checked with every other one, and an empty list at run time falls
+    // back to whatever `options` holds.
+    if (step.kind === 'choice' && !step.optionsFrom) {
       if (timeoutPhases.has(step.phase) ? step.options.length < 1 : step.options.length < 2) {
         err(timeoutPhases.has(step.phase)
           ? `The choice in phase "${step.phase}" has no options.`
