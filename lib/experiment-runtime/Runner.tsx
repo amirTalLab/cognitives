@@ -18,7 +18,7 @@ import {
   buildTrials, EARLY_RESPONSE, expandRecall, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf,
   phaseDuration, resolve, SHOWN, Trial,
 } from './trials';
-import { DisplayView, SEED_KEY, ASSET_BASE_KEY } from './DisplayView';
+import { DisplayView, SEED_KEY, ASSET_BASE_KEY, LANGUAGE_KEY } from './DisplayView';
 import { saveTrial } from './store';
 
 /** One completed trial, ready to be stored. */
@@ -135,7 +135,12 @@ export function Runner({
   // Displays that draw something random (array layouts) read the seed from here, so a
   // layout is stable within a trial and different between trials.
   const values = trial
-    ? { ...trial.values, [SEED_KEY]: trial.seed, [ASSET_BASE_KEY]: definition.assets?.base ?? '' }
+    ? {
+        ...trial.values,
+        [SEED_KEY]: trial.seed,
+        [ASSET_BASE_KEY]: definition.assets?.base ?? '',
+        [LANGUAGE_KEY]: language,
+      }
     : {};
   const phases = design.trial.phases;
   const phase = phases[phaseIdx];
@@ -584,6 +589,10 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
     );
   }
 
+  if (step.kind === 'slider') {
+    return <SliderInput step={step} rtl={rtl} values={values} onAnswer={onAnswer} />;
+  }
+
   if (step.kind === 'number' || step.kind === 'text') {
     return <FreeInput step={step} rtl={rtl} onAnswer={onAnswer} deadlineMs={deadlineMs} />;
   }
@@ -634,6 +643,59 @@ function useDeadline(deadlineMs: number | undefined, onElapsed: () => void): num
 function Countdown({ ms }: { ms: number | null }) {
   if (ms === null) return null;
   return <p className="text-2xl font-bold text-purple-400 text-center">{Math.ceil(ms / 1000)}s</p>;
+}
+
+/**
+ * A dragged scale whose preview is drawn from the current position.
+ *
+ * Keyed to the trial by the caller, so the slider resets between trials — a slider left
+ * where the last answer put it is a starting point that carries information about the
+ * previous stimulus, which is exactly the kind of leak that turns into a serial dependency
+ * in the data.
+ */
+function SliderInput({ step, rtl, values, onAnswer }: {
+  step: Extract<ResponseSpec, { kind: 'slider' }>;
+  rtl: boolean;
+  values: Record<string, unknown>;
+  onAnswer: (v: string) => void;
+}) {
+  const num = (bound: unknown, fallback: number) => {
+    const resolved = Number(resolve(bound as never, values));
+    return Number.isFinite(resolved) ? resolved : fallback;
+  };
+  const min = num(step.min, 0);
+  const max = num(step.max, 100);
+  const start = step.startAt === undefined ? Math.round((min + max) / 2) : num(step.startAt, min);
+  const [value, setValue] = useState(start);
+
+  return (
+    <div className="flex flex-col items-center gap-5 w-full max-w-md" dir={rtl ? 'rtl' : 'ltr'}>
+      {/* Drawn from where the slider is now, so the answer is a match rather than a
+          translation of a remembered size into a number. */}
+      {step.preview && (
+        <div className="flex items-center justify-center" style={{ minHeight: 190 }}>
+          <DisplayView node={step.preview} values={{ ...values, value }} />
+        </div>
+      )}
+      <div className="w-full flex flex-col gap-1">
+        <input
+          type="range"
+          min={min} max={max} step={num(step.step, 1)} value={value}
+          onChange={e => setValue(Number(e.target.value))}
+          className="w-full h-3 rounded-full appearance-none bg-gray-700 accent-purple-400 cursor-pointer touch-manipulation"
+        />
+        {(step.minLabel || step.maxLabel) && (
+          <div className="flex justify-between w-full text-xs text-gray-500">
+            <span>{step.minLabel}</span><span>{step.maxLabel}</span>
+          </div>
+        )}
+      </div>
+      <button onClick={() => onAnswer(String(value))}
+        className="px-10 py-4 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl text-lg touch-manipulation">
+        {step.submitLabel ? (rtl ? step.submitLabel.he : step.submitLabel.en) : (rtl ? 'אישור' : 'Confirm')}
+      </button>
+    </div>
+  );
 }
 
 function FreeInput({ step, rtl, onAnswer, deadlineMs }: {

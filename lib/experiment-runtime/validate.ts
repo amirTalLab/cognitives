@@ -408,8 +408,56 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     if (!isStr((s as ResponseStep).kind)) bad(`Response #${i + 1}'s "kind"`, 'a string');
   });
 
-  if (!isObj(def.trial.correct) || !isStr(def.trial.correct.kind)) {
+  // One rule, or one per kind of trial for a block that interleaves two tasks.
+  const correctForm = def.trial.correct as Record<string, unknown>;
+  if (!isObj(correctForm)) {
     bad('"trial.correct"', 'an object with a "kind"');
+  } else if ('sets' in correctForm) {
+    if (!isStr(correctForm.by)) {
+      bad('"trial.correct.by"', 'a factor name whose value picks the rule');
+    }
+    const sets = correctForm.sets;
+    if (!isObj(sets) || Object.keys(sets as object).length === 0) {
+      bad('"trial.correct.sets"', 'an object with at least one named rule');
+    } else {
+      for (const [name, rule] of Object.entries(sets as Record<string, unknown>)) {
+        if (!isObj(rule) || !isStr((rule as { kind?: unknown }).kind)) {
+          bad(`"trial.correct.sets.${name}"`, 'a rule with a "kind"');
+        } else {
+          checkWithin(rule as Record<string, unknown>, `"trial.correct.sets.${name}"`);
+        }
+      }
+    }
+  } else if (!isStr(correctForm.kind)) {
+    bad('"trial.correct"', 'an object with a "kind"');
+  } else {
+    checkWithin(correctForm, '"trial.correct"');
+  }
+
+  /**
+   * A tolerance rule with no tolerance scores every estimate wrong.
+   *
+   * Zero is the trap rather than a missing field: an estimate landing EXACTLY on the true
+   * value is vanishingly rare, so a zero tolerance reads on the dashboard as a class that
+   * could not do the task at all, which is indistinguishable from a real floor effect.
+   */
+  function checkWithin(rule: Record<string, unknown>, at: string) {
+    if (rule.kind !== 'within') return;
+    if (!isStr(rule.factor)) bad(`${at}'s "factor"`, 'the name of the value being estimated');
+    // A reference is allowed and often necessary: the margin belongs to the stimulus, and a
+    // circle's radius and a line's length are not measured on the same scale.
+    if (isStr(rule.tolerance) && /^\{.+\}$/.test(rule.tolerance)) {
+      // Checked with every other reference further down.
+    } else if (typeof rule.tolerance !== 'number' || !Number.isFinite(rule.tolerance)) {
+      bad(`${at}'s "tolerance"`, 'a number, or a reference to one — how far off an estimate may be and still count');
+    } else if (rule.tolerance <= 0) {
+      issues.push({
+        severity: 'error',
+        message: `${at} has a tolerance of ${rule.tolerance}, so only an exactly right estimate `
+          + 'would count and the task would read as impossible. Give it a real margin — a '
+          + 'quarter of the stimulus range puts chance at 50%.',
+      });
+    }
   }
 
   // Later blocks — DRM's recall, serial order's distractor. Each is a design in its own
@@ -717,7 +765,8 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
 
   // Retrying until correct needs a notion of correct. On a preference task there is none,
   // so the trial could never be answered "right" and practice would never end.
-  if (def.practice?.retryUntilCorrect && def.trial.correct.kind === 'none') {
+  const soleRule = 'sets' in def.trial.correct ? null : def.trial.correct;
+  if (def.practice?.retryUntilCorrect && soleRule?.kind === 'none') {
     err('Practice is set to retry until correct, but this task has no correct answer ("correct" is "none"), so practice could never finish.');
   }
   if (def.practice?.retryUntilCorrect && def.practice.feedback !== true) {
@@ -741,7 +790,7 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   if (!passive && !def.trial.phases.some(p => p.startsClock)) {
     warn('No phase starts the reaction-time clock, so RT will be measured from the response phase.');
   }
-  if (passive && def.trial.correct?.kind !== 'none') {
+  if (passive && soleRule?.kind !== 'none') {
     err('This block asks for no response, so there is nothing to score. Its "trial.correct" must be {"kind": "none"}.');
   }
   if (passive && def.trial.earlyFrom !== undefined) {
@@ -930,8 +979,24 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
 
   // ── References resolve ─────────────────────────────────────────────────────
   const available = availableNames(def);
-  const internal = new Set(['__seed', '__assetBase']);
+  const internal = new Set(['__seed', '__assetBase', '__language']);
+
+  // Two scopes exist only while something is being drawn, so no factor provides them and
+  // none should: the element of a list-driven array, and the live position of a slider
+  // inside its own preview. Collected from the definition, so referencing a scope that was
+  // never opened is still an error.
+  const scopes = new Set<string>();
+  const findScopes = (node: unknown) => {
+    if (!node || typeof node !== 'object') return;
+    const rec = node as Record<string, unknown>;
+    if (rec.kind === 'array' && rec.from) scopes.add(String(rec.as ?? 'each'));
+    if (rec.kind === 'slider' && rec.preview) scopes.add('value');
+    for (const value of Object.values(rec)) findScopes(value);
+  };
+  findScopes(def.trial);
+
   for (const ref of referencesIn(def.trial)) {
+    if (scopes.has(ref.split('.')[0])) continue;
     if (!available.has(ref) && !internal.has(ref)) {
       err(`"{${ref}}" is referenced but no factor provides it.`);
     }
@@ -991,11 +1056,21 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   // function JSON from outside the type system — a model's output, or a file someone
   // wrote by hand — so a missing key here has to become a message the author can act on.
   // Throwing instead would take down the API route that exists to catch exactly this.
-  const rule = def.trial.correct as Partial<{ kind: string; factor: string; expect: Record<string, string> }> | undefined;
+  // A block interleaving two tasks carries a rule per kind; each is checked on its own, and
+  // the shared structural checks below run against whichever single rule there is.
+  const correctSets = def.trial.correct as Partial<{ by: string; sets: Record<string, { kind?: string; factor?: string }> }> | undefined;
+  if (correctSets?.sets) {
+    for (const [name, branch] of Object.entries(correctSets.sets)) {
+      if (branch?.kind && branch.kind !== 'none' && branch.factor && !available.has(branch.factor)) {
+        err(`Correctness rule "${name}" is judged against "${branch.factor}", which no factor provides.`);
+      }
+    }
+  }
+  const rule = (correctSets?.sets ? undefined : def.trial.correct) as Partial<{ kind: string; factor: string; expect: Record<string, string> }> | undefined;
 
-  if (!rule?.kind) {
+  if (!correctSets?.sets && !rule?.kind) {
     err('trial.correct is missing. Use {"kind":"none"} when the task has no right answer.');
-  } else if (rule.kind !== 'none') {
+  } else if (rule && rule.kind !== 'none') {
     if (!rule.factor) {
       err(`Correctness rule "${rule.kind}" needs a "factor" naming what the response is judged against.`);
     } else if (!available.has(rule.factor)) {
@@ -1042,6 +1117,37 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   // nothing", which is exactly the advice that makes someone rewrite a design that was fine.
   const stored = [...available, ...def.store].map(s => s.replace(/\./g, '_'));
   const readable = (field: string) => stored.includes(field.replace(/\./g, '_')) || derived.has(field);
+
+  // A branch with no case for some level of its factor falls back to the first one, which
+  // on screen is a trial asking the wrong question and in the data is an answer scored by
+  // the wrong rule. Neither looks like a fault — they look like a participant doing badly.
+  const branches: { at: string; by: unknown; cases: unknown }[] = [];
+  const collectBranches = (node: unknown, at: string) => {
+    if (Array.isArray(node)) return node.forEach(n => collectBranches(n, at));
+    if (!node || typeof node !== 'object') return;
+    const rec = node as Record<string, unknown>;
+    if (rec.kind === 'switch') branches.push({ at, by: rec.by, cases: rec.cases });
+    Object.values(rec).forEach(v => collectBranches(v, at));
+  };
+  for (const [i, phase] of def.trial.phases.entries()) {
+    collectBranches(phase.display, `Phase ${label(i, phase.name)}'s display`);
+  }
+  if ('sets' in def.trial.correct) {
+    branches.push({ at: '"trial.correct"', by: def.trial.correct.by, cases: def.trial.correct.sets });
+  }
+
+  for (const branch of branches) {
+    if (!isStr(branch.by) || !isObj(branch.cases)) continue;
+    const levels = valuesFor(def, branch.by);
+    if (!levels) continue;
+    const named = new Set(Object.keys(branch.cases as object));
+    const missing = [...new Set(levels)].filter(level => !named.has(level));
+    if (missing.length) {
+      warn(`${branch.at} branches on "${branch.by}" but has no case for `
+        + `${missing.map(m => `"${m}"`).join(', ')}, so those trials fall back to `
+        + `"${Object.keys(branch.cases as object)[0]}".`);
+    }
+  }
 
   // A correlation card reads one stored NUMBER off every row. Unstored, it is permanently
   // blank and reads as "no data yet" rather than as a definition that never asked for it.

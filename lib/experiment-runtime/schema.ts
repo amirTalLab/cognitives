@@ -116,7 +116,14 @@ export interface Factor {
  * use; adding another is a new case here plus a branch in the renderer, and nothing else.
  */
 export type Display =
-  | { kind: 'text'; text: string; size?: number; color?: string; font?: 'sans' | 'mono' }
+  /**
+   * Text on screen.
+   *
+   * `textHe` is for text the participant READS rather than text they are being shown as a
+   * stimulus — a question beside a scale, a label on a prompt. Omit it for a stimulus word,
+   * which must not be translated. With it absent, `text` is used in both languages.
+   */
+  | { kind: 'text'; text: string; textHe?: string; size?: number; color?: string; font?: 'sans' | 'mono' }
   | { kind: 'fixation'; symbol?: string }
   | { kind: 'blank' }
   | { kind: 'mask'; pattern?: string }
@@ -176,6 +183,22 @@ export type Display =
       distractorCount?: Bound<number>;
       area?: { width: number; height: number };
       /**
+       * One item per element of a LIST in the data, instead of `count` copies of one item.
+       *
+       * For an array whose members differ from each other in a way the trial specifies —
+       * ensemble perception, where the whole question is what the average of these particular
+       * sizes was, so the sizes cannot be a repeated constant or a runtime coin-flip. Give it
+       * a reference to a list on a pool item, `"{display.items}"`, and each element's fields
+       * are in scope inside `item` under `as` (default `each`): `size: "{each.value}"`.
+       *
+       * Positions stay the renderer's own random non-overlapping layout, which is what the
+       * hand-built versions of these tasks do too — it is the VALUES that carry the design.
+       * Given `from`, `count`, `distractor` and `groups` are ignored.
+       */
+      from?: string;
+      /** Names each element inside `item`. Defaults to `each`. */
+      as?: string;
+      /**
        * Three or more kinds of item in one array, instead of a target and a distractor.
        *
        * A CONJUNCTION search needs it. Finding the red T among red Ls and blue Ts is hard
@@ -209,7 +232,22 @@ export type Display =
    * inside one, and an exogenous cue is one box's border changing colour. `color` is the
    * border, so it can be bound to a factor like any other colour.
    */
-  | { kind: 'frame'; content?: Display; size?: Bound<number>; color?: Bound<string>; thickness?: Bound<number> };
+  | { kind: 'frame'; content?: Display; size?: Bound<number>; color?: Bound<string>; thickness?: Bound<number> }
+  /**
+   * A different display depending on the trial — the visual half of `trial.response.sets`.
+   *
+   * Everything else here varies an ATTRIBUTE by factor: a colour, a size, a source. This
+   * varies the display itself, which is what an experiment needs when one block interleaves
+   * two kinds of trial. Ensemble perception is the case: the same array of circles is
+   * followed either by "what was the average size?" — a slider — or by a single circle and
+   * "was this one there?". The two questions have to be unpredictable, because a participant
+   * who knew which was coming could encode for it and the whole comparison collapses; so
+   * they cannot be split into two blocks, and the display has to branch per trial.
+   *
+   * `by` is a factor path and its value picks the case. A value with no case falls back to
+   * the first, which the validator reports rather than allowing silently.
+   */
+  | { kind: 'switch'; by: string; cases: Record<string, Display> };
 
 // ─── Phases ───────────────────────────────────────────────────────────────────
 
@@ -280,6 +318,38 @@ export type ResponseSpec =
       layout?: 'row' | 'column' | 'sides' | 'positioned';
     }
   | { kind: 'rating'; min: number; max: number; minLabel?: string; maxLabel?: string }
+  /**
+   * A continuous scale, dragged rather than picked — for answers that are a MAGNITUDE.
+   *
+   * `rating` draws one button per point, which is right for a seven-point agreement scale
+   * and useless for "how big were those circles on average?", where the answer is a size in
+   * pixels somewhere in a range of sixty.
+   *
+   * `preview` is the point of it: a display rendered from the current position, so the
+   * participant matches a stimulus rather than guessing a number. `{value}` inside it is
+   * the position they are on. Without it this asks people to translate a remembered size
+   * into arithmetic, which measures something else entirely.
+   *
+   * The starting position is the middle of the range unless `startAt` says otherwise, and
+   * it is worth thinking about: a slider that starts at the true value is not a measurement,
+   * and one that always starts low makes every estimate an underestimate.
+   */
+  | {
+      kind: 'slider';
+      /**
+       * Bound, because the scale belongs to the stimulus: a circle's radius runs 15–75 and a
+       * line's length 40–200, and one scale stretched over both would make the same drag
+       * mean different things on different trials.
+       */
+      min: Bound<number>;
+      max: Bound<number>;
+      step?: Bound<number>;
+      startAt?: Bound<number>;
+      minLabel?: string;
+      maxLabel?: string;
+      submitLabel?: { en: string; he: string };
+      preview?: Display;
+    }
   | { kind: 'number'; min?: number; max?: number; unit?: string }
   | { kind: 'text'; multiline?: boolean; placeholder?: string }
   /** Free recall of a list — DRM, serial position. */
@@ -494,8 +564,36 @@ export type CorrectRule =
    * answer per value would change what the participant is asked to do.
    */
   | { kind: 'mapping'; factor: string; expect: Record<string, string | string[]> }
+  /**
+   * A numeric estimate counted correct when it lands within `tolerance` of the true value.
+   *
+   * For tasks answered on a scale rather than with a button: estimate the average size of
+   * those circles, reproduce that interval, bisect that line. The answer is never exactly
+   * right, so "correct" has to mean "close enough", and the threshold belongs in the
+   * definition where a lecturer can see it rather than in an analysis script.
+   *
+   * Choose it so that chance is a known quantity and say so. Ensemble perception uses a
+   * quarter of the stimulus range, which puts guessing at 50% and makes the bar directly
+   * comparable with the recognition accuracy beside it.
+   */
+  | { kind: 'within'; factor: string; tolerance: Bound<number> }
   /** Preference tasks with no correct answer — ratings, free choice. */
   | { kind: 'none' };
+
+/**
+ * A correctness rule that depends on the trial, for a block that interleaves two tasks.
+ *
+ * The third of the three things that have to branch together — display, response, and how
+ * the answer is judged. A slider estimate is right when it is close; a yes/no is right when
+ * it matches what was shown; one rule cannot express both, and a block running both kinds
+ * of trial needs both.
+ *
+ * `by` names the same factor `trial.response.sets` keys on, so the three stay in step.
+ */
+export interface CorrectSets {
+  by: string;
+  sets: Record<string, CorrectRule>;
+}
 
 /**
  * How a mock dataset should look.
@@ -850,7 +948,8 @@ export interface ExperimentDefinition {
      * value, so binding them to a factor is not enough — the whole set has to swap.
      */
     response: ResponseSpec | ResponseStep[] | ResponseSets;
-    correct: CorrectRule;
+    /** One rule, or — for a block interleaving two tasks — one per kind of trial. */
+    correct: CorrectRule | CorrectSets;
     /**
      * Expands a typed recall list into a row per studied item. For a `wordList` response.
      */

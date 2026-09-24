@@ -7,7 +7,7 @@
 // Type-only import: see the note in validate.ts — scripts/definition.mjs loads this
 // module directly under Node's type stripping.
 import type {
-  Bound, ExperimentDefinition, Factor, PoolItem, Stage, StageGroup, TrialDesign,
+  Bound, CorrectRule, ExperimentDefinition, Factor, PoolItem, Stage, StageGroup, TrialDesign,
 } from './schema';
 
 /** One trial: the factor values chosen for it, plus its place in the run. */
@@ -26,7 +26,7 @@ const WHOLE = /^\{([^}]+)\}$/;
 const EMBEDDED = /\{([^}]+)\}/g;
 
 /** Reads `item.target` style paths out of a trial's values. */
-function lookup(path: string, values: Record<string, unknown>): unknown {
+export function lookup(path: string, values: Record<string, unknown>): unknown {
   return path.split('.').reduce<unknown>((acc, key) => {
     if (acc === null || acc === undefined) return undefined;
     return (acc as Record<string, unknown>)[key];
@@ -552,17 +552,44 @@ export function phaseDuration(
 // ─── Scoring ──────────────────────────────────────────────────────────────────
 
 /**
+ * The rule that judges THIS trial.
+ *
+ * A block interleaving two tasks carries one rule per kind, keyed by the same factor its
+ * responses are keyed on. A value with no entry falls back to the first rather than throwing
+ * mid-run — the validator reports it before anyone runs the experiment.
+ */
+export function correctRuleFor(
+  correct: TrialDesign['trial']['correct'],
+  trial: Trial,
+): CorrectRule {
+  if (!('sets' in correct)) return correct;
+  const chosen = String(lookup(correct.by, trial.values));
+  return correct.sets[chosen] ?? Object.values(correct.sets)[0] ?? { kind: 'none' };
+}
+
+/**
  * Whether a response was correct, or null when the task has no correct answer.
  *
  * Null is a real answer, not a missing one: preference tasks like bouba-kiki measure which
  * way people go, and scoring them would be meaningless.
  */
 export function isCorrect(def: TrialDesign, trial: Trial, response: string): boolean | null {
-  const rule = def.trial.correct;
+  const rule = correctRuleFor(def.trial.correct, trial);
   if (rule.kind === 'none') return null;
 
   if (rule.kind === 'matchesFactor') {
     return String(lookup(rule.factor, trial.values)) === response;
+  }
+
+  // An estimate on a scale is never exactly right, so "correct" means "close enough". A
+  // response that is not a number at all — an unanswered trial, a timeout — is not correct
+  // rather than accidentally within tolerance of zero.
+  if (rule.kind === 'within') {
+    const given = Number(response);
+    const target = Number(lookup(rule.factor, trial.values));
+    const tolerance = Number(resolve(rule.tolerance, trial.values));
+    if (!Number.isFinite(given) || !Number.isFinite(target) || !Number.isFinite(tolerance)) return false;
+    return Math.abs(given - target) <= tolerance;
   }
 
   const value = String(lookup(rule.factor, trial.values));

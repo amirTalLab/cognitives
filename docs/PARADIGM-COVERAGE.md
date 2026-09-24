@@ -54,6 +54,21 @@ per studied item.
 5. **Audio** — generated tones, stereo presentation
 6. **Within-trial sequences** — RSVP streams, alternating displays
 
+> **Update — one block, two kinds of trial.** The runtime assumed every trial in a block
+> was the same kind of trial. `trial.response.sets` was the first exception to that, added
+> for bouba-kiki; porting ensemble perception finished the job, because its whole design is
+> that a participant cannot predict which of two questions is coming. So a display can
+> branch per trial (`kind: 'switch'`), a scoring rule can (`trial.correct` takes a `by`/`sets`
+> form), and the two key on the same factor the response does, so the three move together.
+>
+> With them: `kind: 'within'`, which counts a numeric estimate correct inside a tolerance —
+> for any task answered on a scale, where "correct" has to mean "close enough"; `kind:
+> 'slider'`, a dragged scale whose `preview` is redrawn from its own position, so a
+> magnitude is answered by matching rather than by arithmetic; an `array` display driven by
+> a list in the data, for a set whose members differ in the way the trial specifies; and
+> `textHe`, because a task whose QUESTION is on screen cannot ask it in English on a Hebrew
+> run. Interleaving, estimation and staircases all become expressible together.
+>
 > **Update — slopes, and practising a later block.** Two additions from porting mental
 > representation, neither of which changes the count above because both paradigms were
 > already reachable — what they change is whether the RESULT can be stated.

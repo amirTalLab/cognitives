@@ -189,7 +189,11 @@ export function specFromDefinition(def: ExperimentDefinition): Spec {
   set('trialStructure', phases);
   set('trialCounts', `${def.repetitions} repetition(s) of the full cross${def.practice ? `, ${def.practice.count} practice trials` : ''}`);
   set('response', responses.map(r => r.kind).join(', '));
-  set('dv', def.trial.correct.kind === 'none' ? 'Choice proportion (no correct answer)' : 'Accuracy and reaction time');
+  // A block interleaving two tasks has a rule per kind, and at least one of them scores.
+  const scored = 'sets' in def.trial.correct
+    ? Object.values(def.trial.correct.sets).some(r => r.kind !== 'none')
+    : def.trial.correct.kind !== 'none';
+  set('dv', scored ? 'Accuracy and reaction time' : 'Choice proportion (no correct answer)');
   set('charts', def.dashboard.charts.map(c => c.title).join('; '));
 
   return {

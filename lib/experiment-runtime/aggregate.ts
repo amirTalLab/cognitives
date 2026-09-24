@@ -192,13 +192,23 @@ function expectedResponse(
   def: TrialDesign,
   values: Record<string, unknown>,
 ): string[] {
-  const rule = def.trial.correct;
+  const correct = def.trial.correct;
+  // A block interleaving two tasks carries one rule per kind of trial; pick this trial's.
+  const rule = 'sets' in correct
+    ? correct.sets[String(valueAt(values, correct.by))] ?? Object.values(correct.sets)[0]
+    : correct;
+  if (!rule) return [];
+
   if (rule.kind === 'mapping') {
     const expected = rule.expect[String(valueAt(values, rule.factor))];
     if (expected === undefined) return [];
     return Array.isArray(expected) ? expected : [expected];
   }
   if (rule.kind === 'matchesFactor') return [String(valueAt(values, rule.factor))];
+  // An estimate task: the mock answers with the true value, which is within any tolerance.
+  // Left out, a mock participant would answer an estimate with a button label and the
+  // dashboard a lecturer previews would show zero accuracy on a task nobody got wrong.
+  if (rule.kind === 'within') return [String(valueAt(values, rule.factor))];
   return [];
 }
 

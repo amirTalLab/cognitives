@@ -22,7 +22,8 @@ import {
 export type Exp = { id: string; title: string; titleHe: string; icon: ElementType; color: string; href?: string };
 
 export const EXPERIMENTS: Exp[] = [
-  { id: 'summaryStats',    title: 'Ensemble Perception',     titleHe: 'תפיסת מכלול',        icon: BarChart2, color: 'text-orange-400'  },
+  // Ported. app/summaryStats/ still serves its own rows at /summaryStats/teacher.
+  { id: 'summaryStats',    title: 'Ensemble Perception',     titleHe: 'תפיסת מכלול',        icon: BarChart2, color: 'text-orange-400', href: '/run/summaryStats' },
   // Ported. app/CompositeFace/ still serves its own rows at /CompositeFace/teacher.
   { id: 'CompositeFace',   title: 'Composite Face Task',     titleHe: 'משימת פנים מורכבות', icon: Users,     color: 'text-pink-400', href: '/run/CompositeFace' },
   // Ported. app/wordSuperiority/ still serves its own table at /wordSuperiority/teacher.

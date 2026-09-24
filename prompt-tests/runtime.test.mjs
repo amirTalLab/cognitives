@@ -110,10 +110,30 @@ for (const [name, def] of CORPUS) {
     walk(def.trial.phases);
     walk(def.trial.response);
 
-    const trial = firstBlock(def)[0];
+    // Two scopes exist only while something is being drawn, so they are not in a trial's
+    // values and cannot be checked here: the element of a list-driven array (named by the
+    // array's `as`), and the live position of a slider inside its preview. Collected from
+    // the definition rather than hard-coded, so a definition that renames them stays checked
+    // and one that references a scope it never opened still fails.
+    const scopes = new Set();
+    const findScopes = node => {
+      if (!node || typeof node !== 'object') return;
+      if (node.kind === 'array' && node.from) scopes.add(node.as ?? 'each');
+      if (node.kind === 'slider' && node.preview) scopes.add('value');
+      for (const v of Object.values(node)) if (v && typeof v === 'object') findScopes(v);
+    };
+    findScopes(def.trial.phases);
+    findScopes(def.trial.response);
+
+    // Against EVERY trial, not the first: a block that interleaves two kinds of trial puts
+    // each kind's references inside its own branch, so "{display.probeValue}" is absent on
+    // an estimate trial by design and present on every trial that actually draws it. A
+    // reference no trial can resolve is still the bug this is here to catch.
+    const trials = firstBlock(def);
     for (const ref of refs) {
-      const value = resolve(`{${ref}}`, trial.values);
-      assert.notEqual(value, undefined, `"{${ref}}" does not resolve`);
+      if (scopes.has(ref.split('.')[0])) continue;
+      const resolved = trials.some(t => resolve(`{${ref}}`, t.values) !== undefined);
+      assert.ok(resolved, `"{${ref}}" does not resolve on any trial`);
     }
   });
 
@@ -2440,4 +2460,213 @@ test('a correlation against an unstored field is reported, not left blank', () =
   };
   const messages = validate(broken).map(i => i.message).join('\n');
   assert.match(messages, /pair\.nothing/);
+});
+
+// ── X. Ensemble perception ────────────────────────────────────────────────────
+//
+// People report the AVERAGE size of a set they saw for 800ms accurately, while being near
+// chance on whether any particular member was in it — and they accept the set's mean, which
+// was never shown, almost as readily as an item that was. Everything below protects one of
+// the three constructions that comparison depends on.
+
+const SUMMARY_STATS = ports.PORTS.find(p => p.slug === 'summaryStats');
+const ssTrials = (seed = 4) => firstBlock(SUMMARY_STATS, seededRandom(seed));
+
+test('summaryStats runs 72 trials, half of each question', () => {
+  const trials = ssTrials();
+  assert.equal(trials.length, 72);
+
+  const ensemble = trials.filter(t => t.values.display.question === 'ensemble');
+  const recognition = trials.filter(t => t.values.display.question === 'recognition');
+  assert.equal(ensemble.length, 36, 'the original runs 36 of each question');
+  assert.equal(recognition.length, 36);
+});
+
+test('the two questions are interleaved, not blocked', () => {
+  // The heart of the design. If the question were predictable a participant could encode for
+  // it — hold the average, or hold the items — and the comparison between the two abilities
+  // would become a comparison between two strategies.
+  const kinds = ssTrials().map(t => t.values.display.question);
+  const runs = kinds.reduce((acc, k) => (acc[acc.length - 1]?.[0] === k ? acc[acc.length - 1].push(k) : acc.push([k]), acc), []);
+  const longest = Math.max(...runs.map(r => r.length));
+  assert.ok(longest <= 8, `${longest} trials of the same question in a row is not interleaved`);
+  assert.ok(runs.length > 20, 'the two questions barely alternate');
+});
+
+test('every set size and both stimuli appear equally often', () => {
+  const trials = ssTrials();
+  for (const n of [3, 5, 7]) {
+    for (const type of ['circles', 'line-lengths']) {
+      const cell = trials.filter(t => t.values.display.n === n && t.values.display.type === type);
+      assert.equal(cell.length, 12, `expected 12 trials at ${type} x ${n}, found ${cell.length}`);
+    }
+  }
+});
+
+test('the three probe kinds are equally represented', () => {
+  // The finding is a comparison ACROSS these three, so an imbalance is a thumb on the scale.
+  const recognition = ssTrials().filter(t => t.values.display.question === 'recognition');
+  for (const probe of ['target', 'foilMean', 'foilNonMean']) {
+    const n = recognition.filter(t => t.values.display.probeType === probe).length;
+    assert.equal(n, 12, `expected 12 ${probe} probes, found ${n}`);
+  }
+});
+
+test('the mean of a set is never one of its own members', () => {
+  // The constraint the whole paradigm rests on. If the rounded mean were sometimes genuinely
+  // present, "people say they saw the mean" would collapse into "people saw the mean".
+  for (const trial of ssTrials()) {
+    const { items, trueMean } = trial.values.display;
+    const values = items.map(i => i.value);
+    assert.ok(!values.includes(trueMean),
+      `a set of [${values}] has mean ${trueMean}, which is one of its own members`);
+    assert.equal(trueMean, Math.round(values.reduce((a, b) => a + b, 0) / values.length));
+  }
+});
+
+test('a mean probe is absent, a target probe is present, a control probe is far from both', () => {
+  const recognition = ssTrials().filter(t => t.values.display.question === 'recognition');
+  for (const trial of recognition) {
+    const { items, probeValue, probeType, trueMean, answer, type } = trial.values.display;
+    const values = items.map(i => i.value);
+    const range = type === 'circles' ? 60 : 160;
+
+    if (probeType === 'target') {
+      assert.ok(values.includes(probeValue), `a target probe ${probeValue} is not in [${values}]`);
+      assert.equal(answer, 'yes');
+    } else {
+      assert.ok(!values.includes(probeValue), `a ${probeType} probe ${probeValue} was actually shown`);
+      assert.equal(answer, 'no', 'only an item that was really there is answered "yes"');
+    }
+    if (probeType === 'foilMean') {
+      assert.equal(probeValue, trueMean, 'the mean probe is not the mean');
+    }
+    if (probeType === 'foilNonMean') {
+      // The control has to be clearly different from every member, or "absent" becomes a
+      // judgement about resolution rather than about memory.
+      const nearest = Math.min(...values.map(v => Math.abs(v - probeValue)));
+      assert.ok(nearest >= Math.round(range * 0.15) - 1,
+        `a control probe ${probeValue} sits ${nearest} from a real member of [${values}]`);
+      assert.notEqual(probeValue, trueMean, 'the control probe is the mean, so it is not a control');
+    }
+  }
+});
+
+test('an estimate is scored against the true mean, a recognition against what was shown', () => {
+  // Two tasks in one block, so one scoring rule cannot serve both. Before this port the
+  // runtime had no way to say that.
+  const trials = ssTrials();
+  const ensemble = trials.find(t => t.values.display.question === 'ensemble');
+  const recognition = trials.find(t => t.values.display.question === 'recognition');
+
+  const { trueMean, tolerance } = ensemble.values.display;
+  assert.equal(isCorrect(SUMMARY_STATS, ensemble, String(trueMean)), true, 'the exact mean is right');
+  assert.equal(isCorrect(SUMMARY_STATS, ensemble, String(trueMean + tolerance)), true, 'the edge of tolerance counts');
+  assert.equal(isCorrect(SUMMARY_STATS, ensemble, String(trueMean + tolerance + 1)), false, 'past tolerance does not');
+  assert.equal(isCorrect(SUMMARY_STATS, ensemble, 'not a number'), false);
+
+  assert.equal(isCorrect(SUMMARY_STATS, recognition, recognition.values.display.answer), true);
+  assert.equal(
+    isCorrect(SUMMARY_STATS, recognition, recognition.values.display.answer === 'yes' ? 'no' : 'yes'),
+    false,
+  );
+});
+
+test('the tolerance puts guessing at 50%, so the two bars can be read together', () => {
+  // The dashboard shows ensemble accuracy beside recognition accuracy. That is only honest
+  // if chance is the same on both: a quarter of the range each way is half the range.
+  for (const trial of ssTrials()) {
+    const { type, tolerance, scaleMin, scaleMax } = trial.values.display;
+    assert.equal(tolerance, Math.round((scaleMax - scaleMin) / 4), `${type} tolerance is not a quarter of its range`);
+  }
+});
+
+test('practice covers both questions and every probe kind', () => {
+  // Fixed rather than sampled: a participant whose practice happened to be all ensemble
+  // would meet the recognition question for the first time in a scored trial.
+  const practice = buildTrials(SUMMARY_STATS, { practice: true, rng: seededRandom(2) });
+  assert.equal(practice.length, 10);
+  const kinds = practice.map(t => t.values.display.question);
+  assert.equal(kinds.filter(k => k === 'ensemble').length, 5);
+  assert.equal(kinds.filter(k => k === 'recognition').length, 5);
+
+  const probes = new Set(practice.map(t => t.values.display.probeType).filter(p => p !== 'none'));
+  for (const probe of ['target', 'foilMean', 'foilNonMean']) {
+    assert.ok(probes.has(probe), `practice never shows a ${probe} probe`);
+  }
+});
+
+test('practice never previews a display the main block will use', () => {
+  const main = new Set(ssTrials().map(t => JSON.stringify(t.values.display.items)));
+  const practice = buildTrials(SUMMARY_STATS, { practice: true, rng: seededRandom(2) });
+  for (const trial of practice) {
+    assert.ok(!main.has(JSON.stringify(trial.values.display.items)),
+      'a practice display also appears in the scored block');
+  }
+});
+
+test('every row carries every stored column, on both kinds of trial', () => {
+  // An interleaved block is where this goes wrong: a column that only exists on half the
+  // trials reads in the export as missing data rather than as "this trial had no probe".
+  for (const trial of ssTrials()) {
+    const payload = payloadOf(SUMMARY_STATS, trial);
+    for (const key of SUMMARY_STATS.store) {
+      assert.notEqual(payload[key.replace(/\./g, '_')], undefined,
+        `${key} is missing on a ${trial.values.display.question} trial`);
+    }
+  }
+});
+
+// ── Y. Per-trial branching ────────────────────────────────────────────────────
+
+test('a display, a response and a scoring rule can each branch on the same factor', () => {
+  // The three have to move together. A response that branched while the display did not
+  // would ask one question and offer the other one's buttons.
+  const question = SUMMARY_STATS.trial.phases.find(p => p.name === 'question');
+  assert.equal(question.display.kind, 'switch');
+  assert.equal(question.display.by, 'display.question');
+  assert.equal(SUMMARY_STATS.trial.response.by, 'display.question');
+  assert.equal(SUMMARY_STATS.trial.correct.by, 'display.question');
+
+  const branches = ['ensemble', 'recognition'];
+  for (const branch of branches) {
+    assert.ok(question.display.cases[branch], `the display has no "${branch}" case`);
+    assert.ok(SUMMARY_STATS.trial.response.sets[branch], `the response has no "${branch}" set`);
+    assert.ok(SUMMARY_STATS.trial.correct.sets[branch], `the scoring has no "${branch}" rule`);
+  }
+});
+
+test('a branch with no case for a level is reported', () => {
+  // It falls back to the first case rather than crashing, which on screen is a trial asking
+  // the wrong question and in the data an answer scored by the wrong rule — neither of which
+  // looks like a fault. It looks like a participant doing badly.
+  const broken = structuredClone({
+    ...SUMMARY_STATS,
+    factors: [{ name: 'kind', levels: ['a', 'b'] }],
+    pools: {},
+    trial: {
+      phases: [{
+        name: 'stim',
+        display: { kind: 'switch', by: 'kind', cases: { a: { kind: 'text', text: 'A' } } },
+        awaitsResponse: true,
+        startsClock: true,
+      }],
+      response: { kind: 'choice', layout: 'row', options: [{ value: 'x', label: 'X' }] },
+      correct: { kind: 'none' },
+      itiMs: 0,
+    },
+    store: [],
+    practice: undefined,
+  });
+  const messages = validate(broken).map(i => i.message).join('\n');
+  assert.match(messages, /no case for "b"/);
+});
+
+test('an estimate with no margin is rejected rather than scoring everyone zero', () => {
+  const broken = {
+    ...SUMMARY_STATS,
+    trial: { ...SUMMARY_STATS.trial, correct: { kind: 'within', factor: 'display.trueMean', tolerance: 0 } },
+  };
+  const messages = validate(broken).map(i => i.message).join('\n');
+  assert.match(messages, /tolerance of 0/);
 });

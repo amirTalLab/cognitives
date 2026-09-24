@@ -8,7 +8,7 @@
 
 import { useMemo } from 'react';
 import type { Display } from './schema';
-import { resolve, seededRandom } from './trials';
+import { lookup, resolve, seededRandom } from './trials';
 
 type Values = Record<string, unknown>;
 
@@ -23,6 +23,17 @@ export const SEED_KEY = '__seed';
  * for exactly this (see SEED_KEY above).
  */
 export const ASSET_BASE_KEY = '__assetBase';
+
+/**
+ * Which language the run is in, for a display that carries both.
+ *
+ * Instructions, buttons and feedback have taken `{ en, he }` from the start, because a
+ * participant reads those. A display did not, on the assumption that what it shows is a
+ * stimulus — and a stimulus should not be translated. But a task whose QUESTION is on screen
+ * breaks that: ensemble perception asks "what was the average circle size?" beside the
+ * scale, and a Hebrew run that asks it in English is not the same experiment.
+ */
+export const LANGUAGE_KEY = '__language';
 
 /**
  * Turns a manifest filename into a URL.
@@ -95,6 +106,22 @@ function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>
   // three kinds at once — and the older target-and-distractor pair is the two-group case of
   // the same thing, kept working so no existing experiment changes.
   const drawn = useMemo(() => {
+    // An array whose members differ from one another in a way the TRIAL specifies: one item
+    // per element of a list, each carrying its own values. Ensemble perception is the case —
+    // the question is what the average of these particular sizes was, so the sizes cannot be
+    // a repeated constant.
+    if (node.from) {
+      const list = lookup(node.from.replace(/^\{|\}$/g, ''), values);
+      if (Array.isArray(list)) {
+        const as = node.as ?? 'each';
+        return list.map(element => ({
+          item: node.item,
+          rotation: 0,
+          values: { ...values, [as]: element },
+        }));
+      }
+    }
+
     const spec = node.groups
       ?? [
         { count: node.count, item: node.item },
@@ -148,7 +175,10 @@ function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>
           // easily as a shape — without every display variant growing its own rotation.
           transform: `translate(-50%, -50%) rotate(${drawn[i]?.rotation ?? 0}deg)`,
         }}>
-          <DisplayView node={drawn[i]?.item ?? node.item} values={values} />
+          {/* An element-driven array gives each item its own values; every other array
+              shares the trial's. */}
+          <DisplayView node={drawn[i]?.item ?? node.item}
+            values={(drawn[i] as { values?: Values })?.values ?? values} />
         </div>
       ))}
     </div>
@@ -157,6 +187,15 @@ function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>
 
 export function DisplayView({ node, values }: { node: Display; values: Values }) {
   switch (node.kind) {
+    // A different display depending on the trial, for a block interleaving two tasks. The
+    // fallback is deliberate: a case that does not exist would otherwise be a blank screen
+    // mid-experiment, and the validator catches the missing case before anyone runs it.
+    case 'switch': {
+      const chosen = String(lookup(node.by, values));
+      const branch = node.cases[chosen] ?? Object.values(node.cases)[0];
+      return branch ? <DisplayView node={branch} values={values} /> : <div />;
+    }
+
     case 'blank':
       return <div />;
 
@@ -171,7 +210,12 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
       );
 
     case 'text': {
-      const text = resolve(node.text, values) ?? '';
+      // `textHe` only where the text is something the participant READS — a question, an
+      // instruction beside the scale. A stimulus word is not translated, which is why this
+      // is opt-in rather than a required pair.
+      const rtl = values[LANGUAGE_KEY] === 'he';
+      const source = rtl && node.textHe !== undefined ? node.textHe : node.text;
+      const text = resolve(source, values) ?? '';
       return (
         <div
           className="select-none"

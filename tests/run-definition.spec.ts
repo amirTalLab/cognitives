@@ -1507,7 +1507,17 @@ test.describe('Visual search, the ported experiment', () => {
     // is drawn per trial, so a one-item display is a legitimate thing to skip past.
     let seen: { letters: Set<string>; colours: Set<string>; angles: Set<string> } | null = null;
 
-    for (let attempt = 0; attempt < 8 && !seen; attempt++) {
+    // Twenty, and through the practice-complete screen if it comes up. Practice is eight
+    // trials and the set size is drawn per trial, so there is no guarantee any of those
+    // eight is crowded — the loop used to run out and fail on a button that was no longer
+    // there, which read as a broken array rather than as a test that had not looked far
+    // enough. The main block has 128 trials, so a crowded one arrives quickly.
+    for (let attempt = 0; attempt < 20 && !seen; attempt++) {
+      const practiceDone = page.getByRole("button", { name: /^(Start|התחל)$/ });
+      if (await practiceDone.count() > 0) {
+        await practiceDone.click();
+        await page.waitForTimeout(600);
+      }
       const items = page.locator('main div[style*="rotate"]');
       await expect(items.first()).toBeVisible({ timeout: 10_000 });
 
@@ -1526,7 +1536,9 @@ test.describe('Visual search, the ported experiment', () => {
         break;
       }
 
-      await page.getByRole('button', { name: /Present|קיימת/ }).click();
+      // Anchored: "קיימת" is a substring of "לא קיימת", so an unanchored match resolves to
+      // both buttons and Playwright refuses to click either.
+      await page.getByRole("button", { name: /^(Present|קיימת)/ }).click();
       await page.waitForTimeout(1400);
     }
 
@@ -1646,5 +1658,75 @@ test.describe('a later block brings its own practice', () => {
       expect(stages.filter(s => s === 'partTwo')).toHaveLength(2);
       expect(saved).toHaveLength(3);
     }
+  });
+});
+
+test.describe('Ensemble perception, the ported experiment', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  /**
+   * One block, two kinds of trial, and the participant cannot tell which is coming.
+   *
+   * Nothing offline can see this. The definition can branch correctly and still put the
+   * wrong control on screen, or draw a slider with no preview, or ask the question in the
+   * wrong language — and a participant would meet all three before any test noticed.
+   */
+  test('a trial asks for an average with a slider, or about one item with yes/no', async ({ page }) => {
+    await open(page, '/run/summaryStats');
+    await page.getByRole('button', { name: 'English' }).click();
+    await page.getByPlaceholder('Name').fill('E2E Tester');
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    const seen = { ensemble: false, recognition: false };
+
+    // Practice is ten trials and covers both questions by construction, so both kinds must
+    // turn up well inside it.
+    for (let i = 0; i < 10 && !(seen.ensemble && seen.recognition); i++) {
+      const slider = page.locator('input[type="range"]');
+      // The key hint is inside the button, so its accessible name is "Yes F", not "Yes".
+      const yes = page.getByRole('button', { name: /^Yes/ });
+
+      await expect(slider.or(yes).first()).toBeVisible({ timeout: 15_000 });
+
+      if (await slider.count() > 0) {
+        // An estimate trial: the question, a scale, and a shape that follows it.
+        await expect(page.getByText(/What was the average (circle size|line length)\?/)).toBeVisible();
+        const preview = page.locator('svg, [data-shape]').first();
+        await expect(preview).toBeVisible();
+
+        // The scale belongs to the stimulus: circles run 15-75, lines 40-200. A single
+        // scale stretched over both would make the same drag mean different things.
+        const min = Number(await slider.getAttribute('min'));
+        const max = Number(await slider.getAttribute('max'));
+        expect([15, 40]).toContain(min);
+        expect([75, 200]).toContain(max);
+
+        await slider.fill(String(Math.round((min + max) / 2)));
+        await page.getByRole('button', { name: 'Confirm' }).click();
+        seen.ensemble = true;
+      } else {
+        // A recognition trial: one shape, and whether it was there.
+        await expect(page.getByText('Did this item appear in the display?')).toBeVisible();
+        await yes.click();
+        seen.recognition = true;
+      }
+      // Feedback, then the inter-trial gap.
+      await page.waitForTimeout(1300);
+    }
+
+    expect(seen.ensemble, 'no trial ever asked for an average').toBe(true);
+    expect(seen.recognition, 'no trial ever asked about a single item').toBe(true);
+  });
+
+  test('the question is asked in Hebrew on a Hebrew run', async ({ page }) => {
+    // Displays carry a stimulus, which is never translated — but this one carries the
+    // QUESTION, and a Hebrew run that asks it in English is not the same experiment.
+    await open(page, '/run/summaryStats');
+    await page.getByPlaceholder('שם').fill('בודק');
+    await page.getByRole('button', { name: 'התחלה' }).click();
+
+    await expect(
+      page.getByText(/מהו גודל העיגול הממוצע\?|מהו אורך הקו הממוצע\?|האם פריט זה הופיע בתצוגה\?/),
+    ).toBeVisible({ timeout: 15_000 });
   });
 });
