@@ -73,13 +73,23 @@ export const COMPOSITE_FACE_PORT: ExperimentDefinition = {
   titleHe: 'משימת פנים מורכבות',
   category: 'PERCEPTION',
 
+  // Word for word from the hand-built landing page (app/CompositeFace/page.tsx).
+  //
+  // An earlier version of this port ended with "Ignore the bottom half entirely — it is
+  // always someone else", which the original never said, on the landing page or in practice.
+  // It reads like a clarification and is not one: the composite effect IS the failure to
+  // ignore the irrelevant half, so telling people harder to ignore it is a change to the
+  // manipulation, and results collected under it would not be comparable with the results
+  // already in the table.
   instructions: {
-    en: 'You will see a face, and then a composite face made of two different halves.\n'
-      + 'Your job is to judge the TOP half only: is it the same person you just saw?\n'
-      + 'Ignore the bottom half entirely — it is always someone else.',
-    he: 'תראי פנים, ואחריהן פנים מורכבות משני חצאים של אנשים שונים.\n'
-      + 'המשימה היא לשפוט רק את החצי העליון: האם זה אותו אדם שראית?\n'
-      + 'התעלמי לחלוטין מהחצי התחתון — הוא תמיד של מישהו אחר.',
+    en: 'On each trial you will briefly see a face, then a second face.\n'
+      + 'The second face is split: the top half belongs to one person, the bottom to another.\n'
+      + 'Judge: is the top half of the second face the same person as the first face?\n'
+      + 'Press "Yes" or "No" accordingly.',
+    he: 'בכל ניסוי תראה פנים לזמן קצר, ולאחר מכן פנים נוספות.\n'
+      + 'הפנים השניות מחולקות: החצי העליון שייך לאדם אחד, התחתון לאדם אחר.\n'
+      + 'עליך לשפוט: האם החצי העליון של הפנים השניות הוא אותו אדם כמו הפנים הראשונות?\n'
+      + 'לחץ "כן" או "לא" בהתאם.',
   },
 
   pools: {

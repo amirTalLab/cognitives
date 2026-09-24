@@ -76,11 +76,16 @@ export const VISUAL_SEARCH_PORT: ExperimentDefinition = {
     en: 'Search for a T in the colour shown above.\n\n'
       + 'On each screen you will see a scatter of letters — some T, some L, in two colours. '
       + 'Decide as fast as you can whether an upright {group.targetName} T is present.\n'
-      + 'Ts in the other colour do not count, and neither do Ls in {group.targetName}.',
+      + 'Ts in the other colour do not count, and neither do Ls in {group.targetName}.\n\n'
+      // What they are agreeing to. /run's landing screen shows the instructions and nothing
+      // else — no automatic trial count — so a length the original page promised is simply
+      // gone unless it is written here. 128 trials with no warning is how people quit.
+      + 'About 8–10 minutes • 8 practice + 128 trials',
     he: 'חפשי את האות T בצבע המוצג למעלה.\n\n'
       + 'בכל מסך יופיעו אותיות מפוזרות — חלקן T וחלקן L, בשני צבעים. החליטי מהר ככל האפשר '
       + 'האם קיימת T זקופה {group.targetNameHe}.\n'
-      + 'אותיות T בצבע השני אינן נחשבות, וגם לא אותיות L {group.targetNameHe}.',
+      + 'אותיות T בצבע השני אינן נחשבות, וגם לא אותיות L {group.targetNameHe}.\n\n'
+      + 'כ-8–10 דקות • 8 ניסיונות תרגול + 128 ניסיונות',
   },
 
   pools: { colourGroups: COLOUR_GROUPS },

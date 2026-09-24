@@ -2166,3 +2166,79 @@ test('the catalogue is a plain data module with no page imports', () => {
   assert.ok(!/from '@\/app\//.test(catalogueSource), 'the catalogue imports from a page');
   assert.ok(/export const RUN_SLUGS/.test(catalogueSource));
 });
+
+// ── U. What a participant is told before they answer anything ─────────────────
+//
+// The blind spot every other test in this file shares: they all begin by responding to a
+// trial, so nothing here can see the screen a participant reads FIRST. visualSearch shipped
+// without ever saying which colour to hunt for, and 472 green tests said nothing — it was
+// found by running it. A sweep of all nine ports against their original landing pages then
+// turned up three more, which these tests pin.
+
+/** The instruction lines of a hand-built landing page, both languages, as authored. */
+function landingLines(slug) {
+  const source = readFileSync(join(process.cwd(), 'app', slug, 'page.tsx'), 'utf8');
+  const lines = [];
+  for (const block of source.matchAll(/(?:inst|steps|instructions):\s*\[([\s\S]*?)\]/g)) {
+    for (const quoted of block[1].matchAll(/'((?:[^'\\]|\\.)*)'/g)) {
+      lines.push(quoted[1].replace(/\\'/g, "'"));
+    }
+  }
+  assert.ok(lines.length > 0, `found no instruction lines in app/${slug}/page.tsx`);
+  return lines;
+}
+
+const portBySlug = slug => ports.PORTS.find(p => p.slug === slug);
+
+test('the composite face task tells participants exactly what it always told them', () => {
+  // Not a style point. The composite effect IS the failure to ignore the irrelevant half,
+  // so an added "ignore the bottom half entirely" — which this port briefly had, and the
+  // original never said anywhere — changes the manipulation rather than clarifying it, and
+  // results collected under it would not be comparable with the rows already in the table.
+  const def = portBySlug('CompositeFace');
+  const both = `${def.instructions.en}\n${def.instructions.he}`;
+  for (const line of landingLines('CompositeFace')) {
+    assert.ok(both.includes(line), `the original says "${line}" and the port no longer does`);
+  }
+  assert.ok(
+    !/ignore the bottom half|התעלמ/i.test(both),
+    'the port tells participants to ignore the bottom half; the original never did',
+  );
+});
+
+test('the serial position task still forbids writing the words down', () => {
+  // The one experimental control on that page, and the port dropped it. The serial-position
+  // curve is the entire result: a participant who jots words during presentation produces
+  // one that measures nothing, and nothing downstream can tell that they did.
+  const def = portBySlug('serialOrder');
+  assert.match(def.instructions.en, /do not write anything down/i);
+  assert.match(def.instructions.he, /אל תרשמ/);
+});
+
+test('every port that promises a length promises one it can keep', () => {
+  // /run's landing screen renders `instructions` and nothing else — there is no automatic
+  // trial count — so a length the hand-built page promised is gone unless it is written
+  // into the definition. Where one IS written, it has to match what the design builds, or
+  // the page is lying in the other direction.
+  const rng = seededRandom(7);
+  for (const def of ports.PORTS) {
+    const stated = def.instructions.en.match(/(\d+)\s+practice\s*\+\s*(\d+)\s+trials/i);
+    if (!stated) continue;
+    const plan = planStages(def, rng);
+    const main = plan.reduce((n, b) => n + buildTrials(b.design, { rng, context: b.context }).length, 0);
+    const practice = buildTrials(plan[0].design, { practice: true, rng, context: plan[0].context }).length;
+    assert.equal(Number(stated[2]), main, `${def.slug} promises ${stated[2]} trials and builds ${main}`);
+    assert.equal(Number(stated[1]), practice,
+      `${def.slug} promises ${stated[1]} practice trials and builds ${practice}`);
+  }
+});
+
+test('the long ports say how long they are', () => {
+  // Anything past a few minutes has to warn people, or they quit in the middle and the row
+  // is unusable. visualSearch is 128 trials and said nothing at all.
+  for (const slug of ['visualSearch', 'posnerCueing', 'stroop', 'wordSuperiority']) {
+    const def = portBySlug(slug);
+    assert.match(def.instructions.en, /\d+\s+trials/i, `${slug} never says how many trials it is`);
+    assert.match(def.instructions.he, /ניסיונות|ניסויים/, `${slug} never says its length in Hebrew`);
+  }
+});

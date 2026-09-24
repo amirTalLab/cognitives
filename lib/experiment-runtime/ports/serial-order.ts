@@ -92,11 +92,17 @@ export const SERIAL_ORDER_PORT: ExperimentDefinition = {
   category: 'MEMORY',
 
   instructions: {
+    // "Do not write anything down" is not politeness, it is the experimental control: the
+    // serial-position curve IS the result here, and a participant who jots words during
+    // presentation produces one that measures nothing. The original landing page said it
+    // and the first version of this port dropped it.
     en: 'You will see a list of words, one at a time. Try to remember them.\n'
+      + 'Do not write anything down.\n'
       + 'After the list you will do some arithmetic, and then type every word you remember, '
       + 'one per line, in any order.\n'
       + 'The whole thing happens twice, with a different list each time.',
     he: 'תראי רשימת מילים, אחת בכל פעם. נסי לזכור אותן.\n'
+      + 'אל תרשמי דבר במהלך ההצגה.\n'
       + 'אחרי הרשימה תפתרי תרגילי חשבון, ואז תקלידי את כל המילים שאת זוכרת, מילה בכל שורה, '
       + 'בכל סדר.\n'
       + 'כל זה יקרה פעמיים, עם רשימה אחרת בכל פעם.',
