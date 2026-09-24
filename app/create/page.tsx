@@ -22,9 +22,8 @@ import { AssetManifest, ExperimentDefinition } from '@/lib/experiment-runtime/sc
 import { uploadAssets } from '@/lib/experiment-runtime/assets';
 import { ValidationIssue } from '@/lib/experiment-runtime/validate';
 import { putPreview } from '@/lib/experiment-runtime/preview-store';
-import {
-  listPublished, loadDefinition, publishDefinition, PublishedSummary,
-} from '@/lib/experiment-runtime/store';
+import { publishDefinition } from '@/lib/experiment-runtime/store';
+import { listEditable, loadLive, type EditableExperiment } from '@/lib/experiment-runtime/registry';
 import {
   AnalyzeResponse, Candidate, ChatMessage, ChatResponse, Feasibility,
   GeneratedFile, GenerateResponse, Spec, Stage, Usage, UsageEntry, estimateCost,
@@ -170,7 +169,7 @@ export default function CreateProjectPage() {
   const [restorable, setRestorable] = useState<CreateDraft | null>(null);
   // Experiments already live at /run. Editing one is the same Refine screen a new
   // experiment ends on, so an experiment is never finished — it can be changed next term.
-  const [published, setPublished] = useState<PublishedSummary[]>([]);
+  const [published, setPublished] = useState<EditableExperiment[]>([]);
   const [openingPublished, setOpeningPublished] = useState<string | null>(null);
 
   /** Records what a stage actually cost, so the running total is measured, not guessed. */
@@ -219,7 +218,7 @@ export default function CreateProjectPage() {
   // it is fetched as soon as the page opens rather than behind a button.
   useEffect(() => {
     if (!authed) return;
-    listPublished().then(setPublished).catch(() => setPublished([]));
+    listEditable().then(setPublished).catch(() => setPublished([]));
   }, [authed]);
 
   /**
@@ -229,10 +228,12 @@ export default function CreateProjectPage() {
    * from sessionStorage like any other, and refining it from here republishes it as the
    * next version. The spec is rebuilt from the definition, since the wizard carries one.
    */
-  const openPublished = (summary: PublishedSummary) => run('Opening the published experiment…', async () => {
+  const openPublished = (summary: EditableExperiment) => run('Opening the published experiment…', async () => {
     setOpeningPublished(summary.slug);
     try {
-      const loaded = await loadDefinition(summary.slug);
+      // The live copy: the published row where there is one, otherwise the built-in a
+      // ported experiment still ships as. Both open on the same screen.
+      const loaded = await loadLive(summary.slug);
       if (!loaded) throw new Error(`"${summary.slug}" could not be loaded. It may have been unpublished.`);
 
       setSpec(specFromDefinition(loaded));
@@ -966,8 +967,9 @@ export default function CreateProjectPage() {
               <div className="mt-6 pt-5 border-t border-gray-800">
                 <h3 className="font-semibold text-gray-200 mb-1">Or edit one that is already live</h3>
                 <p className="text-xs text-gray-500 mb-4">
-                  Opens it on the Refine screen. Free — no stage is run again. Publishing afterwards
-                  makes a new version, and the old one can always be restored.
+                  Every experiment running on /run, whether it was generated here or ported from a
+                  hand-built page. Opens it on the Refine screen — free, no stage is run again.
+                  Publishing afterwards makes a new version, and the old one can always be restored.
                 </p>
                 <div className="flex flex-col gap-2">
                   {published.map(exp => (
@@ -977,9 +979,19 @@ export default function CreateProjectPage() {
                         <p className="text-sm text-gray-200">{exp.title}</p>
                         <p className="text-xs text-gray-600 mt-0.5">
                           /run/{exp.slug}
-                          {exp.revision ? ` · version ${exp.revision}` : ''}
+                          {/* Which copy a change would start from, and what publishing does to
+                              it — editing a built-in writes the first row, and from then on
+                              that row is what students get. */}
+                          {exp.builtIn
+                            ? ' · built in · editing publishes version 1'
+                            : exp.revision ? ` · version ${exp.revision}` : ''}
                           {exp.category ? ` · ${exp.category}` : ''}
                         </p>
+                        {!exp.linked && (
+                          <p className="text-xs text-amber-400/70 mt-1">
+                            Published but not on the homepage — reachable only by its link.
+                          </p>
+                        )}
                       </div>
                       <button onClick={() => openPublished(exp)} disabled={!!busy} className={BTN}>
                         {openingPublished === exp.slug ? 'Opening…' : 'Edit'}

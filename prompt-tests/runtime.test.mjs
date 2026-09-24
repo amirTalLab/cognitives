@@ -155,14 +155,17 @@ for (const [name, def] of CORPUS) {
 //
 // Static, so it costs nothing and cannot be forgotten.
 
-const homepage = readFileSync(join(process.cwd(), 'app', 'page.tsx'), 'utf8');
+// The catalogue moved out of app/page.tsx so that /create's edit list can read the same
+// answer the homepage does. Read from the module rather than scraped from the page: a
+// regex over a file that no longer holds the list matches nothing, and a registration test
+// that silently checks zero slugs is worse than none.
+const catalogue = await import('../lib/experiments.ts');
 const middleware = readFileSync(join(process.cwd(), 'middleware.ts'), 'utf8');
 
-/** Slugs the homepage links to /run/{slug}. */
-const runSlugs = [...homepage.matchAll(/href:\s*'\/run\/([A-Za-z0-9_-]+)'/g)].map(m => m[1]);
+const runSlugs = catalogue.RUN_SLUGS;
 
 test('the homepage links at least one definition experiment', () => {
-  assert.ok(runSlugs.length > 0, 'expected at least one href: "/run/..." on the homepage');
+  assert.ok(runSlugs.length > 0, 'expected at least one experiment with an href of "/run/..."');
 });
 
 for (const slug of runSlugs) {
@@ -1990,4 +1993,119 @@ test('mock data shows an absent search costing more than a present one', () => {
   const mean = xs => xs.reduce((a, b) => a + b.reaction_time_ms, 0) / xs.length;
   assert.ok(mean(absent) > mean(present) + 200,
     `absent ${Math.round(mean(absent))}ms is not clearly slower than present ${Math.round(mean(present))}ms`);
+});
+
+// ── T. What a lecturer can edit ───────────────────────────────────────────────
+//
+// The edit list on /create used to read published rows alone, so the nine ported
+// experiments — the ones a class actually runs — could not be opened at all. It now reads
+// the homepage catalogue, which means a port becomes editable at the moment its card is
+// pointed at /run and nothing has to be remembered separately.
+
+const catalogueSource = readFileSync(join(process.cwd(), 'lib', 'experiments.ts'), 'utf8');
+
+test('every experiment the homepage sends to /run has a definition behind it', () => {
+  // The precondition for editing: listEditable pairs each linked slug with a definition,
+  // and a slug with neither a published row nor a built-in silently drops out of the list.
+  const builtInSource = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'registry.ts'), 'utf8');
+  const registered = (builtInSource.split('const BUILT_IN')[1] ?? '').split('];')[0];
+  const modules = { ...roundTrips, ...probe, ...templates, ...ports };
+  const slugs = new Set(
+    registered.split(/[^A-Za-z0-9_]+/)
+      .map(name => modules[name]?.slug)
+      .filter(Boolean),
+  );
+  // Published-only experiments are legitimate too; these are the ones shipped as code.
+  const published = ['lexicalDecisionPairs'];
+
+  for (const slug of catalogue.RUN_SLUGS) {
+    assert.ok(
+      slugs.has(slug) || published.includes(slug),
+      `the homepage sends students to /run/${slug}, but nothing is registered under that slug`,
+    );
+  }
+});
+
+test('every ported experiment is reachable from the homepage, and so editable', () => {
+  for (const port of ports.PORTS) {
+    assert.ok(
+      catalogue.RUN_SLUGS.includes(port.slug),
+      `${port.slug} is ported but its homepage card does not point at /run/${port.slug}, `
+      + 'so it cannot be edited',
+    );
+  }
+});
+
+test('the catalogue marks a moved experiment by its href, and nothing else', () => {
+  // This is the whole mechanism: `href` starting /run/ IS the record that an experiment has
+  // moved. A second list of "which ones are ported" would be a second thing to forget.
+  const moved = catalogue.EXPERIMENTS.filter(e => e.href?.startsWith('/run/'));
+  assert.equal(moved.length, catalogue.RUN_SLUGS.length);
+  for (const exp of moved) {
+    assert.equal(exp.href, `/run/${exp.href.slice('/run/'.length)}`);
+  }
+  // And an experiment without one is still a hand-built page, not a broken definition.
+  for (const exp of catalogue.EXPERIMENTS) {
+    if (!exp.href) continue;
+    assert.ok(exp.href.startsWith('/run/'), `"${exp.id}" has an href that is not a /run link`);
+  }
+});
+
+test('the homepage no longer keeps its own copy of the catalogue', () => {
+  // Two copies is how an experiment ends up runnable but not editable. If the list ever
+  // moves back into the page, this fails rather than the edit list quietly going stale.
+  const homepageSource = readFileSync(join(process.cwd(), 'app', 'page.tsx'), 'utf8');
+  assert.ok(
+    /from '@\/lib\/experiments'/.test(homepageSource),
+    'app/page.tsx does not import the shared catalogue',
+  );
+  assert.ok(
+    !/const EXPERIMENTS\s*:/.test(homepageSource),
+    'app/page.tsx declares its own EXPERIMENTS list again',
+  );
+});
+
+test('the create page reads the editable list, not the published rows', () => {
+  const createSource = readFileSync(join(process.cwd(), 'app', 'create', 'page.tsx'), 'utf8');
+  assert.ok(/listEditable\(\)/.test(createSource), 'the edit list is not built from listEditable');
+  assert.ok(
+    !/listPublished\(\)/.test(createSource),
+    'the create page still lists published rows, so ported experiments would be missing',
+  );
+  // And it opens the LIVE copy, which for a port is the built-in rather than a row.
+  assert.ok(/loadLive\(/.test(createSource), 'editing does not load the live definition');
+});
+
+test('a ported experiment can be opened for editing before it has ever been published', () => {
+  // The bug this guards: loadDefinition reads the database, so a built-in with no row
+  // answered null and the Edit button reported the experiment as unpublished.
+  const registrySource = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'registry.ts'), 'utf8');
+  const loadLive = registrySource.split('export async function loadLive')[1] ?? '';
+  assert.ok(
+    /BUILT_IN\.find/.test(loadLive),
+    'loadLive does not fall back to the built-in, so a port could not be edited',
+  );
+});
+
+test('the catalogue and the runtime agree on the two hand-built pages that remain', () => {
+  // A sanity check on the migration itself: everything the homepage still serves from its
+  // own route has no /run href, and everything with one is gone from app/<slug>/ or kept
+  // only for its old results.
+  const stillHandBuilt = catalogue.EXPERIMENTS.filter(e => !e.href).map(e => e.id);
+  for (const id of stillHandBuilt) {
+    assert.ok(
+      !ports.PORTS.some(p => p.slug === id),
+      `"${id}" is ported but its card still points at the hand-built page`,
+    );
+  }
+  assert.ok(stillHandBuilt.length > 0, 'expected some experiments still to be hand-built');
+});
+
+test('the catalogue is a plain data module with no page imports', () => {
+  // It is read by the homepage AND by /create; pulling a page into it would make the edit
+  // list depend on the homepage rendering.
+  assert.ok(!/from '@\/app\//.test(catalogueSource), 'the catalogue imports from a page');
+  assert.ok(/export const RUN_SLUGS/.test(catalogueSource));
 });

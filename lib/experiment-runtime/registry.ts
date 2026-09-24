@@ -7,7 +7,8 @@
 
 import type { ExperimentDefinition } from './schema';
 import { getPreview } from './preview-store';
-import { loadDefinition } from './store';
+import { listPublished, loadDefinition } from './store';
+import { RUN_SLUGS } from '@/lib/experiments';
 // WORD_SUPERIORITY and VISUAL_SEARCH (round-trips) are deliberately NOT registered: the
 // ports below share their slugs and supersede them. A round-trip was an outline that
 // simplified the design to fit; a port is the hand-built experiment itself.
@@ -86,4 +87,91 @@ export async function getDefinition(slug: string): Promise<ExperimentDefinition 
 
 export async function listDefinitions(): Promise<ExperimentDefinition[]> {
   return BUILT_IN;
+}
+
+/**
+ * The definition a slug is actually RUNNING — published if there is one, else the built-in.
+ *
+ * Deliberately not `getDefinition`, which looks at the preview store first: that is right
+ * for a participant opening a link mid-refine, and wrong for a lecturer asking to edit the
+ * live experiment, who would silently be handed a half-finished draft from an earlier
+ * session instead.
+ */
+export async function loadLive(slug: string): Promise<ExperimentDefinition | null> {
+  try {
+    const published = await loadDefinition(slug);
+    if (published) return published;
+  } catch {
+    // Unreachable database: the built-in is what is running anyway.
+  }
+  return BUILT_IN.find(d => d.slug === slug) ?? null;
+}
+
+/** An experiment a lecturer can open on the Refine screen and change by hand. */
+export interface EditableExperiment {
+  slug: string;
+  title: string;
+  category: string;
+  /** The published version, where one exists. Absent for an experiment still shipping as code. */
+  revision?: number;
+  updatedAt?: string;
+  /**
+   * True when nothing is published under this slug, so the built-in is what students get.
+   *
+   * Editing one is the same screen either way; publishing afterwards writes the first row
+   * and from then on that row is what runs, since a published definition is looked up
+   * before the built-in of the same slug.
+   */
+  builtIn: boolean;
+  /** False for a published experiment the homepage does not link — reachable only by URL. */
+  linked: boolean;
+}
+
+/**
+ * Everything editable, live experiments first.
+ *
+ * Two sources, because an experiment can be live in two ways. A PORTED one ships as code
+ * and has no published row until someone edits it; a GENERATED one is a row from the start.
+ * Listing only the rows — which is what /create did — meant none of the ported experiments
+ * could be edited at all, even though they are the ones a class actually runs.
+ *
+ * The homepage catalogue decides what counts as live, so an experiment becomes editable at
+ * the moment its card is pointed at /run, and the next port needs nothing done to appear
+ * here. Published rows the catalogue does not link are still listed, marked, and last:
+ * they are reachable by URL, so hiding them would leave something live that nobody can
+ * open — but they are not what a lecturer is looking for.
+ */
+export async function listEditable(): Promise<EditableExperiment[]> {
+  const published = await listPublished().catch(() => []);
+  const bySlug = new Map(published.map(row => [row.slug, row]));
+
+  const live: EditableExperiment[] = [];
+  for (const slug of RUN_SLUGS) {
+    const row = bySlug.get(slug);
+    const builtIn = BUILT_IN.find(d => d.slug === slug);
+    // Neither is an experiment whose card points nowhere; the registration tests catch it.
+    if (!row && !builtIn) continue;
+    bySlug.delete(slug);
+    live.push({
+      slug,
+      title: row?.title ?? builtIn?.title ?? slug,
+      category: row?.category ?? builtIn?.category ?? '',
+      revision: row?.revision,
+      updatedAt: row?.updatedAt,
+      builtIn: !row,
+      linked: true,
+    });
+  }
+
+  const unlinked: EditableExperiment[] = [...bySlug.values()].map(row => ({
+    slug: row.slug,
+    title: row.title,
+    category: row.category,
+    revision: row.revision,
+    updatedAt: row.updatedAt,
+    builtIn: false,
+    linked: false,
+  }));
+
+  return [...live, ...unlinked];
 }

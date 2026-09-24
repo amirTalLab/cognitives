@@ -427,7 +427,16 @@ test('a published experiment opens for editing on Refine, with no API call', asy
   await expect(page.getByRole('heading', { name: 'Or edit one that is already live' })).toBeVisible();
   await expect(page.getByText(`/run/${DEFINITION.slug} · version 4 · MEMORY`)).toBeVisible();
 
-  await page.getByRole('button', { name: 'Edit' }).click();
+  // The ported experiments are listed too, and they are the ones a class actually runs.
+  // Before this, the list read published rows alone and none of them could be opened.
+  await expect(page.getByText('/run/drm · built in · editing publishes version 1')).toBeVisible();
+  await expect(page.getByText('/run/visualSearch · built in · editing publishes version 1')).toBeVisible();
+
+  // Scoped to its own row: there is an Edit button per experiment now. Found by the card
+  // class rather than by text depth — several nested divs contain the slug, and only the
+  // card carries the button.
+  const row = page.locator('div.rounded-xl').filter({ hasText: `/run/${DEFINITION.slug} ·` });
+  await row.getByRole('button', { name: 'Edit' }).click();
 
   // The Refine screen, holding the live experiment — and saying what publishing again does.
   await expect(page.getByRole('heading', { name: 'Refine' })).toBeVisible();
@@ -529,4 +538,47 @@ test('publishing sends the edited title', async ({ page }) => {
   await expect(page.getByText(/stopped for the test/)).toBeVisible();
 
   expect(JSON.parse(published).definition.title).toBe('Letters in Memory');
+});
+
+// A ported experiment ships as code and has no published row until someone edits it. That
+// is the case the edit list could not handle at all: it read published rows, so the nine
+// experiments a class actually runs were missing, and the Edit button would have reported
+// them as unpublished even if they had been listed.
+test('a ported experiment can be opened for editing before it has ever been published', async ({ page }) => {
+  const apiCalls: string[] = [];
+  page.on('request', r => { if (r.url().includes('/api/create/')) apiCalls.push(r.url()); });
+
+  await serverNotInMock(page);
+  // Nothing published at all — the state a fresh database is in.
+  await page.route('**/rest/v1/**', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.addInitScript(() => {
+    sessionStorage.setItem('ss_home_authed', '1');
+    sessionStorage.setItem('ss_create_key', 'placeholder');
+  });
+
+  await page.goto('/create');
+  await expect(page.getByRole('heading', { name: 'Or edit one that is already live' })).toBeVisible();
+
+  // Listed, and honest about what editing it will do.
+  const row = page.locator('div.rounded-xl').filter({ hasText: '/run/drm · built in' });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await expect(row).toContainText('editing publishes version 1');
+
+  await row.getByRole('button', { name: 'Edit' }).click();
+
+  // The Refine screen, holding the built-in definition rather than an error.
+  await expect(page.getByRole('heading', { name: 'Refine' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByLabel('English instructions')).not.toHaveValue('');
+  await expect(page.getByRole('heading', { name: 'Preview' })).toBeVisible();
+
+  // And the hand edits work on it, which is the point of listing it: the title and the
+  // instructions come from the built-in and can be changed without running a stage.
+  await expect(page.getByLabel('Experiment title in English')).toHaveValue(/DRM|Memory/);
+
+  // /status is the free health check the page polls; everything else is billed per call.
+  expect(
+    apiCalls.filter(u => !u.includes('/api/create/status')),
+    'opening a built-in experiment must not call a metered route',
+  ).toEqual([]);
 });
