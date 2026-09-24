@@ -37,7 +37,8 @@ export const EXPERIMENTS: Exp[] = [
   { id: 'bouba-kiki',      title: 'Bouba-Kiki Effect',       titleHe: 'אפקט בובה-קיקי',    icon: Shapes,    color: 'text-indigo-400', href: '/run/bouba-kiki' },
   // Ported. app/stroop/ still serves its own 112 rows at /stroop/teacher; new runs go here.
   { id: 'stroop',          title: 'Stroop Effect',           titleHe: 'אפקט סטרופ',         icon: Brain,     color: 'text-emerald-400', href: '/run/stroop' },
-  { id: 'mentalRep',       title: 'Mental Representation',   titleHe: 'ייצוג מנטלי',        icon: BrainCog,  color: 'text-cyan-400'    },
+  // Ported. app/mentalRep/ still serves its own rows at /mentalRep/teacher.
+  { id: 'mentalRep',       title: 'Mental Representation',   titleHe: 'ייצוג מנטלי',        icon: BrainCog,  color: 'text-cyan-400', href: '/run/mentalRep' },
   // Ported. app/drm/ still serves its own rows at /drm/teacher; new runs go here.
   { id: 'drm',             title: 'Memory (DRM)',             titleHe: 'זיכרון (DRM)',        icon: Beaker,    color: 'text-emerald-400', href: '/run/drm' },
   // Ported. app/srt/ still serves its own rows at /srt/teacher.

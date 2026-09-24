@@ -434,7 +434,126 @@ SIGNAL_DETECTION.mock = { participants: 15, baseRtMs: 700, baseAccuracy: 0.6, ef
   { factor: 'signalStrength', level: 'high', accuracyDelta: 0.3 },
 ] };
 
+
+// 9. STERNBERG MEMORY SCANNING — is this digit in the set you just held?
+// Stresses: a finding that is a SLOPE rather than a contrast between conditions, and a
+// second task inside one session that has to be practised on its own.
+// Fit: written after mentalRep added `StatSpec.measure: 'correlation'` and stage-level
+// `practice`. Included precisely because it is NOT mentalRep: a capability that only ever
+// serves the experiment it was built for is not a capability, and this is the check that
+// the two added here can be reached by a paradigm nobody had in mind at the time.
+//
+// Sternberg (1966) holds a set of one to six digits, then shows a probe. Response time
+// rises by a near-constant amount per item in the set — about 38ms — whether or not the
+// probe is present, which is what argued for an exhaustive serial scan of memory.
+export const STERNBERG: ExperimentDefinition = {
+  version: 1,
+  slug: 'sternbergScanning',
+  title: 'Memory Scanning',
+  titleHe: 'סריקת זיכרון',
+  category: 'MEMORY',
+  instructions: {
+    en: 'You will see a short set of digits to hold in mind, then a single digit.\n'
+      + 'Decide as fast as you can whether that digit was in the set.',
+    he: 'תראי קבוצה קצרה של ספרות לזכור, ואחריה ספרה אחת.\n'
+      + 'החליטי מהר ככל האפשר האם הספרה הייתה בקבוצה.',
+  },
+  pools: {
+    sets: [
+      { digits: '4', size: 1, inSet: '4', outSet: '7' },
+      { digits: '3 9', size: 2, inSet: '9', outSet: '5' },
+      { digits: '2 6 8', size: 3, inSet: '6', outSet: '1' },
+      { digits: '1 5 7 3', size: 4, inSet: '7', outSet: '9' },
+      { digits: '8 2 4 6 0', size: 5, inSet: '2', outSet: '3' },
+      { digits: '9 1 3 5 7 2', size: 6, inSet: '5', outSet: '4' },
+    ],
+  },
+  factors: [
+    { name: 'set', from: 'sets' },
+    { name: 'present', levels: [true, false] },
+    // Which digit is shown follows from the two above, so it is derived rather than crossed.
+    {
+      name: 'probe',
+      derivedFrom: ['present'],
+      mapping: { true: '{set.inSet}', false: '{set.outSet}' },
+    },
+  ],
+  repetitions: 3,
+  practice: { count: 4, feedback: true, record: false },
+  trial: {
+    phases: [
+      { name: 'fixation', display: { kind: 'fixation' }, durationMs: 500 },
+      { name: 'set', display: { kind: 'text', text: '{set.digits}', size: 48 }, durationMs: 1200 },
+      { name: 'blank', display: { kind: 'blank' }, durationMs: 1000 },
+      {
+        name: 'probe',
+        display: { kind: 'text', text: '{probe}', size: 64 },
+        awaitsResponse: true,
+        startsClock: true,
+      },
+    ],
+    response: {
+      kind: 'choice',
+      layout: 'row',
+      options: [
+        { value: 'yes', label: 'Yes', labelHe: 'כן', key: 'f' },
+        { value: 'no', label: 'No', labelHe: 'לא', key: 'j' },
+      ],
+    },
+    correct: { kind: 'mapping', factor: 'present', expect: { true: 'yes', false: 'no' } },
+    itiMs: 500,
+  },
+  store: ['set.size', 'present'],
+  thanks: { showResults: true },
+  dashboard: {
+    stats: [
+      {
+        // The finding itself, and a mean cannot state it: what Sternberg reported is that
+        // time rises WITH set size, which is a relationship rather than a difference.
+        label: 'Set size ↔ time',
+        measure: 'correlation',
+        against: 'set.size',
+        correctOnly: true,
+      },
+    ],
+    charts: [
+      {
+        title: 'Reaction time by set size',
+        description: 'A straight rise of roughly a fixed cost per item is the classic result: '
+          + 'memory appears to be scanned one item at a time.',
+        kind: 'line',
+        groupBy: 'set.size',
+        measure: 'meanRt',
+        correctOnly: true,
+        errorBars: true,
+        xLabel: 'Digits held in mind',
+        yLabel: 'RT (ms)',
+      },
+      {
+        title: 'Reaction time by set size, present vs absent',
+        description: 'The two lines rise together. If the scan stopped on finding the digit, '
+          + '"present" would be the flatter of the two — and it is not.',
+        kind: 'line',
+        groupBy: 'set.size',
+        seriesBy: 'present',
+        measure: 'meanRt',
+        correctOnly: true,
+        errorBars: true,
+        xLabel: 'Digits held in mind',
+        yLabel: 'RT (ms)',
+      },
+    ],
+  },
+};
+STERNBERG.mock = { participants: 16, baseRtMs: 520, baseAccuracy: 0.95, effects: [
+  { factor: 'set.size', level: 2, rtDeltaMs: 38 },
+  { factor: 'set.size', level: 3, rtDeltaMs: 76 },
+  { factor: 'set.size', level: 4, rtDeltaMs: 114 },
+  { factor: 'set.size', level: 5, rtDeltaMs: 152 },
+  { factor: 'set.size', level: 6, rtDeltaMs: 190 },
+] };
+
 export const PROBE = [
   STROOP, FLANKER, POSNER, LEXICAL_DECISION,
-  SEMANTIC_PRIMING, DELAY_DISCOUNTING, FACE_INVERSION, SIGNAL_DETECTION,
+  SEMANTIC_PRIMING, DELAY_DISCOUNTING, FACE_INVERSION, SIGNAL_DETECTION, STERNBERG,
 ];

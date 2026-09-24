@@ -381,6 +381,11 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
           bad(`${at}'s "difference"`, 'an object with "factor", "level" and "minus"');
         }
       }
+      // A correlation needs something to correlate against. Whether that field is actually
+      // stored is checked further down, where every block's `store` is in scope.
+      if (s.measure === 'correlation' && !isStr((s as { against?: unknown }).against)) {
+        bad(`${at}'s "against"`, 'the name of a stored number to correlate RT against');
+      }
     });
   }
 
@@ -1037,6 +1042,22 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   // nothing", which is exactly the advice that makes someone rewrite a design that was fine.
   const stored = [...available, ...def.store].map(s => s.replace(/\./g, '_'));
   const readable = (field: string) => stored.includes(field.replace(/\./g, '_')) || derived.has(field);
+
+  // A correlation card reads one stored NUMBER off every row. Unstored, it is permanently
+  // blank and reads as "no data yet" rather than as a definition that never asked for it.
+  for (const stat of def.dashboard.stats ?? []) {
+    if (stat.measure !== 'correlation') {
+      if (stat.against !== undefined) {
+        warn(`Stat "${stat.label}" names "against", which only "correlation" uses.`);
+      }
+      continue;
+    }
+    if (stat.against && !readable(stat.against)) {
+      warn(`Stat "${stat.label}" correlates reaction time against "${stat.against}", which is `
+        + 'not in the stored fields, so the card would always be blank.');
+    }
+  }
+
   for (const chart of def.dashboard.charts) {
     if (!readable(chart.groupBy)) {
       warn(`Chart "${chart.title}" groups by "${chart.groupBy}", which is not in the stored fields.`);

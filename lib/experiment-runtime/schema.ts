@@ -380,6 +380,17 @@ export interface Stage {
   repetitions: number;
   order?: TrialOrder;
   endsAfterMs?: number;
+  /**
+   * A practice run for THIS block, before its real trials.
+   *
+   * The definition's own `practice` covers the first block only. A block that starts a
+   * genuinely different task needs its own: mental rotation practises before its forty
+   * trials even though it is the second half of a session that began with mental scanning,
+   * and a participant who has only ever practised part one arrives at part two cold.
+   *
+   * The run shows the block's intro, then the practice, then "Practice complete" with the
+   * real trial count, exactly as it does for the first block.
+   */
   practice?: ExperimentDefinition['practice'];
   trial: ExperimentDefinition['trial'];
   store: string[];
@@ -667,7 +678,23 @@ export interface ChartSpec {
  */
 export interface StatSpec {
   label: string;
-  measure: ChartSpec['measure'];
+  /**
+   * `correlation` is the one measure that is not a group average: the mean WITHIN-participant
+   * correlation between reaction time and the number named in `against`.
+   *
+   * Use it for the many findings stated as "RT rises with X" — rotation angle, distance
+   * scanned, set size, memory load. Those papers report an r, and a bar chart of means
+   * cannot say what an r says.
+   */
+  measure: ChartSpec['measure'] | 'correlation';
+  /**
+   * Required by `measure: 'correlation'`: the stored numeric field to correlate RT against.
+   *
+   * It has to be in `store` and it has to be a NUMBER — an angle in degrees, a distance, a
+   * set size. A factor whose levels are words has no correlation with anything, and the
+   * validator says so rather than reporting zero.
+   */
+  against?: string;
   ofResponse?: string | string[];
   filter?: ChartSpec['filter'];
   correctOnly?: boolean;

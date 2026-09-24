@@ -36,7 +36,7 @@ registerHooks({
 const { validate } = await import('../lib/experiment-runtime/validate.ts');
 const { buildTrials, isCorrect, payloadOf, resolve, excluded, seededRandom, shuffle, expandRecall, planStages } =
   await import('../lib/experiment-runtime/trials.ts');
-const { aggregate, generateMockRows, seriesNames, measureLabel, sem } =
+const { aggregate, generateMockRows, seriesNames, measureLabel, sem, statValue, pearson } =
   await import('../lib/experiment-runtime/aggregate.ts');
 const roundTrips = await import('../lib/experiment-runtime/round-trips.ts');
 const probe = await import('../lib/experiment-runtime/generality-probe.ts');
@@ -2241,4 +2241,203 @@ test('the long ports say how long they are', () => {
     assert.match(def.instructions.en, /\d+\s+trials/i, `${slug} never says how many trials it is`);
     assert.match(def.instructions.he, /ניסיונות|ניסויים/, `${slug} never says its length in Hebrew`);
   }
+});
+
+// ── V. Mental representation ──────────────────────────────────────────────────
+//
+// Two experiments in one session, both claiming that a mental image keeps the properties of
+// the thing it depicts: scanning time rises with distance on a map that is no longer on
+// screen, rotation time rises with the angle between two figures. Both findings are a SLOPE
+// rather than a difference between conditions, which is why this is the port that taught the
+// runtime to report a correlation, and why it needed a practice block that is not the first.
+
+const MENTAL_REP = ports.PORTS.find(p => p.slug === 'mentalRep');
+const mrPlan = () => planStages(MENTAL_REP, seededRandom(11));
+const mrBlock = name => mrPlan().find(b => b.stage === name);
+
+test('mentalRep runs the map, then 21 scans, then 40 rotations', () => {
+  const rng = seededRandom(11);
+  const plan = planStages(MENTAL_REP, rng);
+  assert.deepEqual(plan.map(b => b.stage), ['mapStudy', 'scanning', 'rotation']);
+
+  const counts = plan.map(b => buildTrials(b.design, { rng, context: b.context }).length);
+  assert.deepEqual(counts, [1, 21, 40], 'the original studies one map, scans 21 pairs, rotates 40');
+});
+
+test('the map is studied for thirty seconds and asks for nothing', () => {
+  // The whole scanning result rests on the map being in memory rather than on screen. A
+  // study phase that ended early, or that took a keypress, would be measuring perception.
+  const [phase] = MENTAL_REP.trial.phases;
+  assert.equal(phase.durationMs, 30000);
+  assert.equal(MENTAL_REP.trial.response.kind, 'none');
+  assert.ok(!phase.awaitsResponse, 'the study phase must not wait for a response');
+});
+
+test('rotation practises before its own trials, though it is the second half', () => {
+  // The capability this port added. Before it, `practice` on a stage typechecked, validated
+  // and was silently never run: only the definition's first block was ever practised, so a
+  // participant met the rotation task cold after the whole of a different task.
+  const rotation = mrBlock('rotation');
+  assert.ok(rotation.design.practice, 'the rotation block declares no practice');
+  assert.equal(rotation.design.practice.count, 5);
+  assert.equal(rotation.design.practice.feedback, true);
+
+  const rng = seededRandom(3);
+  const practice = buildTrials(rotation.design, { practice: true, rng, context: rotation.context });
+  assert.equal(practice.length, 5, 'the original gives five practice trials with feedback');
+});
+
+test('a later block that practises is actually taken through the practice', () => {
+  // The definition half of the above is worth nothing if the page ignores it, which is
+  // exactly what it did. Both routes into a block have to practise: the one through the
+  // intro screen, and the one that skips the intro because autoAdvanceMs is zero.
+  const source = readFileSync(join(process.cwd(), 'app', 'run', '[slug]', 'page.tsx'), 'utf8');
+  assert.ok(/'stagePractice'/.test(source), 'the run page has no stage-practice step');
+  const routes = source.match(/design\.practice \? 'stagePractice' : 'stageRun'/g) ?? [];
+  assert.equal(routes.length, 2,
+    'both ways into a block — through the intro and straight past it — must practise first');
+});
+
+test('rotation samples five pairs from each angle and answer', () => {
+  const rotation = mrBlock('rotation');
+  const trials = buildTrials(rotation.design, { rng: seededRandom(5), context: rotation.context });
+
+  for (const angle of [0, 60, 120, 180]) {
+    for (const answer of ['same', 'different']) {
+      const n = trials.filter(t => t.values.pair.angle === angle && t.values.pair.answer === answer).length;
+      assert.equal(n, 5, `expected 5 trials at ${angle} degrees answered "${answer}", found ${n}`);
+    }
+  }
+});
+
+test('a "different" pair is the mirror of the same figure, not another figure', () => {
+  // What makes the task a rotation task. Two DIFFERENT objects can be told apart by their
+  // shape without rotating anything; a mirror image cannot, so the only way to decide is to
+  // turn it — which is the whole reason time rises with angle.
+  const rotation = mrBlock('rotation');
+  const trials = buildTrials(rotation.design, { rng: seededRandom(9), context: rotation.context });
+
+  for (const trial of trials) {
+    const { left, right, answer, figure } = trial.values.pair;
+    assert.ok(left.includes(figure) && right.includes(figure),
+      `a ${answer} trial pairs ${left} with ${right}, which are not the same figure`);
+    assert.equal(right.endsWith('_m.svg'), answer === 'different',
+      `a "${answer}" trial should ${answer === 'different' ? '' : 'not '}mirror the right figure`);
+    assert.ok(!left.endsWith('_m.svg'), 'the left figure is never the mirrored one');
+  }
+});
+
+test('every figure a rotation trial names exists on disk', () => {
+  // The figures are files now, not a React component drawing cubes. A path that is right in
+  // the pool and absent from public/ is a blank square in the middle of the experiment.
+  const rotation = mrBlock('rotation');
+  const trials = buildTrials(rotation.design, { rng: seededRandom(21), context: rotation.context });
+  for (const trial of trials) {
+    for (const src of [trial.values.pair.left, trial.values.pair.right]) {
+      assert.ok(existsSync(join(process.cwd(), 'public', src.replace(/^\//, ''))), `${src} does not exist`);
+    }
+  }
+});
+
+test('scanning takes seven pairs from each distance band', () => {
+  const scanning = mrBlock('scanning');
+  const trials = buildTrials(scanning.design, { rng: seededRandom(7), context: scanning.context });
+
+  for (const band of ['short', 'medium', 'long']) {
+    const n = trials.filter(t => t.values.pair.band === band).length;
+    assert.equal(n, 7, `expected 7 ${band} scans, found ${n}`);
+  }
+
+  // And the bands are genuinely ordered, or "distance" would not be the manipulation.
+  const mean = band => {
+    const d = trials.filter(t => t.values.pair.band === band).map(t => t.values.pair.distance);
+    return d.reduce((a, b) => a + b, 0) / d.length;
+  };
+  assert.ok(mean('short') < mean('medium'), 'short scans are not shorter than medium ones');
+  assert.ok(mean('medium') < mean('long'), 'medium scans are not shorter than long ones');
+});
+
+test('a scan trial names both landmarks before the clock starts', () => {
+  // The original shows "starting at X, scan to Y" for 1.5s and only then starts timing. Time
+  // the reading of two words into the measure and short scans gain a fixed cost that long
+  // ones also have — which flattens the very slope the experiment is looking for.
+  const scanning = mrBlock('scanning');
+  const phases = scanning.design.trial.phases;
+  const ready = phases.find(p => p.name === 'ready');
+  const scan = phases.find(p => p.name === 'scan');
+
+  assert.ok(ready, 'there is no naming phase before the scan');
+  assert.equal(ready.durationMs, 1500);
+  assert.ok(!ready.startsClock, 'the clock must not start while the pair is being read');
+  assert.ok(scan.startsClock && scan.awaitsResponse);
+});
+
+test('scanning is not scored, because there is no right answer', () => {
+  // Pressing space when you "arrive" cannot be correct or incorrect. Scoring it would put a
+  // fabricated accuracy on the dashboard and, worse, let `correctOnly` silently drop trials.
+  const scanning = mrBlock('scanning');
+  assert.equal(scanning.design.trial.correct.kind, 'none');
+  assert.equal(scanning.design.trial.response.options.length, 1);
+  assert.equal(scanning.design.trial.response.options[0].key, ' ');
+});
+
+// ── W. Correlation as a measure ───────────────────────────────────────────────
+//
+// "RT rises with X" is one of the most common claims in the field, and the number that
+// states it is an r, which no group mean can express.
+
+test('pearson matches a correlation worked by hand', () => {
+  // A perfect positive relationship, a perfect negative one, and a real one.
+  assert.equal(pearson([{ x: 1, y: 2 }, { x: 2, y: 4 }, { x: 3, y: 6 }]), 1);
+  assert.equal(pearson([{ x: 1, y: 6 }, { x: 2, y: 4 }, { x: 3, y: 2 }]), -1);
+  const r = pearson([{ x: 0, y: 500 }, { x: 60, y: 620 }, { x: 120, y: 700 }, { x: 180, y: 900 }]);
+  assert.ok(r > 0.97 && r < 0.99, `expected about .98, got ${r}`);
+});
+
+test('an unmeasurable correlation is absent, not zero', () => {
+  // Zero reads as "no relationship". For someone who pressed at one speed all through, or
+  // saw one value of x, the truth is "not measurable from this person" — and averaging a
+  // zero in would drag everyone else's real correlation towards nothing.
+  assert.equal(pearson([{ x: 1, y: 2 }, { x: 2, y: 4 }]), null, 'two points is not a correlation');
+  assert.equal(pearson([{ x: 5, y: 1 }, { x: 5, y: 2 }, { x: 5, y: 3 }]), null, 'no spread in x');
+  assert.equal(pearson([{ x: 1, y: 7 }, { x: 2, y: 7 }, { x: 3, y: 7 }]), null, 'no spread in y');
+});
+
+test('a correlation is computed per participant, then averaged', () => {
+  // The reason it must be: one uniformly slow participant sits above everyone else at EVERY
+  // value of x, so pooling the class would read their slowness as a relationship. Here two
+  // people each have a perfect within-person correlation; pooled, the cloud is a mess.
+  const row = (participant, angle, rt) => ({
+    participant_name: participant, pair_angle: angle, reaction_time_ms: rt, is_correct: true,
+  });
+  const rows = [
+    row('fast', 0, 400), row('fast', 60, 500), row('fast', 120, 600), row('fast', 180, 700),
+    row('slow', 0, 1400), row('slow', 60, 1500), row('slow', 120, 1600), row('slow', 180, 1700),
+  ];
+  const stat = { label: 'angle', measure: 'correlation', against: 'pair.angle' };
+  const value = statValue(stat, rows);
+  assert.ok(value > 0.999, `each participant is a perfect line, so the mean r should be 1, got ${value}`);
+});
+
+test('a correlation card ignores rows from other blocks', () => {
+  // mentalRep has two correlations on one dashboard, over two different fields. Without the
+  // stage filter each would be computed over the other block's rows as well — where its own
+  // field is absent, so the number would quietly be built from whichever trials had it.
+  const stats = MENTAL_REP.dashboard.stats.filter(s => s.measure === 'correlation');
+  assert.equal(stats.length, 2);
+  for (const stat of stats) {
+    assert.ok(stat.filter && stat.filter.stage, `"${stat.label}" is not filtered to one block`);
+  }
+});
+
+test('a correlation against an unstored field is reported, not left blank', () => {
+  const broken = {
+    ...MENTAL_REP,
+    dashboard: {
+      ...MENTAL_REP.dashboard,
+      stats: [{ label: 'Nonsense', measure: 'correlation', against: 'pair.nothing' }],
+    },
+  };
+  const messages = validate(broken).map(i => i.message).join('\n');
+  assert.match(messages, /pair\.nothing/);
 });

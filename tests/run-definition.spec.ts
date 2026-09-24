@@ -1551,3 +1551,100 @@ test.describe('Visual search, the ported experiment', () => {
     await expect(page.locator('.recharts-surface')).toHaveCount(6, { timeout: 15_000 });
   });
 });
+
+test.describe('a later block brings its own practice', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  /**
+   * Two blocks, and it is the SECOND one that practises.
+   *
+   * The shape mentalRep has: a session whose second half is a different task, which a
+   * participant meets after finishing the first. `Stage.practice` typechecked and validated
+   * long before anything ran it — only the definition's own first block was ever practised —
+   * so the practice was declared, silently skipped, and nothing anywhere said so.
+   */
+  const twoPart = {
+    version: 1,
+    slug: 'e2eStagePractice',
+    title: 'Two part',
+    titleHe: 'שני חלקים',
+    category: 'MEMORY',
+    instructions: { en: 'Part one, then part two.', he: 'חלק ראשון, ואז שני.' },
+    factors: [{ name: 'colour', levels: ['red'] }],
+    repetitions: 1,
+    stageName: 'partOne',
+    trial: {
+      phases: [{ name: 'stim', display: { kind: 'text', text: 'ONE' }, awaitsResponse: true, startsClock: true }],
+      response: { kind: 'choice', layout: 'row', options: [{ value: 'red', label: 'Red' }] },
+      correct: { kind: 'matchesFactor', factor: 'colour' },
+      itiMs: 0,
+    },
+    store: ['colour'],
+    stages: [{
+      name: 'partTwo',
+      title: { en: 'Part two', he: 'חלק שני' },
+      instructions: { en: 'A different task now.', he: 'משימה אחרת.' },
+      factors: [{ name: 'shape', levels: ['square', 'circle'] }],
+      repetitions: 1,
+      practice: { count: 2, feedback: true, record: false },
+      trial: {
+        phases: [{ name: 'stim', display: { kind: 'text', text: 'TWO' }, awaitsResponse: true, startsClock: true }],
+        response: {
+          kind: 'choice',
+          layout: 'row',
+          options: [{ value: 'square', label: 'Square' }, { value: 'circle', label: 'Circle' }],
+        },
+        correct: { kind: 'matchesFactor', factor: 'shape' },
+        feedback: { durationMs: 300, correct: { en: 'Correct', he: 'נכון' }, incorrect: { en: 'Incorrect', he: 'לא נכון' } },
+        itiMs: 0,
+      },
+      store: ['shape'],
+    }],
+    thanks: { showResults: false },
+    dashboard: { charts: [{ title: 'Shapes', kind: 'bar', groupBy: 'shape', measure: 'accuracy' }] },
+  };
+
+  test('part two practises first, and its practice is not saved', async ({ page }) => {
+    const saved = await runPreview(page, twoPart as never);
+
+    // Part one: one trial, no practice of its own.
+    await page.getByRole('button', { name: 'Red' }).click();
+
+    // Then part two's intro, and only then its practice.
+    await expect(page.getByRole('heading', { name: 'Part two' })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: /continue|start|המשך/i }).click();
+
+    // Two practice trials, each giving feedback — which is how a participant can tell this
+    // is practice at all.
+    for (let i = 0; i < 2; i++) {
+      await page.getByRole('button', { name: 'Square' }).first().click();
+      await expect(page.getByText(/Correct|Incorrect/)).toBeVisible({ timeout: 5000 });
+    }
+
+    // The screen that says the practice did not count. Before this fix a participant went
+    // straight from part one's last trial into part two's real trials.
+    await expect(page.getByRole('heading', { name: 'Practice complete!' })).toBeVisible({ timeout: 10_000 });
+    // And it counts the block that is about to run, not the definition's first block.
+    await expect(page.getByText('2 trials')).toBeVisible();
+    await page.getByRole('button', { name: 'Start' }).click();
+
+    for (let i = 0; i < 2; i++) {
+      await page.getByRole('button', { name: /Square|Circle/ }).first().click();
+      await page.waitForTimeout(400);
+    }
+
+    await expect(page.getByRole('heading', { name: /thank you/i })).toBeVisible({ timeout: 15_000 });
+
+    // Three rows: part one's single trial and part two's two real trials. The practice is
+    // `record: false`, so if it were saved the class's accuracy would include trials taken
+    // before the participant knew the task.
+    if (await rowsSent(saved, 3)) {
+      const stages = saved.map(r => {
+        const row = r as { stage?: string; payload?: { stage?: string } };
+        return row.stage ?? row.payload?.stage;
+      });
+      expect(stages.filter(s => s === 'partTwo')).toHaveLength(2);
+      expect(saved).toHaveLength(3);
+    }
+  });
+});

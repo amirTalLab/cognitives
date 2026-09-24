@@ -486,8 +486,76 @@ type StatSpec = NonNullable<ExperimentDefinition['dashboard']['stats']>[number];
  * single group — so a card and a chart of the same measure can never disagree.
  */
 export function statValue(stat: StatSpec, rows: ResultRow[]): number | null {
-  const [point] = aggregate({ ...stat, title: stat.label, kind: 'bar', groupBy: 'all' }, rows);
+  if (stat.measure === 'correlation') return correlationValue(stat, rows);
+  // Past the guard above, the measure is one a chart understands — but the union still
+  // carries 'correlation', which no ChartSpec has.
+  const measure = stat.measure as ChartSpec['measure'];
+  const [point] = aggregate({ ...stat, measure, title: stat.label, kind: 'bar', groupBy: 'all' }, rows);
   return point ? point.value : null;
+}
+
+/**
+ * Mean within-participant correlation between a stored number and reaction time.
+ *
+ * "RT rises with X" is one of the most common claims in the field — with rotation angle,
+ * with distance scanned, with set size, with memory load — and the number that states it is
+ * a correlation, which no group mean can express. Every other measure here answers "how much
+ * on average"; this one answers "how tightly does it track".
+ *
+ * Per participant FIRST, then averaged, for the same reason the error bars are: one person
+ * who is uniformly slow would otherwise inflate the correlation for the whole class, since
+ * their slow trials sit above everyone else's at every value of X. The class mean of
+ * individual rs is the number the hand-built dashboards reported, and it is the honest one.
+ *
+ * Participants with fewer than three usable trials, or with no variation in X or in RT, are
+ * left out rather than counted as zero: r is undefined there, and zero would read as "no
+ * relationship" when the truth is "not measurable from this person".
+ */
+function correlationValue(stat: StatSpec, allRows: ResultRow[]): number | null {
+  const against = stat.against;
+  if (!against) return null;
+  const field = against.replace(/\./g, '_');
+
+  const chart = { ...stat, title: stat.label, kind: 'bar', groupBy: 'all' } as ChartSpec;
+  const rows = allRows.filter(r =>
+    included(chart, r)
+    && typeof r.reaction_time_ms === 'number'
+    && typeof r[field] === 'number');
+
+  const byParticipant = new Map<string, { x: number; y: number }[]>();
+  for (const row of rows) {
+    const key = String(row.participant_name);
+    if (!byParticipant.has(key)) byParticipant.set(key, []);
+    byParticipant.get(key)!.push({ x: row[field] as number, y: row.reaction_time_ms as number });
+  }
+
+  const rs: number[] = [];
+  for (const points of byParticipant.values()) {
+    const r = pearson(points);
+    if (r !== null) rs.push(r);
+  }
+  if (!rs.length) return null;
+  return rs.reduce((a, b) => a + b, 0) / rs.length;
+}
+
+/** Pearson's r, or null where it is undefined — fewer than three points, or no spread. */
+export function pearson(points: { x: number; y: number }[]): number | null {
+  const n = points.length;
+  if (n < 3) return null;
+
+  const sumX = points.reduce((a, p) => a + p.x, 0);
+  const sumY = points.reduce((a, p) => a + p.y, 0);
+  const sumXY = points.reduce((a, p) => a + p.x * p.y, 0);
+  const sumX2 = points.reduce((a, p) => a + p.x * p.x, 0);
+  const sumY2 = points.reduce((a, p) => a + p.y * p.y, 0);
+
+  const numerator = n * sumXY - sumX * sumY;
+  const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+  // A participant who pressed at the same speed every time, or saw one value of x: the
+  // relationship is not zero, it is unmeasurable, and averaging a zero in would dilute
+  // everyone else's real correlation towards nothing.
+  if (denominator === 0) return null;
+  return numerator / denominator;
 }
 
 /** One point of an `xy` chart: a participant, placed by two different measures. */

@@ -111,5 +111,6 @@ export const config = {
     '/run/srt/:path*',
     '/run/CompositeFace/:path*',
     '/run/visualSearch/:path*',
+    '/run/mentalRep/:path*',
   ],
 };

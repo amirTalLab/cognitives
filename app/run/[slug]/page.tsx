@@ -21,7 +21,7 @@ import { DisplayView } from '@/lib/experiment-runtime/DisplayView';
 // generation test.
 type Stage =
   | 'loading' | 'missing' | 'landing' | 'practice' | 'practiceDone' | 'main'
-  | 'stageIntro' | 'stageRun' | 'thanks';
+  | 'stageIntro' | 'stagePractice' | 'stageRun' | 'thanks';
 
 export default function RunPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -40,16 +40,18 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   // one and a participant could study one list and then be tested on another.
   const plan = useMemo(() => (def ? planStages(def) : []), [def]);
 
-  // For the practice-complete screen. Counted from the design, since the main block's runner
-  // has not been built yet when that screen is up.
+  // For the practice-complete screen. Counted from the design, since the block's runner has
+  // not been built yet when that screen is up. `stageIdx` rather than the definition,
+  // because a later block runs its own practice and its own trial count is the one to show.
   const mainTrialCount = useMemo(() => {
-    if (!def) return 0;
+    const block = plan[stageIdx];
+    if (!block) return 0;
     try {
-      return buildTrials(def).length;
+      return buildTrials(block.design, { context: block.context }).length;
     } catch {
       return 0;
     }
-  }, [def]);
+  }, [plan, stageIdx]);
 
   useEffect(() => {
     // Caught as well as resolved: an unhandled rejection leaves the stage on 'loading',
@@ -148,7 +150,9 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
             <p className="text-gray-500 text-sm">{mainTrialCount} {rtl ? 'ניסיונות' : 'trials'}</p>
           )}
         </div>
-        <button onClick={() => setStage('main')}
+        {/* Back to whichever block the practice belonged to: the definition's own first
+            block, or a later stage that brought its own practice with it. */}
+        <button onClick={() => setStage(stageIdx === 0 ? 'main' : 'stageRun')}
           className="px-10 py-4 bg-purple-500 hover:bg-purple-400 text-white font-bold text-xl rounded-xl touch-manipulation">
           {rtl ? 'התחל' : 'Start'}
         </button>
@@ -163,8 +167,11 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
       setStageIdx(nextIdx);
       // Zero means no intro screen at all, not one that vanishes instantly: DRM's arithmetic
       // runs straight into its recall, and a screen flashing between them would be a pause
-      // the original does not have.
-      setStage(plan[nextIdx].autoAdvanceMs === 0 ? 'stageRun' : 'stageIntro');
+      // the original does not have. A block with its own practice still practises first —
+      // skipping the intro must not also skip the practice.
+      const next = plan[nextIdx];
+      setStage(next.autoAdvanceMs !== 0 ? 'stageIntro'
+        : next.design.practice ? 'stagePractice' : 'stageRun');
     } else {
       setStage('thanks');
     }
@@ -190,7 +197,25 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   if (stage === 'stageIntro') {
     const next = plan[stageIdx];
     if (!next) return null;
-    return <StageIntro block={next} rtl={rtl} onDone={() => setStage('stageRun')} />;
+    // A later block can bring its own practice, and until this existed it was declared and
+    // silently skipped: `Stage.practice` typechecked, validated, and never reached a
+    // participant. Only the definition's first block was ever practised, so a two-part
+    // experiment — mental rotation after mental scanning, a second task after a first —
+    // dropped the practice for every part but the opening one with nothing to show for it.
+    return (
+      <StageIntro block={next} rtl={rtl}
+        onDone={() => setStage(next.design.practice ? 'stagePractice' : 'stageRun')} />
+    );
+  }
+
+  if (stage === 'stagePractice') {
+    const current = plan[stageIdx];
+    if (!current) return null;
+    return (
+      <Runner key={`stage-practice-${stageIdx}`} definition={def} design={current.design}
+        context={current.context} language={language} practice
+        onComplete={() => setStage('practiceDone')} />
+    );
   }
 
   if (stage === 'stageRun') {

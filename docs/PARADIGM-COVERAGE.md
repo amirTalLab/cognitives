@@ -54,6 +54,24 @@ per studied item.
 5. **Audio** — generated tones, stereo presentation
 6. **Within-trial sequences** — RSVP streams, alternating displays
 
+> **Update — slopes, and practising a later block.** Two additions from porting mental
+> representation, neither of which changes the count above because both paradigms were
+> already reachable — what they change is whether the RESULT can be stated.
+>
+> `StatSpec.measure: 'correlation'`, with `against` naming a stored number, reports the mean
+> within-participant correlation between that number and reaction time. A large family of
+> findings is a slope rather than a contrast — time against rotation angle, against distance
+> scanned, against set size, against memory load — and a bar chart of group means cannot say
+> what an r says. Computed per participant and then averaged, because one uniformly slow
+> person sits above everyone else at every value of x, so pooling the class would read their
+> slowness as a relationship.
+>
+> `Stage.practice` now actually runs. It was in the type and in the validator from the day
+> stages were added, and nothing ever executed it: only the definition's first block was
+> practised, so any session whose second half is a different task sent participants into it
+> cold. Declared, silently skipped, and nothing said so — the failure mode this project keeps
+> meeting, and the reason the browser test matters more than the offline one here.
+>
 > **Update — withheld responses.** `timeoutMs` on a response phase, with `trial.earlyFrom`
 > for too-early presses and `trial.feedback` for per-outcome messages. Built to port Posner
 > cueing, whose catch trials need them. Go/No-Go is buildable; stop-signal still needs an

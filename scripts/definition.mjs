@@ -168,9 +168,19 @@ function describe(def) {
       totalMs += block.design.endsAfterMs ?? timing.fixed * blockTrials.length;
       totalMs += block.autoAdvanceMs ?? 0;
 
-      const seen = counts.get(block.stage) ?? { runs: 0, trials: 0, timed: !!block.design.endsAfterMs };
+      // A later block can practise too, and its practice is real time a class has to sit
+      // through. Counted from the first block's `practice` alone, a session that practises
+      // before its second half was reported shorter than it is.
+      const blockPractice = block.design.practice
+        ? buildTrials(block.design, { practice: true, rng, context: block.context }).length
+        : 0;
+      totalMs += timing.fixed * blockPractice;
+
+      const seen = counts.get(block.stage)
+        ?? { runs: 0, trials: 0, practice: 0, timed: !!block.design.endsAfterMs };
       seen.runs += 1;
       seen.trials += blockTrials.length;
+      seen.practice += blockPractice;
       counts.set(block.stage, seen);
     }
 
@@ -179,7 +189,10 @@ function describe(def) {
       const each = seen.timed
         ? 'timed'
         : `${Math.round(seen.trials / seen.runs)} trial${seen.trials / seen.runs === 1 ? '' : 's'}`;
-      say(`    ${c.dim('·')} ${name}: ${seen.runs}× ${c.dim(`(${each} each)`)}`);
+      const practised = seen.practice
+        ? `, + ${Math.round(seen.practice / seen.runs)} practice`
+        : '';
+      say(`    ${c.dim('·')} ${name}: ${seen.runs}× ${c.dim(`(${each} each${practised})`)}`);
     }
   }
 
