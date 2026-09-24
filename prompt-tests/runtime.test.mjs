@@ -2804,7 +2804,12 @@ test('no definition in the repo reaches for the hatch without needing it', () =>
       }
     }
   }
-  assert.ok(used.length <= 3, `components are in use by ${used.length} phases: ${used.join(', ')}`);
+  // DISTINCT components, not phase occurrences: bRMS shares one trial across three blocks,
+  // which is one escape-hatch decision rather than three.
+  const distinct = [...new Set(used.map(u => u.split(':')[1]))];
+  assert.ok(distinct.length <= 3,
+    `${distinct.length} components are in use: ${distinct.join(', ')}. Each one is a phase no`
+    + ' lecturer can edit and no paper can generate — check it breaks one of the three rules.');
 });
 
 // ── AA. Reasoning biases ──────────────────────────────────────────────────────
@@ -3171,4 +3176,132 @@ test('the port declares the one thing it cannot do yet', () => {
   assert.ok(CREATIVITY.simplifications?.length);
   const text = CREATIVITY.simplifications.map(s => `${s.what} ${s.why}`).join(' ');
   assert.match(text, /Hebrew/);
+});
+
+// ── AC. bRMS ──────────────────────────────────────────────────────────────────
+//
+// A face suppressed by flashing masks, and the measure is how long it stays invisible. The
+// point of this port is how ORDINARY it is: crossed factors, a spine-and-payload row, bar
+// charts the runtime already draws. One phase is code, and one screen is.
+
+const BRMS = ports.PORTS.find(p => p.slug === 'bRMS');
+const brmsPlan = () => planStages(BRMS, seededRandom(23));
+const brmsStimuli = await import('../lib/brms-emotion/stimuli.ts');
+
+test('bRMS runs 108 trials in three blocks, plus practice', () => {
+  const rng = seededRandom(23);
+  const plan = planStages(BRMS, rng);
+  const counts = plan.map(b => buildTrials(b.design, { rng, context: b.context }).length);
+
+  assert.equal(counts.length, 3, 'the original breaks every 36 trials, which is three blocks');
+  assert.deepEqual(counts, [36, 36, 36]);
+  assert.equal(counts.reduce((a, b) => a + b, 0), brmsStimuli.TRIALS_PER_CELL * 6);
+  assert.equal(BRMS.practice.count, brmsStimuli.PRACTICE_TOTAL);
+});
+
+test('every cell of the design gets the trials the original gives it', () => {
+  // 3 emotions x 2 orientations x 18 each. Identity is crossed so each appears three times
+  // in every cell, which is what the original's shuffled cycle produces.
+  const rng = seededRandom(23);
+  const trials = brmsPlan().flatMap(b => buildTrials(b.design, { rng, context: b.context }));
+
+  for (const emotion of ['fearful', 'happy', 'neutral']) {
+    for (const orientation of ['upright', 'inverted']) {
+      const cell = trials.filter(t => t.values.emotion === emotion && t.values.orientation === orientation);
+      assert.equal(cell.length, brmsStimuli.TRIALS_PER_CELL,
+        `${emotion}/${orientation} has ${cell.length} trials`);
+
+      for (const id of brmsStimuli.IDENTITY_IDS) {
+        const forId = cell.filter(t => t.values.identity === id).length;
+        assert.equal(forId, 3, `identity ${id} appears ${forId} times in ${emotion}/${orientation}`);
+      }
+    }
+  }
+});
+
+test('the face appears on each side equally often', () => {
+  // Counterbalanced rather than crossed: it has to be even, and crossing it would double a
+  // 108-trial session to 216.
+  const rng = seededRandom(23);
+  const trials = brmsPlan().flatMap(b => buildTrials(b.design, { rng, context: b.context }));
+  const left = trials.filter(t => t.values.side === 'left').length;
+  assert.equal(left, trials.length / 2, `${left} of ${trials.length} trials had the face on the left`);
+});
+
+test('the suppression phase is code, and it is the only part that is', () => {
+  // The escape hatch's second case, and the clearest: masks for four frames, face for two,
+  // at 60Hz, with contrast ramping over exactly three seconds. A phase with a duration
+  // cannot say that, and running a frame long lets the face through early — which shortens
+  // the very number the experiment exists to measure.
+  const [fixation, suppression] = BRMS.trial.phases;
+  assert.equal(fixation.component, undefined, 'a fixation cross does not need code');
+  assert.equal(suppression.component, 'bRMSSuppression');
+  assert.ok(suppression.awaitsResponse && suppression.startsClock);
+  // It still declares what it collects, so the answer lands in the ordinary column.
+  assert.equal(BRMS.trial.response.kind, 'choice');
+  assert.deepEqual(BRMS.trial.response.options.map(o => o.value), ['left', 'right']);
+});
+
+test('the run is gated on measuring the display', () => {
+  // The stimulus is specified in degrees of visual angle. A frame sized in pixels is a
+  // different experiment on every screen, so this cannot start until the physical width is
+  // known — which no definition can describe and no trial can measure.
+  assert.equal(BRMS.onboarding, 'calibrateDisplay');
+  assert.ok(componentNames.ONBOARDING_COMPONENTS.includes('calibrateDisplay'));
+});
+
+test('everything except those two is ordinary', () => {
+  // The whole argument for an escape hatch rather than a second platform. If this experiment
+  // needed its own results shape or its own dashboard, it would have been the case for one.
+  assert.equal(BRMS.trial.correct.kind, 'matchesFactor');
+  assert.deepEqual(BRMS.store, ['emotion', 'orientation', 'identity', 'side']);
+  for (const chart of BRMS.dashboard.charts) {
+    assert.ok(['bar', 'line', 'xy', 'scatter'].includes(chart.kind),
+      `chart "${chart.title}" needs a kind the runtime does not have`);
+  }
+  assert.deepEqual(errorsOf(BRMS), []);
+});
+
+test('the timing flag and the rescue are recorded, not hidden', () => {
+  // A trial rendered on a struggling machine has a breakthrough time that is partly about
+  // the machine, and one answered after the masks began to fade is not a breakthrough at
+  // all. A lecturer excluding those has to be able to see which they were.
+  const source = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'components.tsx'), 'utf8');
+  const component = source.split('function BRMSSuppression')[1] ?? '';
+  for (const field of ['timing_flag', 'rescue_triggered', 'side_shown', 'stimulus_set']) {
+    assert.ok(component.includes(field), `the component does not record ${field}`);
+  }
+});
+
+test('the suppression timings are the original\'s, not retyped', () => {
+  // Imported from lib/brms-emotion/stimuli.ts, so the flicker cannot drift from the file the
+  // hand-built experiment uses.
+  const source = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'components.tsx'), 'utf8');
+  assert.match(source, /from '\.\.\/brms-emotion\/stimuli'/);
+  for (const constant of ['CYCLE_FRAMES', 'MASK_FRAMES', 'RAMP_MS', 'MAX_CONTRAST', 'RESCUE_START_MS']) {
+    assert.ok(source.includes(constant), `${constant} is not imported`);
+  }
+  // And the cycle really is four mask frames and two face frames.
+  assert.equal(brmsStimuli.CYCLE_FRAMES, 6);
+  assert.equal(brmsStimuli.MASK_FRAMES, 4);
+});
+
+test('the port declares the ordering rule it cannot express', () => {
+  assert.ok(BRMS.simplifications?.length);
+  const text = BRMS.simplifications.map(s => `${s.what} ${s.why}`).join(' ');
+  assert.match(text, /consecutive|neighbour/i);
+});
+
+test('mock data shows a fearful face breaking through first', () => {
+  const rows = generateMockRows(BRMS);
+  const meanFor = emotion => {
+    const times = rows
+      .filter(r => r.emotion === emotion && r.is_correct && typeof r.reaction_time_ms === 'number')
+      .map(r => r.reaction_time_ms);
+    return times.reduce((a, b) => a + b, 0) / times.length;
+  };
+  assert.ok(meanFor('fearful') < meanFor('neutral'),
+    `fearful ${Math.round(meanFor('fearful'))}ms is not faster than neutral ${Math.round(meanFor('neutral'))}ms`);
 });

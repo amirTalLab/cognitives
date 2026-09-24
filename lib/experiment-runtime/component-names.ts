@@ -34,6 +34,8 @@
 export const PHASE_COMPONENTS = [
   /** Wason's 2-4-6 rule discovery: the participant proposes triples and is told yes or no. */
   'wasonRuleDiscovery',
+  /** Continuous flash suppression: a per-frame contract no declarative phase can hold. */
+  'bRMSSuppression',
 ] as const;
 
 /**
@@ -44,7 +46,10 @@ export const PHASE_COMPONENTS = [
  * locks the display to landscape. Nothing a definition can describe, and nothing that
  * belongs in a trial.
  */
-export const ONBOARDING_COMPONENTS = [] as const;
+export const ONBOARDING_COMPONENTS = [
+  /** Measures the physical screen, checks the frame rate, then goes fullscreen and landscape. */
+  'calibrateDisplay',
+] as const;
 
 export type PhaseComponentName = typeof PHASE_COMPONENTS[number];
 export type OnboardingComponentName = typeof ONBOARDING_COMPONENTS[number];

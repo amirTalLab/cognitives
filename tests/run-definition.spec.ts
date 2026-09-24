@@ -2017,3 +2017,84 @@ test.describe('Creativity, the ported battery', () => {
     ).toBe(true);
   });
 });
+
+test.describe('bRMS, the ported experiment', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  /**
+   * The escape hatch's hardest case, end to end.
+   *
+   * Two custom surfaces — a calibration gate before the run and a frame-accurate suppression
+   * phase inside it — with ordinary blocks, rows and charts around them. If this works, the
+   * decision to add an escape hatch rather than a second platform holds.
+   */
+  test('the display is calibrated first, then a face breaks through and is answered', async ({ page }) => {
+    test.setTimeout(90_000);
+    const saved = await runBuiltIn(page, 'bRMS');
+
+    // The gate: size a coin, check the frame rate, then start. It must not be skippable,
+    // because a frame sized in pixels is a different experiment on every screen.
+    await expect(page.getByText(/Hold a 1₪ coin/)).toBeVisible({ timeout: 15_000 });
+    await page.locator('input[type="range"]').fill('90');
+    await page.getByRole('button', { name: 'That looks right' }).click();
+
+    // The frame check reports and lets through either way — a participant who cannot start
+    // is worse than one whose data carries a caveat.
+    await expect(page.getByText(/display is steady enough|not perfectly steady/)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'That looks right' }).click();
+
+    await expect(page.getByText(/Sit about \d+ cm/)).toBeVisible();
+    await page.getByRole('button', { name: 'Start' }).click();
+
+    // And what it measured is kept, in the place the hand-built pages keep it.
+    const pxPerMm = await page.evaluate(() => sessionStorage.getItem('brms_px_per_mm'));
+    expect(Number(pxPerMm)).toBeGreaterThan(0);
+
+    // The suppression phase: a canvas of masks and a face image, and two answers.
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 20_000 });
+    const left = page.getByRole('button', { name: 'Left', exact: true });
+    await expect(left).toBeVisible();
+
+    // The face really is being flashed rather than sitting there: its opacity changes
+    // between frames, which is the whole manipulation.
+    const opacities = new Set<string>();
+    for (let i = 0; i < 12; i++) {
+      opacities.add(await page.locator('main img').first().evaluate(el => (el as HTMLElement).style.opacity));
+      await page.waitForTimeout(40);
+    }
+    expect(opacities.size, 'the face never changed opacity, so nothing was flickering').toBeGreaterThan(1);
+
+    await left.click();
+
+    // Practice comes first and is deliberately not recorded, so the first saved row is a
+    // dozen answers away. Answer whatever is on screen — including the screen between
+    // practice and the real block — until one arrives.
+    for (let i = 0; i < 12; i++) {
+      const start = page.getByRole("button", { name: /^(Start|התחל)$/ });
+      if (await start.count() > 0) { await start.first().click(); await page.waitForTimeout(400); }
+      // Waited for, not counted: a fixation cross runs between trials and there are no
+      // buttons during it, so checking once finds nothing and stops after one answer.
+      const button = page.getByRole("button", { name: "Left", exact: true });
+      await expect(button).toBeVisible({ timeout: 25_000 });
+      await button.click();
+      await page.waitForTimeout(300);
+    }
+
+    // The row carries the ordinary spine plus what the component observed.
+    await expect.poll(
+      () => saved.some(r => {
+        const row = r as { payload?: Record<string, unknown> };
+        return row.payload?.timing_flag !== undefined;
+      }),
+      { message: 'no row carried the component\'s own columns', timeout: 10_000 },
+    ).toBe(true);
+
+    const row = saved.find(r => (r as { payload?: Record<string, unknown> }).payload?.timing_flag !== undefined) as
+      { response?: string; payload?: Record<string, unknown> };
+    expect(['left', 'right']).toContain(String(row.response));
+    expect(['fearful', 'happy', 'neutral']).toContain(String(row.payload?.emotion));
+    expect(['upright', 'inverted']).toContain(String(row.payload?.orientation));
+    expect(row.payload?.rescue_triggered).toBe(false);
+    expect(row.payload?.side_shown).toBeTruthy();
+  });
+});

@@ -52,7 +52,8 @@ export const EXPERIMENTS: Exp[] = [
   { id: 'logics',          title: 'Reasoning Biases',       titleHe: 'הטיות בחשיבה',         icon: Lightbulb, color: 'text-yellow-400', href: '/run/logics' },
   // Ported. app/creativity/ still serves its own rows at /creativity/teacher.
   { id: 'creativity',      title: 'Creativity Battery',     titleHe: 'סוללת יצירתיות',       icon: Sparkles,  color: 'text-emerald-400', href: '/run/creativity' },
-  { id: 'bRMS',             title: 'bRMS Emotion',           titleHe: 'bRMS רגש',              icon: Eye,       color: 'text-purple-400'  },
+  // Ported. app/bRMS/ still serves its own rows at /bRMS/teacher.
+  { id: 'bRMS',             title: 'bRMS Emotion',           titleHe: 'bRMS רגש',              icon: Eye,       color: 'text-purple-400', href: '/run/bRMS' },
   // The card used to point at /run/flankerLetterTask, which exists nowhere — not published,
   // not built in — so it showed students "No experiment named". It now runs the built-in
   // Eriksen flanker; publishing a definition under this slug replaces it.

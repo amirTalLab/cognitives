@@ -115,5 +115,6 @@ export const config = {
     '/run/summaryStats/:path*',
     '/run/logics/:path*',
     '/run/creativity/:path*',
+    '/run/bRMS/:path*',
   ],
 };

@@ -1,4 +1,4 @@
-import { Emotion, Orientation, Side, Trial } from '@/types/brms-emotion';
+import type { Emotion, Orientation, Side, Trial } from '@/types/brms-emotion';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 

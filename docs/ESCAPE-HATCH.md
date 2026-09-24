@@ -90,9 +90,30 @@ property is not negotiable.
   trade above is being made repeatedly and silently.
 - A test asserts the boundary is still stated in `schema.ts`, where the generator reads it.
 
+## How it turned out
+
+Built 2026-09-24 and used by both candidates the same day.
+
+**Wason's rule task** (logics) — one phase of a 23-question battery. The other 22 questions
+are ordinary data a lecturer can edit, which is exactly what the second-template design would
+have cost.
+
+**bRMS** — two custom surfaces, a suppression phase and a calibration gate, around an
+entirely ordinary experiment: 108 trials from crossed factors in three blocks, a
+spine-and-payload row, four charts the runtime already drew. Nothing about its results,
+dashboard or publishing needed anything new. This was the case that would have justified a
+second platform, and it did not need one.
+
+**The drawing task** (creativity) turned out not to be an escape-hatch case at all, as
+predicted below: `{ kind: 'drawing' }` is a response kind. Two occupants, not three.
+
 ## Still open
 
-The drawing task is probably **not** an escape-hatch case: "draw something" is a response
-kind, no less declarative than the `wordList` response DRM's recall already uses. It should
-be tried as `{ kind: 'drawing' }` before anyone writes a component for it. bRMS may similarly
-reduce to a `flicker` display kind; that one has not been examined closely enough to promise.
+bRMS's suppression might still reduce to a `flicker` display kind one day — a mask stream and
+a ramping overlay are not obviously undeclarable. It was not attempted, because the timing
+contract is the experiment and a display kind that got it slightly wrong would shorten every
+breakthrough time in the dataset without anyone noticing.
+
+One ordering rule is still inexpressible: bRMS reshuffles until no two consecutive trials
+share an identity or a condition. Declared as a simplification on that port rather than
+worked around.
