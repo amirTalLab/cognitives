@@ -262,6 +262,34 @@ export interface Phase {
   name: string;
   display: Display;
   /**
+   * Render this phase with a named built-in component instead of the display above.
+   *
+   * THE ESCAPE HATCH, and it is meant to stay small. Allowed only where the runtime's three
+   * assumptions genuinely break: the participant authors the stimulus so there are no trials
+   * to plan (Wason's 2-4-6), the display cannot be declared (frame-accurate flash
+   * suppression), or the input is not an HTML control (freehand drawing). Never because a
+   * design is merely hard — ensemble perception looked like a candidate, and building it
+   * declaratively is what gave every experiment interleaving, estimation and sliders.
+   *
+   * The name must be one of `PHASE_COMPONENTS` in component-names.ts. A DEFINITION CANNOT
+   * INTRODUCE ONE: the pipeline writes JSON, and a component is code that ships with the
+   * site. So a generated experiment cannot use this, and an experiment that needs it is one
+   * to say no to rather than to approximate — a lookalike that drops the timing or the
+   * drawing is not the experiment.
+   *
+   * What it costs, which falls on the lecturer rather than on you: a phase that is code
+   * cannot be edited from /create and cannot be regenerated. Everything else about the
+   * experiment stays ordinary — same results table, same dashboard, same publish flow.
+   *
+   * `display` is still required and is what a preview or a still frame shows.
+   *
+   * A component phase still sets `awaitsResponse` and the trial still declares a `response`
+   * — `{ "kind": "text" }` for the rule task. The controls are not drawn, because the
+   * component draws its own, but the declared shape is what scoring and the results table
+   * are built from, so the answer lands in the same column as every other experiment's.
+   */
+  component?: string;
+  /**
    * Omitted on a response phase, which waits for input instead.
    * Bound because in cueing paradigms the interval itself is the manipulation.
    */
@@ -846,6 +874,19 @@ export interface ExperimentDefinition {
 
   /** Let a participant start without typing a name. A name is required by default. */
   nameOptional?: boolean;
+
+  /**
+   * A named gate between the landing page and the first trial.
+   *
+   * The same escape hatch as `Phase.component`, for a run that cannot begin until something
+   * about the DEVICE is settled: bRMS measures the physical width of the screen so its
+   * stimulus subtends the right visual angle, then locks the display to landscape. That is
+   * not a trial and not something a definition can describe.
+   *
+   * One of `ONBOARDING_COMPONENTS` in component-names.ts, and subject to the same rule —
+   * a generated experiment cannot use it, because it is code.
+   */
+  onboarding?: string;
 
   /** The closing screen. By default a thank-you with the participant's accuracy and mean RT. */
   thanks?: {

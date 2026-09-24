@@ -13,6 +13,7 @@ import { FlaskConical, Check } from 'lucide-react';
 import { ExperimentDefinition } from '@/lib/experiment-runtime/schema';
 import { getDefinition } from '@/lib/experiment-runtime/registry';
 import { Runner, TrialRow } from '@/lib/experiment-runtime/Runner';
+import { ONBOARDING_COMPONENT_MAP } from '@/lib/experiment-runtime/components';
 import { buildTrials, planStages, resolve, type PlannedBlock } from '@/lib/experiment-runtime/trials';
 import { DisplayView } from '@/lib/experiment-runtime/DisplayView';
 
@@ -20,7 +21,7 @@ import { DisplayView } from '@/lib/experiment-runtime/DisplayView';
 // walk whatever `stages` lists after it: DRM's recall, serial order's distractor, SRT's
 // generation test.
 type Stage =
-  | 'loading' | 'missing' | 'landing' | 'practice' | 'practiceDone' | 'main'
+  | 'loading' | 'missing' | 'landing' | 'onboarding' | 'practice' | 'practiceDone' | 'main'
   | 'stageIntro' | 'stagePractice' | 'stageRun' | 'thanks';
 
 export default function RunPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -84,7 +85,12 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
       sessionStorage.setItem(`${def.slug}_name`, name.trim());
       sessionStorage.setItem(`${def.slug}_language`, language);
       sessionStorage.setItem(`${def.slug}_session_id`, crypto.randomUUID());
-      setStage(def.practice ? 'practice' : 'main');
+      // A device gate first where the definition has one: bRMS cannot start until the
+      // physical width of the screen is known, or its stimulus is the wrong size in degrees.
+      // Only when the named gate actually exists — a name this site does not have must not
+      // strand a participant on a screen that will never render.
+      const gated = def.onboarding && ONBOARDING_COMPONENT_MAP[def.onboarding];
+      setStage(gated ? 'onboarding' : def.practice ? 'practice' : 'main');
     };
 
     return (
@@ -126,6 +132,19 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
           </form>
         </motion.div>
       </main>
+    );
+  }
+
+  // Between the landing page and the first trial, for a run that cannot begin until
+  // something about the device is settled. Looked up by name from a fixed map, never a path:
+  // an unknown name is skipped rather than blocking a participant on a screen that will
+  // never appear.
+  if (stage === 'onboarding') {
+    // Guaranteed to exist: the landing page only enters this stage when the name resolves.
+    const Gate = ONBOARDING_COMPONENT_MAP[def.onboarding!];
+    return (
+      <Gate language={language}
+        onDone={() => setStage(def.practice ? 'practice' : 'main')} />
     );
   }
 

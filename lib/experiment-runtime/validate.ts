@@ -14,6 +14,7 @@
 // type stripping — that leaves a value import of a types-only module behind and fails.
 import type { ExperimentDefinition, Factor, ResponseStep, Stage } from './schema';
 import { excluded, MAX_TRIALS, NO_RESPONSE } from './trials';
+import { ONBOARDING_COMPONENTS, PHASE_COMPONENTS } from './component-names';
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -306,6 +307,29 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     if (!isObj(p)) return bad(`Phase #${i + 1}`, 'an object');
     if (!isStr(p.name) || !p.name) bad(`Phase ${label(i, p.name)}'s "name"`, 'a non-empty string');
     if (!isObj(p.display)) bad(`Phase ${label(i, p.name)}'s "display"`, 'an object');
+
+    // The escape hatch is a fixed guest list. A name that is not on it renders nothing, and
+    // a blank screen in the middle of an experiment is the failure a participant cannot
+    // report — they assume it is meant to be like that.
+    //
+    // This is also the line the PIPELINE cannot cross: a component is code that ships with
+    // the site, and generation writes JSON. A model asked for continuous flash suppression
+    // might reasonably invent `"component": "flashSuppression"`, and the honest answer is
+    // that this site cannot run that experiment — not a definition that silently shows an
+    // empty box for 200ms a hundred times.
+    if (p.component !== undefined) {
+      if (!isStr(p.component)) {
+        bad(`Phase ${label(i, p.name)}'s "component"`, 'the name of a built-in component');
+      } else if (!(PHASE_COMPONENTS as readonly string[]).includes(p.component)) {
+        issues.push({
+          severity: 'error',
+          message: `Phase ${label(i, p.name)} asks for a component named "${p.component}", which `
+            + `this site does not have. The ones that exist are: ${PHASE_COMPONENTS.join(', ') || 'none'}. `
+            + 'A component is code, so a definition cannot introduce one — an experiment that '
+            + 'needs a new kind of phase has to be built by hand rather than generated.',
+        });
+      }
+    }
     if (p.timeoutMs !== undefined && !Number.isFinite(p.timeoutMs) && !isStr(p.timeoutMs)) {
       bad(`Phase ${label(i, p.name)}'s "timeoutMs"`, 'a number of milliseconds');
     }
@@ -407,6 +431,19 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     if (!isObj(s)) return bad(`Response #${i + 1}`, 'an object');
     if (!isStr((s as ResponseStep).kind)) bad(`Response #${i + 1}'s "kind"`, 'a string');
   });
+
+  // Same guest list for the gate before the first trial.
+  if (def.onboarding !== undefined) {
+    if (!isStr(def.onboarding)) {
+      bad('"onboarding"', 'the name of a built-in gate');
+    } else if (!(ONBOARDING_COMPONENTS as readonly string[]).includes(def.onboarding)) {
+      issues.push({
+        severity: 'error',
+        message: `"onboarding" asks for a gate named "${def.onboarding}", which this site does `
+          + `not have. The ones that exist are: ${ONBOARDING_COMPONENTS.join(', ') || 'none'}.`,
+      });
+    }
+  }
 
   // One rule, or one per kind of trial for a block that interleaves two tasks.
   const correctForm = def.trial.correct as Record<string, unknown>;

@@ -19,6 +19,7 @@ import {
   phaseDuration, resolve, SHOWN, Trial,
 } from './trials';
 import { DisplayView, SEED_KEY, ASSET_BASE_KEY, LANGUAGE_KEY } from './DisplayView';
+import { PHASE_COMPONENT_MAP } from './components';
 import { saveTrial } from './store';
 
 /** One completed trial, ready to be stored. */
@@ -116,6 +117,9 @@ export function Runner({
   const rows = useRef<TrialRow[]>([]);
   const clock = useRef(0);
   const answers = useRef<Record<string, string>>({});
+  // Extra columns a component phase observed — the triples a participant tested, whether the
+  // frame timing held. Cleared per trial, with the answers, so nothing leaks into the next.
+  const componentPayload = useRef<Record<string, unknown>>({});
   // Set when the first response phase ran out, so the row records no reaction time.
   const timedOut = useRef(false);
   // The correct option, marked while practice waits for a retry. Null at every other moment,
@@ -235,6 +239,10 @@ export function Runner({
       ...payloadOf(design, trial),
       ...(stage ? { stage } : {}),
       ...(repetition !== undefined ? { repetition } : {}),
+      // A component phase can add columns of its own. Last, so it cannot quietly overwrite
+      // the stage name or a stored factor — a component decides what it observed, not what
+      // block it was in.
+      ...componentPayload.current,
     };
 
     // An early press the definition does not record is not a trial at all: it shows "too
@@ -284,6 +292,7 @@ export function Runner({
     }
 
     answers.current = {};
+    componentPayload.current = {};
     timedOut.current = false;
 
     // Per-outcome messages, when the definition has them. They time out by themselves, so a
@@ -406,7 +415,12 @@ export function Runner({
   if (!trial || !phase) return null;
 
   const step = steps.find(s => s.phase === phase.name) ?? (inEarlyWindow ? steps[0] : undefined);
-  const showResponse = (phase.awaitsResponse || inEarlyWindow) && !feedback && !iti;
+  // Looked up by name from a fixed map — never a path, never evaluated. A published
+  // definition is data from a database, so the worst a wrong value can do is match nothing.
+  const PhaseComponent = phase.component ? PHASE_COMPONENT_MAP[phase.component] : undefined;
+  // A component collects its own answer, so the declarative controls would be a second way
+  // to end the same trial.
+  const showResponse = (phase.awaitsResponse || inEarlyWindow) && !feedback && !iti && !phase.component;
   // Between trials: blank, or whatever the definition keeps up. Under a feedback message:
   // the feedback display when there is one, so a stimulus need not linger behind "Missed".
   const shown = iti
@@ -426,7 +440,29 @@ export function Runner({
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center gap-10 px-6">
-        {shown && <DisplayView node={shown} values={values} />}
+        {/* A phase the runtime cannot declare — the participant authors the stimulus, or the
+            display is a matter of frame timing. It answers the trial itself, so the ordinary
+            response controls stay off. An unknown name renders a message rather than nothing:
+            a blank screen mid-experiment is the failure a participant cannot report. */}
+        {PhaseComponent ? (
+          !iti && !feedback && (
+            <PhaseComponent
+              key={`${trialIdx}-${phase.name}`}
+              values={values} language={language} practice={practice}
+              onDone={({ response, payload }) => {
+                if (payload) componentPayload.current = { ...componentPayload.current, ...payload };
+                answer(response ?? SHOWN);
+              }} />
+          )
+        ) : (
+          shown && <DisplayView node={shown} values={values} />
+        )}
+        {phase.component && !PhaseComponent && (
+          <p className="text-amber-400 text-sm">
+            This experiment needs a component named &ldquo;{phase.component}&rdquo;, which this
+            site does not have.
+          </p>
+        )}
 
         {showResponse && step && (
           <ResponseView step={step} values={values} rtl={rtl} onAnswer={answer} highlight={retryHint}

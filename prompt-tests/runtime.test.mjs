@@ -2670,3 +2670,135 @@ test('an estimate with no margin is rejected rather than scoring everyone zero',
   const messages = validate(broken).map(i => i.message).join('\n');
   assert.match(messages, /tolerance of 0/);
 });
+
+// ── Z. The escape hatch ───────────────────────────────────────────────────────
+//
+// A phase may be code when the runtime's three assumptions genuinely break: the participant
+// authors the stimulus so there are no trials to plan, the display cannot be declared, or
+// the input is not an HTML control. The mechanism matters less than the boundary around it —
+// an escape hatch that is easy to reach for is how a declarative runtime stops growing.
+
+const componentNames = await import('../lib/experiment-runtime/component-names.ts');
+
+/** A minimal definition with one component phase, for checking the rules around it. */
+const withComponent = (component, extra = {}) => ({
+  version: 1,
+  slug: 'e2eHatch',
+  title: 'Hatch',
+  titleHe: 'Hatch',
+  category: 'REASONING',
+  instructions: { en: 'x', he: 'x' },
+  factors: [{ name: 'only', levels: ['a'] }],
+  repetitions: 1,
+  trial: {
+    phases: [{
+      name: 'task',
+      display: { kind: 'text', text: 'placeholder' },
+      component,
+      awaitsResponse: true,
+      startsClock: true,
+    }],
+    response: { kind: 'text' },
+    correct: { kind: 'none' },
+    itiMs: 0,
+  },
+  store: ['only'],
+  thanks: { showResults: false },
+  dashboard: { charts: [{ title: 'c', kind: 'bar', groupBy: 'only', measure: 'count' }] },
+  ...extra,
+});
+
+test('a phase may name a component that exists', () => {
+  assert.deepEqual(errorsOf(withComponent('wasonRuleDiscovery')), []);
+});
+
+test('a component this site does not have is an error, not a blank screen', () => {
+  // The failure it replaces: an empty box where a phase should be, a hundred times, which a
+  // participant assumes is meant to be like that and never reports.
+  const messages = errorsOf(withComponent('flashSuppression')).join('\n');
+  assert.match(messages, /"flashSuppression", which this site does not have/);
+  assert.match(messages, /a definition cannot introduce one/);
+});
+
+test('the guest list and the registry cannot drift apart', () => {
+  // Two files: names the validator can read without React, and the components themselves.
+  // A name in one and not the other is a definition that validates and renders nothing, or
+  // a component nothing is allowed to use.
+  const registry = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'components.tsx'), 'utf8');
+  const mapBody = (registry.split('PHASE_COMPONENT_MAP')[1] ?? '').split('};')[0];
+  const registered = [...mapBody.matchAll(/^\s{2}([A-Za-z][A-Za-z0-9]*):/gm)].map(m => m[1]);
+
+  assert.deepEqual(
+    [...componentNames.PHASE_COMPONENTS].sort(),
+    registered.sort(),
+    'component-names.ts and components.tsx list different components',
+  );
+});
+
+test('the escape hatch stays small, and each entry earns its place', () => {
+  // Not a style rule. Ensemble perception looked like a candidate — two interleaved tasks, a
+  // slider, a per-trial scoring rule — and building it declaratively is what gave every
+  // experiment interleaving, estimation and sliders. A component would have bought one
+  // experiment and taught the runtime nothing. If this number climbs, that trade is being
+  // made repeatedly and silently.
+  const total = componentNames.PHASE_COMPONENTS.length + componentNames.ONBOARDING_COMPONENTS.length;
+  assert.ok(total <= 5,
+    `${total} components. Before adding another, check it breaks one of the three rules in `
+    + 'component-names.ts rather than being merely hard to declare.');
+});
+
+test('the rule for when a phase may be code is in the generator prompt', () => {
+  // schema.ts is read from disk and passed to the model verbatim, so this is the only place
+  // the boundary can be stated where generation will actually see it.
+  const schema = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'schema.ts'), 'utf8');
+  // The whole doc block, not a fixed window: it grows, and a window would quietly stop
+  // covering the sentence this test exists to protect.
+  // Comment markers and line breaks stripped: the sentence this protects wraps across
+  // lines, and a raw match would pass or fail on where the paragraph happened to break.
+  const doc = schema
+    .split('Render this phase with a named built-in component')[1]
+    .split('component?: string;')[0]
+    .replace(/^\s*\*\s?/gm, ' ')
+    .replace(/\s+/g, ' ');
+  assert.match(doc, /never a path|cannot introduce|CANNOT INTRODUCE/i,
+    'the schema does not tell the generator it may not invent a component');
+  assert.match(doc, /Wason|authors the stimulus/,
+    'the schema does not say when a phase is allowed to be code');
+});
+
+test('a component phase still declares what it collects', () => {
+  // The component draws its own controls, but the declared response is what scoring and the
+  // results table are built from — so a component answer lands in the same column as every
+  // other experiment's rather than in a shape only one dashboard understands.
+  const def = withComponent('wasonRuleDiscovery');
+  assert.deepEqual(errorsOf(def), []);
+  assert.equal(def.trial.response.kind, 'text');
+
+  const broken = withComponent('wasonRuleDiscovery');
+  broken.trial.phases[0].awaitsResponse = false;
+  assert.ok(errorsOf(broken).length > 0, 'a component phase collecting nothing should be reported');
+});
+
+test('an unknown onboarding gate is reported too', () => {
+  const messages = errorsOf(withComponent('wasonRuleDiscovery', { onboarding: 'calibrateScreen' })).join('\n');
+  assert.match(messages, /"calibrateScreen", which this site does not have/);
+});
+
+test('no definition in the repo reaches for the hatch without needing it', () => {
+  // Every component phase in the corpus, named, so adding one is a visible decision rather
+  // than something that arrives inside a large diff.
+  const used = [];
+  for (const [name, def] of CORPUS) {
+    for (const phase of def.trial?.phases ?? []) {
+      if (phase.component) used.push(`${name}:${phase.component}`);
+    }
+    for (const stage of def.stages ?? []) {
+      for (const phase of stage.trial?.phases ?? []) {
+        if (phase.component) used.push(`${name}:${phase.component}`);
+      }
+    }
+  }
+  assert.ok(used.length <= 3, `components are in use by ${used.length} phases: ${used.join(', ')}`);
+});

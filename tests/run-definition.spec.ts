@@ -1730,3 +1730,99 @@ test.describe('Ensemble perception, the ported experiment', () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 });
+
+test.describe('a phase that is code', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  /**
+   * The escape hatch, end to end.
+   *
+   * Wason's 2-4-6: the participant is given a triple that fits a rule and may test five of
+   * their own to work out what it is. It is here rather than in a definition because the
+   * participant AUTHORS the stimulus — there are no trials to plan, and the answer is a
+   * predicate on what they typed.
+   *
+   * What this proves that nothing offline can: the component reaches the screen, its answer
+   * lands in the ordinary response column, and the extra columns it observed reach the row.
+   */
+  const ruleTask = {
+    version: 1,
+    slug: 'e2eWason',
+    title: 'Rule discovery',
+    titleHe: 'גילוי כלל',
+    category: 'REASONING',
+    instructions: { en: '2-4-6 fits a rule. Work out what it is.', he: 'x' },
+    factors: [{ name: 'task', levels: ['rule'] }],
+    repetitions: 1,
+    trial: {
+      phases: [{
+        name: 'rule',
+        display: { kind: 'text', text: '2 – 4 – 6' },
+        component: 'wasonRuleDiscovery',
+        awaitsResponse: true,
+        startsClock: true,
+      }],
+      response: { kind: 'text' },
+      correct: { kind: 'none' },
+      itiMs: 0,
+    },
+    store: ['task'],
+    thanks: { showResults: false },
+    dashboard: { charts: [{ title: 'Guesses', kind: 'bar', groupBy: 'task', measure: 'count' }] },
+  };
+
+  test('the participant tests triples, guesses the rule, and every triple is recorded', async ({ page }) => {
+    const saved = await runPreview(page, ruleTask as never);
+
+    // Two triples: one that fits the rule and one that does not. A participant who only ever
+    // tests triples they expect to fit is the finding — so the row has to be able to tell
+    // the difference, which means both have to work.
+    for (const [a, b, c] of [[1, 2, 3], [9, 5, 1]]) {
+      await page.getByPlaceholder('#1').fill(String(a));
+      await page.getByPlaceholder('#2').fill(String(b));
+      await page.getByPlaceholder('#3').fill(String(c));
+      await page.getByRole('button', { name: 'Test' }).click();
+    }
+
+    await expect(page.getByText('1 – 2 – 3')).toBeVisible();
+    await expect(page.getByText('Fits ✓')).toBeVisible();
+    await expect(page.getByText('9 – 5 – 1')).toBeVisible();
+    await expect(page.getByText("Doesn't fit ✗")).toBeVisible();
+    await expect(page.getByText('2/5 sequences tested')).toBeVisible();
+
+    await page.getByRole('button', { name: 'I am ready to guess the rule' }).click();
+    await page.getByPlaceholder('The rule is...').fill('each number is larger than the last');
+    await page.getByRole('button', { name: 'Submit' }).click();
+
+    await expect(page.getByRole('heading', { name: /thank you/i })).toBeVisible({ timeout: 10_000 });
+
+    if (await rowsSent(saved, 1)) {
+      const row = saved[0] as { response?: string; payload?: Record<string, unknown> };
+      // The answer is in the ordinary column, not a shape only one dashboard understands.
+      expect(row.response).toBe('each number is larger than the last');
+      // And the columns the component observed came with it.
+      expect(row.payload?.triples_tested).toBe(2);
+      expect(row.payload?.disconfirming_tests).toBe(1);
+      expect(row.payload?.found_rule).toBe(true);
+      expect(JSON.parse(String(row.payload?.rule_triples))).toHaveLength(2);
+      // The stored factor is still there: a component adds columns, it does not replace them.
+      expect(row.payload?.task).toBe('rule');
+    }
+  });
+
+  test('a component this site does not have says so instead of showing nothing', async ({ page }) => {
+    // A definition can name anything — it is data, and a published one comes from a
+    // database. The failure to avoid is a blank screen a participant assumes is intentional.
+    const missing = {
+      ...ruleTask,
+      slug: 'e2eMissingComponent',
+      trial: {
+        ...ruleTask.trial,
+        phases: [{ ...ruleTask.trial.phases[0], component: 'noSuchComponent' }],
+      },
+    };
+    await runPreview(page, missing as never);
+
+    await expect(page.getByText(/needs a component named .noSuchComponent./)).toBeVisible({ timeout: 10_000 });
+  });
+});
