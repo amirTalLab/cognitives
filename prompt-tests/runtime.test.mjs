@@ -154,7 +154,12 @@ for (const [name, def] of CORPUS) {
   test(`[${name}] stored payload has every declared key`, () => {
     const trial = firstBlock(def)[0];
     const payload = payloadOf(def, trial);
+    // An OUTCOME does not exist until the trial has been answered — which world a choice led
+    // to, whether it paid — so it is legitimately absent from a freshly built trial. The
+    // runner merges them in before the row is written.
+    const outcomes = new Set((def.trial.outcomes ?? []).map(o => o.name));
     for (const key of def.store) {
+      if (outcomes.has(key.split('.')[0])) continue;
       const flat = key.replace(/\./g, '_');
       assert.ok(flat in payload, `"${key}" is declared in store but missing from the payload`);
       assert.notEqual(payload[flat], undefined, `"${key}" stored as undefined`);
@@ -3304,4 +3309,167 @@ test('mock data shows a fearful face breaking through first', () => {
   };
   assert.ok(meanFor('fearful') < meanFor('neutral'),
     `fearful ${Math.round(meanFor('fearful'))}ms is not faster than neutral ${Math.round(meanFor('neutral'))}ms`);
+});
+
+
+// ── AD. The two-step task ─────────────────────────────────────────────────────
+//
+// A choice leads — usually, not always — to one of two worlds, and the choice you make
+// there sometimes pays. The design separates two ways of learning that look identical from
+// outside, and it comes apart on the RARE transitions, so the probabilistic branch is the
+// experiment rather than a detail of it.
+
+const TWO_STEP = ports.PORTS.find(p => p.slug === 'twoStepTask');
+const twoStepBlock = () => planStages(TWO_STEP, seededRandom(29))[0];
+const twoStepStimuli = await import('../lib/two-step-task/stimuli.ts');
+
+test('twoStepTask runs 100 trials plus practice, in order', () => {
+  const block = twoStepBlock();
+  const trials = buildTrials(block.design, { rng: seededRandom(29), context: block.context });
+  assert.equal(trials.length, twoStepStimuli.MAIN_TRIALS);
+  assert.equal(TWO_STEP.practice.count, twoStepStimuli.PRACTICE_TRIALS);
+
+  // The walk is a sequence. Shuffling it would destroy the slow drift, which is the only
+  // thing in the task there is to learn.
+  assert.equal(TWO_STEP.order, 'fixed');
+  assert.deepEqual(trials.map(t => t.values.trial.index), trials.map((_, i) => i));
+});
+
+test('a participant is given one walk for the whole session', () => {
+  // A fresh walk per trial would be noise with no structure to find.
+  assert.equal(TWO_STEP.assign.as, 'run');
+  const block = twoStepBlock();
+  const trials = buildTrials(block.design, { rng: seededRandom(29), context: block.context });
+  const walks = new Set(trials.map(t => t.values.trial.walk));
+  assert.equal(walks.size, 1, `a session drew ${walks.size} walks`);
+});
+
+test('every branch a participant could take is decided before the trial starts', () => {
+  // The schema has no arithmetic on purpose, so randomness is pre-drawn: where each choice
+  // would lead, and whether each world-and-choice pair pays. It also means the road not
+  // taken is in the stored row, which is the counterfactual a model-based analysis needs.
+  const block = twoStepBlock();
+  const trials = buildTrials(block.design, { rng: seededRandom(29), context: block.context });
+  for (const t of trials) {
+    const v = t.values.trial;
+    assert.ok(['A', 'B'].includes(v.stateIfLeft), `stateIfLeft is ${v.stateIfLeft}`);
+    assert.ok(['A', 'B'].includes(v.stateIfRight));
+    assert.ok(['common', 'rare'].includes(v.transitionIfLeft));
+    assert.ok(['common', 'rare'].includes(v.transitionIfRight));
+    assert.equal(typeof v.rewardA.left, 'boolean');
+    assert.equal(typeof v.rewardB.right, 'boolean');
+  }
+});
+
+test('the common transition really is about 70%', () => {
+  // The manipulation. At 50% the two learners are indistinguishable; at 100% there are no
+  // rare trials and the experiment has nothing to measure.
+  const block = twoStepBlock();
+  const trials = buildTrials(block.design, { rng: seededRandom(29), context: block.context });
+  const common = trials.filter(t => t.values.trial.transitionIfLeft === 'common').length;
+  const share = common / trials.length;
+  assert.ok(share > 0.55 && share < 0.85,
+    `${Math.round(share * 100)}% of first choices led to the common world, expected about 70%`);
+});
+
+test('a common transition goes where the choice usually goes, and a rare one does not', () => {
+  // Left commonly leads to A and right to B. If that were not so, "rare" would mean nothing.
+  const block = twoStepBlock();
+  const trials = buildTrials(block.design, { rng: seededRandom(29), context: block.context });
+  for (const t of trials) {
+    const v = t.values.trial;
+    assert.equal(v.stateIfLeft, v.transitionIfLeft === 'common' ? 'A' : 'B');
+    assert.equal(v.stateIfRight, v.transitionIfRight === 'common' ? 'B' : 'A');
+  }
+});
+
+test('the reward probabilities drift slowly and stay inside their bounds', () => {
+  // Slow is the point. An abrupt change cannot be tracked, and no change leaves nothing to
+  // learn — the drift is what forces a participant to keep updating.
+  const block = twoStepBlock();
+  const trials = buildTrials(block.design, { rng: seededRandom(29), context: block.context });
+  const series = trials.map(t => t.values.trial.probA1);
+
+  for (const p of series) {
+    assert.ok(p >= 0.24 && p <= 0.76, `a reward probability reached ${p}`);
+  }
+  const steps = series.slice(1).map((p, i) => Math.abs(p - series[i]));
+  const biggest = Math.max(...steps);
+  assert.ok(biggest < 0.15, `a probability jumped by ${biggest} in one trial`);
+  // And it does move: a flat walk would be a different experiment.
+  assert.ok(Math.max(...series) - Math.min(...series) > 0.1, 'the walk barely moved');
+});
+
+test('what follows from a choice is looked up, never computed', () => {
+  // Four outcomes, chained: the choice picks a world, the world picks a reward pair, and the
+  // second choice picks within it. Every case reads a field that was drawn in advance.
+  const names = TWO_STEP.trial.outcomes.map(o => o.name);
+  assert.deepEqual(names, ['state', 'transition', 'reward', 'rewarded']);
+
+  const by = Object.fromEntries(TWO_STEP.trial.outcomes.map(o => [o.name, o.by]));
+  assert.equal(by.state, 'answer.stage1');
+  assert.equal(by.transition, 'answer.stage1');
+  assert.equal(by.reward, 'state', 'the reward pair should follow the world, not the choice');
+  assert.equal(by.rewarded, 'answer.stage2');
+
+  for (const outcome of TWO_STEP.trial.outcomes) {
+    for (const [level, value] of Object.entries(outcome.cases)) {
+      assert.match(String(value), /^\{.+\}$/,
+        `${outcome.name}.${level} is "${value}", which is a literal rather than a pre-drawn value`);
+    }
+  }
+});
+
+test('the second stage shows the world it belongs to, not the one that was expected', () => {
+  // On a rare trial the participant lands somewhere they did not intend, and the symbols
+  // have to be that world's. Branching on the outcome rather than on the choice is the
+  // difference between the task working and not.
+  const stage2 = TWO_STEP.trial.phases.find(p => p.name === 'stage2');
+  assert.equal(stage2.display.kind, 'switch');
+  assert.equal(stage2.display.by, 'state');
+  assert.ok(stage2.display.cases.A && stage2.display.cases.B);
+
+  const transition = TWO_STEP.trial.phases.find(p => p.name === 'transition');
+  assert.equal(transition.display.by, 'state');
+});
+
+test('the row records what happened, including which road was taken', () => {
+  for (const key of ['state', 'transition', 'rewarded', 'trial.index', 'trial.walk']) {
+    assert.ok(TWO_STEP.store.includes(key), `${key} is not stored`);
+  }
+  // And the probabilities in force on that trial, so the drift is reconstructable.
+  assert.ok(TWO_STEP.store.some(k => k.startsWith('trial.probA')));
+});
+
+test('nothing in the task is scored', () => {
+  // Which strategy someone uses is the finding. Scoring a choice would invent a correctness
+  // the task does not have and put a meaningless accuracy on the dashboard.
+  assert.equal(TWO_STEP.trial.correct.kind, 'none');
+});
+
+test('the timings are the original\'s', () => {
+  const [stage1, transition, stage2, reward] = TWO_STEP.trial.phases;
+  assert.equal(stage1.timeoutMs, twoStepStimuli.STAGE1_CHOICE_MS);
+  assert.equal(transition.durationMs, twoStepStimuli.TRANSITION_MS);
+  assert.equal(stage2.timeoutMs, twoStepStimuli.STAGE2_CHOICE_MS);
+  assert.equal(reward.durationMs, twoStepStimuli.REWARD_MS);
+  assert.equal(TWO_STEP.trial.itiMs, twoStepStimuli.ISI_MS);
+});
+
+test('mock data fills the outcome charts rather than leaving them empty', () => {
+  // The outcomes do not exist until a trial is answered, so a mock participant has to make
+  // the choices. Without that the whole dashboard is empty under Mock Data.
+  const rows = generateMockRows(TWO_STEP);
+  const withState = rows.filter(r => r.state === 'A' || r.state === 'B');
+  assert.ok(withState.length > 100, `only ${withState.length} mock rows carried a world`);
+  const transitions = new Set(rows.map(r => r.transition).filter(Boolean));
+  assert.deepEqual([...transitions].sort(), ['common', 'rare']);
+});
+
+test('the port says which analysis it cannot draw yet', () => {
+  // The headline result compares a trial with the one before it, and the dashboard has no
+  // notion of a previous row. Everything needed is stored, so the export supports it.
+  assert.ok(TWO_STEP.simplifications?.length);
+  const text = TWO_STEP.simplifications.map(s => `${s.what} ${s.why}`).join(' ');
+  assert.match(text, /previous|before it/i);
 });

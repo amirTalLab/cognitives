@@ -2098,3 +2098,79 @@ test.describe('bRMS, the ported experiment', () => {
     expect(row.payload?.side_shown).toBeTruthy();
   });
 });
+
+test.describe('The two-step task, ported', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  /**
+   * Within-trial contingency, on screen.
+   *
+   * Nothing offline can see whether the second half of a trial actually follows from the
+   * first. The definition can declare its outcomes correctly and the runner can still show
+   * the wrong world's symbols, or fail to resolve the reward — and either would look to a
+   * participant like a task that simply works that way.
+   */
+  test('a choice leads to a world, and the world decides what is offered next', async ({ page }) => {
+    test.setTimeout(120_000);
+    const saved = await runBuiltIn(page, 'twoStepTask');
+
+    const A = new Set(['ན', 'ཤ']);   // world A's symbols
+    const B = new Set(['བ', 'ཇ']);   // world B's
+
+    const seen = { A: false, B: false, rewarded: false, unrewarded: false };
+
+    // Practice is ten trials and is not recorded; the real block follows. Twenty answers is
+    // enough to meet both worlds and both outcomes several times over.
+    for (let i = 0; i < 20; i++) {
+      const start = page.getByRole('button', { name: /^(Start|התחל)$/ });
+      if (await start.count() > 0) { await start.first().click(); await page.waitForTimeout(300); }
+
+      const left = page.getByRole('button', { name: /^Left/ });
+      await expect(left).toBeVisible({ timeout: 20_000 });
+      await left.click();
+
+      // The transition, then the second stage — whose symbols must belong to ONE world.
+      await page.waitForTimeout(1700);
+      const body = await page.locator('main').innerText();
+      const inA = [...A].some(s => body.includes(s));
+      const inB = [...B].some(s => body.includes(s));
+      expect(inA || inB, 'the second stage showed neither world\'s symbols').toBe(true);
+      expect(inA && inB, 'the second stage mixed both worlds').toBe(false);
+      if (inA) seen.A = true;
+      if (inB) seen.B = true;
+
+      await page.getByRole('button', { name: /^Left/ }).click();
+
+      // The reward screen: paid or not.
+      await page.waitForTimeout(600);
+      const after = await page.locator('main').innerText();
+      if (after.includes('🪙')) seen.rewarded = true;
+      if (after.includes('∅')) seen.unrewarded = true;
+
+      await page.waitForTimeout(1600);
+    }
+
+    // Always choosing "left" still reaches both worlds, because the transition is
+    // probabilistic — which is the whole design. If only one world ever appeared, the rare
+    // transition would not be happening and the task would measure nothing.
+    expect(seen.A && seen.B, 'always choosing left never reached the rare world').toBe(true);
+    expect(seen.rewarded || seen.unrewarded, 'no reward outcome was ever shown').toBe(true);
+
+    // And the row carries what followed from the choices, not just the choices.
+    await expect.poll(
+      () => saved.some(r => {
+        const row = r as { payload?: Record<string, unknown> };
+        return row.payload?.state !== undefined && row.payload?.transition !== undefined;
+      }),
+      { message: 'no row recorded which world the choice led to', timeout: 10_000 },
+    ).toBe(true);
+
+    const row = saved.find(r => (r as { payload?: Record<string, unknown> }).payload?.state !== undefined) as
+      { payload?: Record<string, unknown> };
+    expect(['A', 'B']).toContain(String(row.payload?.state));
+    expect(['common', 'rare']).toContain(String(row.payload?.transition));
+    expect(typeof row.payload?.rewarded).toBe('boolean');
+    // The probabilities in force on that trial, so the drift is reconstructable afterwards.
+    expect(Number(row.payload?.trial_probA1)).toBeGreaterThan(0);
+  });
+});

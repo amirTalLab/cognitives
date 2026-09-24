@@ -12,7 +12,7 @@
 // `import type` rather than a plain import so this module can also be loaded by
 // scripts/definition.mjs, which runs the real validator from the terminal under Node's
 // type stripping — that leaves a value import of a types-only module behind and fails.
-import type { ExperimentDefinition, Factor, ResponseStep, Stage } from './schema';
+import type { ExperimentDefinition, Factor, PoolItem, ResponseStep, Stage } from './schema';
 import { excluded, MAX_TRIALS, NO_RESPONSE } from './trials';
 import { ONBOARDING_COMPONENTS, PHASE_COMPONENTS } from './component-names';
 
@@ -22,6 +22,35 @@ export interface ValidationIssue {
 }
 
 const REF = /^\{([^}]+)\}$/;
+
+/**
+ * The list behind a reference like `"{run.trials}"`.
+ *
+ * The name before the dot is something drawn for this participant — a between-subject item,
+ * or a stage group's item — and the field after it holds a list of pool items. Returns null
+ * where it cannot be worked out, so the caller warns nothing rather than guessing.
+ */
+function listBehind(def: ExperimentDefinition, reference: string): PoolItem[] | null {
+  const [holder, field] = reference.replace(/^\{|\}$/g, '').split('.');
+  if (!holder || !field) return null;
+
+  const candidates: PoolItem[][] = [];
+  if (def.assign?.as === holder && def.pools?.[def.assign.pool]) {
+    candidates.push(def.pools[def.assign.pool]);
+  }
+  for (const entry of def.stages ?? []) {
+    const group = entry as unknown as { forEach?: string; as?: string };
+    if (group.as === holder && group.forEach && def.pools?.[group.forEach]) {
+      candidates.push(def.pools[group.forEach]);
+    }
+  }
+
+  for (const pool of candidates) {
+    const found = pool[0]?.[field];
+    if (Array.isArray(found)) return found as PoolItem[];
+  }
+  return null;
+}
 
 /** Factor names a definition makes available, including pool item fields as `factor.field`. */
 function availableNames(def: ExperimentDefinition): Set<string> {
@@ -38,13 +67,29 @@ function availableNames(def: ExperimentDefinition): Set<string> {
         ...(factor.fromEach ?? []).map(p => p?.pool).filter(Boolean),
       ];
       for (const name of draws) {
-        const item = pools?.[name as string]?.[0];
+        // A pool NAME, or a REFERENCE to a list carried on an item this participant was
+        // given — "{run.trials}", the hundred-trial walk assigned for the whole session.
+        // Without this, every field of every trial in that list reads as naming nothing.
+        const item = String(name).startsWith('{')
+          ? listBehind(def, String(name))?.[0]
+          : pools?.[name as string]?.[0];
         for (const key of Object.keys(item ?? {})) names.add(`${factor.name}.${key}`);
       }
     }
   };
 
   fromFactors(def.factors, def.pools);
+
+  // What the participant did, and what followed from it. Neither is a factor — they do not
+  // exist until the trial is under way — but both are in scope for the phases after them,
+  // for `store`, and for each other.
+  for (const phase of def.trial?.phases ?? []) names.add(`answer.${phase.name}`);
+  for (const outcome of def.trial?.outcomes ?? []) {
+    names.add(outcome.name);
+    // An outcome may be an object — a pair of reward flags, say — and the field read out of
+    // it is only knowable at run time, so the whole subtree is treated as in scope.
+    names.add(`${outcome.name}.*`);
+  }
 
   // The between-subject item is in scope everywhere, exactly like a factor, so a display
   // saying "{group.target}" is referring to something real.
@@ -1045,6 +1090,8 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
 
   for (const ref of referencesIn(def.trial)) {
     if (scopes.has(ref.split('.')[0])) continue;
+    // A field read out of an outcome, whose shape is only known once the trial has run.
+    if (available.has(`${ref.split('.')[0]}.*`)) continue;
     if (!available.has(ref) && !internal.has(ref)) {
       err(`"{${ref}}" is referenced but no factor provides it.`);
     }

@@ -182,6 +182,32 @@ export function generateMockRows(def: ExperimentDefinition): ResultRow[] {
           ? (expected[Math.floor(rng() * expected.length)] ?? offered[Math.floor(rng() * offered.length)] ?? 'correct')
           : (wrongOnes[Math.floor(rng() * wrongOnes.length)] ?? 'incorrect');
 
+        // What would have followed from those choices. A mock participant has to make them
+        // for the outcomes to exist at all — without it a two-stage task's dashboard is empty
+        // under Mock Data, which is exactly when a lecturer reaches for it.
+        if (design.trial.outcomes?.length) {
+          const outcomes: Record<string, unknown> = {};
+          const answer: Record<string, string> = {};
+          for (const step of stepsOf(design)) {
+            const choices = step.kind === 'choice' || step.kind === 'multiSelect'
+              ? (step.options ?? []).map(o => String(o.value))
+              : [answered];
+            answer[step.phase] = choices[Math.floor(rng() * choices.length)] ?? answered;
+          }
+          for (const outcome of design.trial.outcomes) {
+            const scope = { ...trial.values, answer, ...outcomes };
+            const key = String(valueAt(scope, outcome.by) ?? '');
+            if (!(key in outcome.cases)) continue;
+            const chosen = outcome.cases[key];
+            outcomes[outcome.name] = typeof chosen === 'string' && /^{.+}$/.test(chosen)
+              ? valueAt(scope, chosen.slice(1, -1))
+              : chosen;
+          }
+          for (const [key, value] of Object.entries(outcomes)) {
+            if (design.store.includes(key)) stored[key] = value;
+          }
+        }
+
         rows.push({
           ...base,
           response: withheld ? NO_RESPONSE : answered,
@@ -205,6 +231,21 @@ export function sem(values: number[]): number {
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
   const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / (values.length - 1);
   return Math.sqrt(variance / values.length);
+}
+
+/** The response steps of a design, flattened — one form covers all three shapes. */
+function stepsOf(design: TrialDesign): { kind: string; phase: string; options?: { value: string }[] }[] {
+  const spec = design.trial.response;
+  const list = Array.isArray(spec)
+    ? spec
+    : 'sets' in spec
+      ? Object.values(spec.sets).flatMap(s => (Array.isArray(s) ? s : [s]))
+      : [spec];
+  const fallback = design.trial.phases.find(p => p.awaitsResponse)?.name ?? 'response';
+  return list.map(step => ({
+    ...(step as { kind: string; options?: { value: string }[] }),
+    phase: (step as { phase?: string }).phase ?? fallback,
+  }));
 }
 
 /** The response(s) a trial's correctness rule expects, when the rule names any. */

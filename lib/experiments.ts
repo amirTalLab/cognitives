@@ -44,7 +44,8 @@ export const EXPERIMENTS: Exp[] = [
   { id: 'drm',             title: 'Memory (DRM)',             titleHe: 'זיכרון (DRM)',        icon: Beaker,    color: 'text-emerald-400', href: '/run/drm' },
   // Ported. app/srt/ still serves its own rows at /srt/teacher.
   { id: 'srt',             title: 'Serial Reaction Time',   titleHe: 'זמן תגובה סדרתי',    icon: Timer,     color: 'text-lime-400', href: '/run/srt' },
-  { id: 'twoStepTask',     title: 'Two-Step Task',          titleHe: 'משימת שני השלבים',    icon: GitFork,   color: 'text-violet-400'  },
+  // Ported. app/twoStepTask/ still serves its own rows at /twoStepTask/teacher.
+  { id: 'twoStepTask',     title: 'Two-Step Task',          titleHe: 'משימת שני השלבים',    icon: GitFork,   color: 'text-violet-400', href: '/run/twoStepTask' },
   // Ported. app/serialOrder/ still serves its own rows at /serialOrder/teacher.
   { id: 'serialOrder',     title: 'Serial Position',        titleHe: 'זיכרון סדרתי',        icon: List,      color: 'text-sky-400', href: '/run/serialOrder' },
   { id: 'testingEffect',   title: 'Testing Effect',         titleHe: 'אפקט הבחינה',         icon: BookOpen,  color: 'text-blue-400'    },

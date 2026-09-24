@@ -1,4 +1,4 @@
-import { TwoStepTrial } from '@/types/two-step-task';
+import type { TwoStepTrial } from '@/types/two-step-task';
 
 // ── Tibetan characters (matching Daw et al. 2011 original design) ───────────
 // 6 distinct Tibetan consonants: 2 for Stage 1 (green), 2 for State A (pink), 2 for State B (blue)

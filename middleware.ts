@@ -116,5 +116,6 @@ export const config = {
     '/run/logics/:path*',
     '/run/creativity/:path*',
     '/run/bRMS/:path*',
+    '/run/twoStepTask/:path*',
   ],
 };

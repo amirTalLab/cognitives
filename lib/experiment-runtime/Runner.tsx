@@ -133,6 +133,12 @@ export function Runner({
   // Extra columns a component phase observed — the triples a participant tested, whether the
   // frame timing held. Cleared per trial, with the answers, so nothing leaks into the next.
   const componentPayload = useRef<Record<string, unknown>>({});
+  // What followed from what the participant did — which world a choice led to, whether it
+  // paid. In state because the phases after it have to re-render, AND in a ref because the
+  // row is written from a callback: reading the state there captures the value from the
+  // render the callback was created in, which is the empty one it started as.
+  const [outcomes, setOutcomes] = useState<Record<string, unknown>>({});
+  const outcomeValues = useRef<Record<string, unknown>>({});
   // Set when the first response phase ran out, so the row records no reaction time.
   const timedOut = useRef(false);
   // The correct option, marked while practice waits for a retry. Null at every other moment,
@@ -154,6 +160,11 @@ export function Runner({
   const values = trial
     ? {
         ...trial.values,
+        // What has been answered so far in THIS trial, and what followed from it. A phase
+        // whose display depends on the choice made two phases ago reads them here, and both
+        // are cleared with the trial so nothing leaks into the next one.
+        answer: { ...answers.current },
+        ...outcomes,
         [SEED_KEY]: trial.seed,
         [ASSET_BASE_KEY]: definition.assets?.base ?? '',
         [LANGUAGE_KEY]: language,
@@ -248,8 +259,10 @@ export function Runner({
     // The stage name travels with every row, so one results table can hold a study block
     // and a recall block and a chart can still ask about one of them. The repetition comes
     // too where a group ran the same block more than once, so the passes can be told apart.
+    // Outcomes are ordinary values by the time a trial ends, so `store` can name them and
+    // the row carries what actually happened — which world the choice led to, whether it paid.
     const payload = {
-      ...payloadOf(design, trial),
+      ...payloadOf(design, { ...trial, values: { ...trial.values, ...outcomeValues.current } }),
       ...(stage ? { stage } : {}),
       ...(repetition !== undefined ? { repetition } : {}),
       // A component phase can add columns of its own. Last, so it cannot quietly overwrite
@@ -306,6 +319,8 @@ export function Runner({
 
     answers.current = {};
     componentPayload.current = {};
+    setOutcomes({});
+    outcomeValues.current = {};
     timedOut.current = false;
 
     // Per-outcome messages, when the definition has them. They time out by themselves, so a
@@ -350,13 +365,16 @@ export function Runner({
     return () => clearInterval(tick);
   }, [design.endsAfterMs, practice, onComplete]);
 
-  // A trial that asks nothing ends when its last phase has played. Without this the phase
-  // index walks past the end of the list, `phase` becomes undefined, and the runner renders
-  // nothing for ever — a silent deadlock rather than a visible error.
+  // A trial ends when its last phase has played. Without this the phase index walks past the
+  // end of the list, `phase` becomes undefined, and the runner renders nothing for ever — a
+  // silent deadlock rather than a visible error.
+  //
+  // Reaching the end implies every response phase was answered or timed out, because a phase
+  // awaiting a response does not advance on its own.
   useEffect(() => {
-    if (phase || !trial || feedback || iti || steps.length > 0) return;
+    if (phase || !trial || feedback || iti) return;
     finishTrial();
-  }, [phase, trial, feedback, iti, steps.length, finishTrial]);
+  }, [phase, trial, feedback, iti, finishTrial]);
 
   // Timed phases advance themselves; response phases wait for input. Idle during the ITI so
   // the old trial's phases do not keep running while the screen is blank.
@@ -403,8 +421,30 @@ export function Runner({
     if (!phase?.awaitsResponse) return;
     answers.current[phase.name] = value;
 
-    const remaining = phases.slice(phaseIdx + 1).some(p => p.awaitsResponse);
-    if (remaining) setPhaseIdx(i => i + 1);
+    // What follows from it. Resolved in order, so one outcome can read another — a choice
+    // leads to a world, and the world decides whether the next choice paid. Only outcomes
+    // whose `by` can now be read resolve; the rest wait for the answer they depend on.
+    const declared = design.trial.outcomes;
+    if (declared?.length) {
+      setOutcomes(previous => {
+        const next = { ...previous };
+        for (const outcome of declared) {
+          if (next[outcome.name] !== undefined) continue;
+          const scope = { ...trial?.values, answer: { ...answers.current }, ...next };
+          const key = String(lookup(outcome.by, scope) ?? '');
+          if (!(key in outcome.cases)) continue;
+          next[outcome.name] = resolve(outcome.cases[key], scope);
+        }
+        outcomeValues.current = next;
+        return next;
+      });
+    }
+
+    // On to whatever comes next — another question, or a screen that shows what the answer
+    // led to. A trial used to end the moment its last response landed, which silently
+    // skipped any phase after it: the two-step task's reward screen never appeared, so a
+    // participant learned nothing from a trial whose entire purpose is the feedback.
+    if (phaseIdx + 1 < phases.length) setPhaseIdx(i => i + 1);
     else finishTrial();
   }
 

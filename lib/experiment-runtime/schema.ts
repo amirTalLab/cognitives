@@ -1081,6 +1081,35 @@ export interface ExperimentDefinition {
      * trials.
      */
     itiDisplay?: Display;
+
+    /**
+     * Values that depend on WHAT THE PARTICIPANT JUST DID, resolved as each answer arrives.
+     *
+     * Everything else in a trial is settled before it starts. A two-stage choice task is not:
+     * you pick one of two symbols, that takes you — usually, not always — to one of two
+     * worlds, and which world decides what you are offered next. The second half of the trial
+     * cannot be planned, because it depends on the first half.
+     *
+     * `by` names what to look at: `"answer.stage1"` is the response given in the phase called
+     * stage1, and an earlier outcome is fair game too, so they can be chained. `cases` maps
+     * each possible value to what this outcome becomes, and the values are bound, so they
+     * usually read a pre-drawn field off the trial's own item.
+     *
+     * PRE-DRAWN is the point. A 70% transition and a probabilistic reward are randomness, and
+     * the schema has no arithmetic on purpose — so the trial carries the outcome for every
+     * branch the participant could have taken, drawn when the trial was built, and this picks
+     * the one that happened. Nothing is computed at run time, the whole trial is
+     * reconstructable from its stored row, and a table is checkable in a way a formula buried
+     * in a renderer is not.
+     *
+     * Resolved outcomes are ordinary values: later phases can display them, later outcomes
+     * can read them, `store` can keep them, and a correctness rule can name them.
+     */
+    outcomes?: {
+      name: string;
+      by: string;
+      cases: Record<string, Bound<string | number | boolean>>;
+    }[];
     /**
      * Brief messages per outcome, shown for `durationMs` and then moving on by themselves.
      *
