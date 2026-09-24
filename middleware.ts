@@ -114,5 +114,6 @@ export const config = {
     '/run/mentalRep/:path*',
     '/run/summaryStats/:path*',
     '/run/logics/:path*',
+    '/run/creativity/:path*',
   ],
 };

@@ -113,7 +113,27 @@ export function generateMockRows(def: ExperimentDefinition): ResultRow[] {
         // A recall block answers once about many items, so it produces a row per studied
         // word — the shape the runner writes, and the only shape a serial-position curve or
         // a lure rate can be drawn from.
-        if (design.trial.recall) {
+        // A FREE list — "name as many uses as you can" — has no studied pool to check
+        // against, so the mock invents a plausible NUMBER of ideas rather than plausible
+        // ideas. How many is the measure of a divergent task, and a preview that showed an
+        // empty fluency chart would be showing a lecturer the opposite of the finding.
+        if (design.trial.recall && !design.trial.recall.against) {
+          const ideas = Math.max(2, Math.round((5 + rng() * 6) / speed));
+          for (let i = 1; i <= ideas; i++) {
+            rows.push({
+              ...base,
+              response: `idea ${i}`,
+              is_correct: null,
+              reaction_time_ms: null,
+              ...stamp,
+              ...stored,
+              outputPosition: i,
+            });
+          }
+          continue;
+        }
+
+        if (design.trial.recall?.against) {
           const against = design.trial.recall.against;
           const probes = (against.startsWith('{')
             ? valueAt(trial.values, against.slice(1, -1))

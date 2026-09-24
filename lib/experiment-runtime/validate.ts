@@ -73,13 +73,16 @@ function availableNames(def: ExperimentDefinition): Set<string> {
       if (!recall) return;
       names.add('outputPosition');
       if (recall.intrusions) names.add('intrusion');
-      const pool = recall.against.startsWith('{')
+      // A free list is scored against nothing, so there is no pool whose fields travel.
+      const against = recall.against;
+      if (!against) return;
+      const pool = against.startsWith('{')
         // "{list.words}" — the list is a pool item, so look inside the pool it comes from.
         ? Object.values({ ...def.pools, ...stage.pools })
           .flat()
-          .map(entry => (entry as Record<string, unknown>)[recall.against.slice(1, -1).split('.')[1]])
+          .map(entry => (entry as Record<string, unknown>)[against.slice(1, -1).split('.')[1]])
           .find(Array.isArray) as Record<string, unknown>[] | undefined
-        : { ...def.pools, ...stage.pools }[recall.against];
+        : { ...def.pools, ...stage.pools }[against];
       for (const key of Object.keys(pool?.[0] ?? {})) names.add(key);
     };
 
@@ -839,16 +842,21 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   // result looks like a class that remembered nothing rather than like a broken definition.
   const recall = def.trial.recall;
   if (recall !== undefined) {
-    if (!isObj(recall) || !isStr(recall.against) || !isStr(recall.match)) {
-      bad('"trial.recall"', 'an object naming the studied pool ("against") and the field holding each word ("match")');
-    } else {
-      const studied = def.pools?.[recall.against];
+    // Two shapes. Scored against a studied pool, which needs BOTH names; or a free list with
+    // neither, where every typed entry is simply a row. One of the two without the other is
+    // a definition that would silently score nothing.
+    const freeList = isObj(recall) && recall.against === undefined && recall.match === undefined;
+    if (!isObj(recall) || (!freeList && (!isStr(recall.against) || !isStr(recall.match)))) {
+      bad('"trial.recall"', 'either both "against" (the studied pool) and "match" (the field holding each word), or neither — a free list is scored against nothing');
+    } else if (!freeList) {
+      const studied = def.pools?.[recall.against!];
+      const match = recall.match!;
       if (!studied) {
         err(`Recall is scored against pool "${recall.against}", which this experiment does not have.`);
       } else if (studied.length === 0) {
         err(`Recall is scored against pool "${recall.against}", which is empty, so every word would count as an intrusion.`);
-      } else if (!studied.some(item => isStr(item?.[recall.match]) && String(item[recall.match]).trim() !== '')) {
-        err(`Recall matches on "${recall.match}", but no item in pool "${recall.against}" has that field, so nothing could ever be recalled.`);
+      } else if (!studied.some(item => isStr(item?.[match]) && String(item[match]).trim() !== '')) {
+        err(`Recall matches on "${match}", but no item in pool "${recall.against}" has that field, so nothing could ever be recalled.`);
       }
     }
   }

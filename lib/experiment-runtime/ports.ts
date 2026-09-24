@@ -27,6 +27,7 @@ export { VISUAL_SEARCH_PORT } from './ports/visual-search';
 export { MENTAL_REP_PORT } from './ports/mental-rep';
 export { SUMMARY_STATS_PORT } from './ports/summary-stats';
 export { LOGICS_PORT } from './ports/logics';
+export { CREATIVITY_PORT } from './ports/creativity';
 
 import { POSNER_CUEING } from './ports/posner-cueing';
 import { STROOP_PORT } from './ports/stroop';
@@ -40,5 +41,6 @@ import { VISUAL_SEARCH_PORT } from './ports/visual-search';
 import { MENTAL_REP_PORT } from './ports/mental-rep';
 import { SUMMARY_STATS_PORT } from './ports/summary-stats';
 import { LOGICS_PORT } from './ports/logics';
+import { CREATIVITY_PORT } from './ports/creativity';
 
-export const PORTS = [POSNER_CUEING, STROOP_PORT, WORD_SUPERIORITY_PORT, BOUBA_KIKI_PORT, DRM_PORT, SERIAL_ORDER_PORT, SRT_PORT, COMPOSITE_FACE_PORT, VISUAL_SEARCH_PORT, MENTAL_REP_PORT, SUMMARY_STATS_PORT, LOGICS_PORT];
+export const PORTS = [POSNER_CUEING, STROOP_PORT, WORD_SUPERIORITY_PORT, BOUBA_KIKI_PORT, DRM_PORT, SERIAL_ORDER_PORT, SRT_PORT, COMPOSITE_FACE_PORT, VISUAL_SEARCH_PORT, MENTAL_REP_PORT, SUMMARY_STATS_PORT, LOGICS_PORT, CREATIVITY_PORT];

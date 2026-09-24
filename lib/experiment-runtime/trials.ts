@@ -455,6 +455,22 @@ export function expandRecall(def: TrialDesign, trial: Trial, typedAnswer: string
   const spec = def.trial.recall;
   if (!spec) return null;
 
+  // A FREE list with nothing to match against: "name as many uses for a brick as you can".
+  // One row per thing they said, in the order they said it. Split on commas and newlines
+  // only — never on spaces, because an answer here is a phrase ("door stop") and splitting
+  // it would turn one idea into two and inflate the only measure the task has.
+  if (!spec.against) {
+    const context = payloadOf(def, trial);
+    return typedAnswer
+      .split(/[,\n]+/)
+      .map(entry => entry.trim())
+      .filter(Boolean)
+      .map((entry, i) => ({
+        response: entry,
+        payload: { ...context, outputPosition: i + 1 },
+      }));
+  }
+
   // Commas, semicolons or spaces: participants use all three, and the hand-built DRM
   // already accepted any of them. Kept as a LIST, not a set: the order words come out in is
   // itself data — lag analyses of free recall are entirely about which word followed which —
@@ -472,11 +488,15 @@ export function expandRecall(def: TrialDesign, trial: Trial, typedAnswer: string
   // chart can ask about one list without the pool having to repeat it on every item.
   const context = payloadOf(def, trial);
 
+  // Past the free-list branch above, a scored recall always names the field it matches on;
+  // the validator requires it alongside `against`.
+  const match = spec.match ?? 'word';
+
   const rows: RecallRow[] = [];
   const matched = new Set<string>();
 
   for (const item of studied) {
-    const word = normalise(String(item[spec.match] ?? ''));
+    const word = normalise(String(item[match] ?? ''));
     const came = word !== '' && typed.has(word);
     if (came) matched.add(word);
     rows.push({
@@ -492,7 +512,7 @@ export function expandRecall(def: TrialDesign, trial: Trial, typedAnswer: string
       if (matched.has(word)) continue;
       rows.push({
         response: RECALLED,
-        payload: { ...context, [spec.match]: word, intrusion: true, outputPosition: firstAt.get(word)! },
+        payload: { ...context, [match]: word, intrusion: true, outputPosition: firstAt.get(word)! },
       });
     }
   }
@@ -584,6 +604,18 @@ export function isCorrect(def: TrialDesign, trial: Trial, response: string): boo
   // An estimate on a scale is never exactly right, so "correct" means "close enough". A
   // response that is not a number at all — an unanswered trial, a timeout — is not correct
   // rather than accidentally within tolerance of zero.
+  // Typed, so case and stray spaces are not part of the answer.
+  if (rule.kind === 'textMatch') {
+    const given = response.trim().toLowerCase();
+    const target = String(lookup(rule.factor, trial.values) ?? '').trim().toLowerCase();
+    if (!target) return false;
+    if (given === target) return true;
+    if (!rule.plural) return false;
+    // A trailing s or es either way: the answer is a noun and the number was never the point.
+    return given === `${target}s` || `${given}s` === target
+      || given === `${target}es` || `${given}es` === target;
+  }
+
   if (rule.kind === 'within') {
     const given = Number(response);
     const target = Number(lookup(rule.factor, trial.values));

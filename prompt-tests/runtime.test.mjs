@@ -3019,3 +3019,156 @@ test('the port declares what it does differently from the original', () => {
   const text = LOGICS.simplifications.map(s => `${s.what} ${s.why}`).join(' ');
   assert.match(text, /shuffle/i);
 });
+
+// ── AB. Creativity ────────────────────────────────────────────────────────────
+//
+// Three tasks measuring creativity in two directions. DIVERGENT — how many ideas, how far
+// apart — has no right answers at all, which is the thing most likely to be got wrong by a
+// runtime built around scoring. CONVERGENT has exactly one, typed rather than pressed.
+
+const CREATIVITY = ports.PORTS.find(p => p.slug === 'creativity');
+const creativityPlan = () => planStages(CREATIVITY, seededRandom(17));
+const creativityBlock = name => creativityPlan().find(b => b.stage === name);
+const originalCreativity = await import('../lib/creativity/stimuli.ts');
+
+test('creativity runs four objects, thirty circles and fifteen triples', () => {
+  const rng = seededRandom(17);
+  const plan = planStages(CREATIVITY, rng);
+  const counts = plan.map(b => buildTrials(b.design, { rng, context: b.context }).length);
+
+  assert.equal(plan.filter(b => b.stage.startsWith('uses')).length, 4, 'the original uses four objects');
+  assert.deepEqual(counts.slice(-2), [30, 15]);
+});
+
+test('each task is bounded by the clock the original gives it', () => {
+  // The whole design of a divergent task is the time limit — an unbounded minute is not one
+  // minute, and a class that sat there until they ran dry would produce a different measure.
+  const plan = creativityPlan();
+  for (const block of plan.filter(b => b.stage.startsWith('uses'))) {
+    assert.equal(block.design.endsAfterMs, originalCreativity.AUT_TIME_PER_OBJECT_MS);
+  }
+  assert.equal(creativityBlock('circles').design.endsAfterMs, originalCreativity.CIRCLES_TIME_MS);
+  assert.equal(creativityBlock('associates').design.endsAfterMs, originalCreativity.RAT_TIME_MS);
+});
+
+test('every object and triple the original uses reaches the port', () => {
+  const rng = seededRandom(17);
+  const objects = [];
+  const triples = [];
+  for (const block of planStages(CREATIVITY, rng)) {
+    for (const trial of buildTrials(block.design, { rng, context: block.context })) {
+      if (trial.values.object) objects.push(trial.values.object.nameEn);
+      if (trial.values.triplet) triples.push(trial.values.triplet.index);
+    }
+  }
+  assert.deepEqual(objects, originalCreativity.AUT_OBJECTS.map(o => o.nameEn));
+  assert.deepEqual(triples.sort((a, b) => a - b), originalCreativity.RAT_TRIPLETS.map(t => t.index));
+});
+
+test('the Hebrew triples are their own puzzles, not translations', () => {
+  // A word puzzle cannot be translated and stay a puzzle. Each index carries its own three
+  // words and its own solution per language; showing the English words to a Hebrew reader
+  // would be showing them an unsolvable task.
+  const associates = creativityBlock('associates');
+  const trials = buildTrials(associates.design, { rng: seededRandom(3), context: associates.context });
+  for (const trial of trials) {
+    const t = trial.values.triplet;
+    assert.ok(t.wordsEn && t.wordsHe, `triple ${t.index} is missing a language`);
+    assert.notEqual(t.wordsEn, t.wordsHe, `triple ${t.index} shows the same words in both languages`);
+    assert.ok(/[֐-׿]/.test(String(t.wordsHe)), `triple ${t.index} has no Hebrew words`);
+    assert.ok(/[֐-׿]/.test(String(t.solutionHe)), `triple ${t.index} has no Hebrew solution`);
+  }
+});
+
+test('a typed answer is matched forgivingly, but not loosely', () => {
+  // "Cheese", "cheese " and "cheeses" are the same answer; marking any of them wrong makes a
+  // class look worse at the task than it is. A different word is still wrong.
+  const associates = creativityBlock('associates');
+  const trials = buildTrials(associates.design, { rng: seededRandom(5), context: associates.context });
+  const trial = trials.find(t => t.values.triplet.solutionEn === 'CHEESE');
+  assert.ok(trial, 'expected the cottage/swiss/cake triple');
+
+  // The BLOCK's design, not the definition: scoring belongs to the block a trial ran in,
+  // and this experiment's three tasks score differently on purpose.
+  for (const answer of ['CHEESE', 'cheese', '  Cheese ', 'cheeses']) {
+    assert.equal(isCorrect(associates.design, trial, answer), true, `"${answer}" should be accepted`);
+  }
+  for (const answer of ['chees', 'butter', '']) {
+    assert.equal(isCorrect(associates.design, trial, answer), false, `"${answer}" should not be accepted`);
+  }
+});
+
+test('a divergent task scores nothing, and says so', () => {
+  // There is no right answer, and inventing one would put a fabricated accuracy on the
+  // dashboard for the task where accuracy means least.
+  for (const name of ['usesBrick', 'circles']) {
+    const block = creativityBlock(name);
+    assert.equal(block.design.trial.correct.kind, 'none', `${name} scores answers`);
+  }
+});
+
+test('a free list becomes one row per idea, in the order they came', () => {
+  // How MANY someone produced is the measure. A single row holding "door stop, paperweight,
+  // weapon" can be counted only by splitting it again in a spreadsheet, and the position an
+  // idea arrived at — early ones are the obvious ones — would be gone entirely.
+  const block = creativityBlock('usesBrick');
+  const trial = buildTrials(block.design, { rng: seededRandom(2), context: block.context })[0];
+
+  const rows = expandRecall(block.design, trial, 'door stop, paperweight, weapon');
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.map(r => r.response), ['door stop', 'paperweight', 'weapon']);
+  assert.deepEqual(rows.map(r => r.payload.outputPosition), [1, 2, 3]);
+  // The block's own fields travel with every row, so a chart can ask about one object.
+  assert.equal(rows[0].payload.object_nameEn, 'Brick');
+});
+
+test('a multi-word idea stays one idea', () => {
+  // Splitting on spaces would turn "door stop" into two ideas and inflate the only measure
+  // this task has. Commas and newlines only.
+  const block = creativityBlock('usesBrick');
+  const trial = buildTrials(block.design, { rng: seededRandom(2), context: block.context })[0];
+  const rows = expandRecall(block.design, trial, 'door stop\nbook end, garden path');
+  assert.deepEqual(rows.map(r => r.response), ['door stop', 'book end', 'garden path']);
+});
+
+test('the circles task collects a drawing and a name', () => {
+  // Both are the answer: a rater needs the picture, and the label is what makes an ambiguous
+  // drawing interpretable. The guide circle is drawn into the canvas, so what is stored is
+  // what the participant saw.
+  const circles = creativityBlock('circles');
+  const [draw, name] = circles.design.trial.response;
+  assert.equal(draw.kind, 'drawing');
+  assert.equal(draw.guide, 'circle');
+  assert.equal(draw.phase, 'draw');
+  assert.equal(name.kind, 'text');
+  assert.equal(name.phase, 'name');
+});
+
+test('there are more circles and triples than anyone finishes', () => {
+  // Deliberate: the measure is how far someone got, so the list must never run out before
+  // the clock does.
+  const circles = creativityBlock('circles');
+  const associates = creativityBlock('associates');
+  assert.equal(
+    buildTrials(circles.design, { rng: seededRandom(1), context: circles.context }).length,
+    originalCreativity.CIRCLES_TOTAL);
+  assert.equal(
+    buildTrials(associates.design, { rng: seededRandom(1), context: associates.context }).length,
+    originalCreativity.RAT_TRIPLETS.length);
+});
+
+test('mock data fills the fluency chart rather than leaving it empty', () => {
+  // The Mock Data toggle exists so a lecturer can demo with no participants. A free list
+  // that mocked nothing would show them an empty chart for the task whose whole finding is
+  // a count.
+  const rows = generateMockRows(CREATIVITY);
+  const ideas = rows.filter(r => r.outputPosition !== undefined && r.outputPosition !== null);
+  assert.ok(ideas.length > 50, `only ${ideas.length} mock ideas`);
+  assert.ok(ideas.every(r => Number(r.outputPosition) >= 1));
+});
+
+test('the port declares the one thing it cannot do yet', () => {
+  assert.ok(CREATIVITY.simplifications?.length);
+  const text = CREATIVITY.simplifications.map(s => `${s.what} ${s.why}`).join(' ');
+  assert.match(text, /Hebrew/);
+});

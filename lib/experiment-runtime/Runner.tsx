@@ -655,6 +655,10 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
     );
   }
 
+  if (step.kind === 'drawing') {
+    return <DrawingInput step={step} rtl={rtl} onAnswer={onAnswer} />;
+  }
+
   if (step.kind === 'slider') {
     return <SliderInput step={step} rtl={rtl} values={values} onAnswer={onAnswer} />;
   }
@@ -709,6 +713,96 @@ function useDeadline(deadlineMs: number | undefined, onElapsed: () => void): num
 function Countdown({ ms }: { ms: number | null }) {
   if (ms === null) return null;
   return <p className="text-2xl font-bold text-purple-400 text-center">{Math.ceil(ms / 1000)}s</p>;
+}
+
+/**
+ * A drawing, captured as an image.
+ *
+ * Ported from app/creativity/experiment/page.tsx. The guide is drawn INTO the canvas rather
+ * than behind it, so what is stored is what the participant saw — a rated drawing that is
+ * missing the circle it was drawn on is not the same drawing.
+ *
+ * Pointer events rather than mouse and touch separately: one code path, and it works with a
+ * stylus, which is what a tablet user will reach for.
+ */
+function DrawingInput({ step, rtl, onAnswer }: {
+  step: Extract<ResponseSpec, { kind: 'drawing' }>;
+  rtl: boolean;
+  onAnswer: (v: string) => void;
+}) {
+  const width = step.width ?? 300;
+  const height = step.height ?? 300;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const last = useRef<{ x: number; y: number } | null>(null);
+  const [touched, setTouched] = useState(false);
+
+  const reset = useCallback(() => {
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, 0, width, height);
+    if ((step.guide ?? 'none') === 'circle') {
+      ctx.beginPath();
+      ctx.arc(width / 2, height / 2, Math.min(width, height) / 2 - 4, 0, Math.PI * 2);
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    setTouched(false);
+  }, [width, height, step.guide]);
+
+  useEffect(() => { reset(); }, [reset]);
+
+  const at = (e: React.PointerEvent) => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-3" dir={rtl ? 'rtl' : 'ltr'}>
+      <canvas
+        ref={canvasRef} width={width} height={height}
+        className="rounded-xl border border-gray-700 touch-none cursor-crosshair"
+        onPointerDown={e => { e.preventDefault(); drawing.current = true; last.current = at(e); }}
+        onPointerMove={e => {
+          if (!drawing.current || !last.current) return;
+          const ctx = canvasRef.current?.getContext('2d');
+          if (!ctx) return;
+          const now = at(e);
+          ctx.beginPath();
+          ctx.moveTo(last.current.x, last.current.y);
+          ctx.lineTo(now.x, now.y);
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+          last.current = now;
+          setTouched(true);
+        }}
+        onPointerUp={() => { drawing.current = false; last.current = null; }}
+        onPointerLeave={() => { drawing.current = false; last.current = null; }}
+      />
+      <div className="flex gap-3">
+        <button onClick={reset}
+          className="px-4 py-2 rounded-lg border border-gray-700 text-gray-400 text-sm touch-manipulation">
+          {rtl ? 'ניקוי' : 'Clear'}
+        </button>
+        <button
+          onClick={() => onAnswer(canvasRef.current?.toDataURL('image/png') ?? '')}
+          disabled={!touched}
+          className={`px-6 py-2 rounded-lg font-semibold touch-manipulation ${touched
+            ? 'bg-purple-500 hover:bg-purple-400 text-white'
+            : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}>
+          {rtl ? 'סיום' : 'Done'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**

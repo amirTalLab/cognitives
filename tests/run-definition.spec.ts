@@ -1936,3 +1936,84 @@ test.describe("Reasoning biases, the ported battery", () => {
     expect(survival && mortality, 'a participant was shown both wordings').toBe(false);
   });
 });
+
+test.describe('Creativity, the ported battery', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  /**
+   * A drawing and a free list are both new kinds of answer, and neither exists until it is
+   * on screen. Offline can check that the definition asks for them; only this can check that
+   * a participant can give them.
+   */
+  test('ideas are listed one per row, and a circle can be drawn on and named', async ({ page }) => {
+    // Six blocks, four of them a minute long, so the default 30s is not enough even though
+    // submitting ends each block early.
+    test.setTimeout(120_000);
+    const saved = await runBuiltIn(page, 'creativity');
+
+    // Part 1: a minute with an object. Three ideas, then submit.
+    await expect(page.getByText('Brick')).toBeVisible({ timeout: 15_000 });
+    const ideaBox = page.getByRole('textbox').first();
+    for (const idea of ['door stop', 'paperweight', 'garden path']) {
+      await ideaBox.fill(idea);
+      await ideaBox.press('Enter');
+    }
+    await page.getByRole('button', { name: /Done|Submit|סיום/ }).first().click();
+
+    // One row per idea, in the order they came — not one row holding a comma-blob.
+    if (await rowsSent(saved, 3)) {
+      const ideas = saved.filter(r => {
+        const row = r as { payload?: Record<string, unknown> };
+        return row.payload?.outputPosition !== undefined && row.payload?.outputPosition !== null;
+      });
+      expect(ideas.length).toBeGreaterThanOrEqual(3);
+      expect(String((ideas[0] as { response?: string }).response)).toBe('door stop');
+      // A two-word idea stayed one idea.
+      expect(String((ideas[2] as { response?: string }).response)).toBe('garden path');
+    }
+
+    // Skip the remaining three objects and the intro screens between them, to reach the
+    // circles. Each block ends by itself after a minute, so the intros are the way through.
+    for (let i = 0; i < 4; i++) {
+      const next = page.getByRole('button', { name: /Continue|Start|המשך|התחל/ });
+      if (await next.count() > 0) await next.first().click();
+      const box = page.getByRole('textbox').first();
+      if (await box.count() > 0) {
+        await box.fill('one idea');
+        await box.press('Enter');
+        await page.getByRole('button', { name: /Done|Submit|סיום/ }).first().click();
+      }
+      await page.waitForTimeout(400);
+    }
+
+    // Part 2: the circle. A canvas with a guide drawn into it, which is the prompt.
+    const canvas = page.locator('canvas');
+    await expect(canvas).toBeVisible({ timeout: 20_000 });
+
+    // Done stays disabled until something is actually drawn — an empty canvas is not an
+    // answer, and a row holding a blank circle would be unratable.
+    const done = page.getByRole('button', { name: 'Done' });
+    await expect(done).toBeDisabled();
+
+    const box = await canvas.boundingBox();
+    await page.mouse.move(box!.x + 80, box!.y + 80);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + 200, box!.y + 200, { steps: 8 });
+    await page.mouse.up();
+
+    await expect(done).toBeEnabled();
+    await done.click();
+
+    // Then what they called it.
+    await expect(page.getByText('What is it?')).toBeVisible({ timeout: 10_000 });
+    await page.getByPlaceholder('Name it').fill('a face');
+    await page.getByRole('button', { name: 'Submit' }).click();
+
+    // The drawing is stored as an image. Polled rather than counted: rows from the earlier
+    // blocks are already in, so any count is satisfied before this one is even sent.
+    await expect.poll(
+      () => saved.some(r => String((r as { response?: string }).response ?? '').startsWith('data:image')),
+      { message: 'the drawing was never stored as an image', timeout: 10_000 },
+    ).toBe(true);
+  });
+});

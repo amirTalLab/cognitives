@@ -414,6 +414,18 @@ export type ResponseSpec =
   /** Free recall of a list — DRM, serial position. */
   | { kind: 'wordList'; maxWords?: number }
   /**
+   * A drawing, captured as an image.
+   *
+   * For figural tasks — finish this circle into a picture, complete this shape. The answer is
+   * the drawing, so it is stored as a data URI on the row and nothing about it is scored
+   * automatically: divergent-thinking drawings are rated by people afterwards, and a runtime
+   * that invented a score for one would be inventing the result.
+   *
+   * `guide` draws a faint shape into the canvas for the participant to draw ON, which is the
+   * whole prompt in a circles task — an empty square would be a different test.
+   */
+  | { kind: 'drawing'; width?: number; height?: number; guide?: 'circle' | 'none' }
+  /**
    * Nothing is asked: the trial presents its phases and ends by itself.
    *
    * A study list is the case — DRM and serial order show each word for two seconds and
@@ -591,10 +603,18 @@ export interface ResponseSets {
  * commas, semicolons or spaces, since participants use all three.
  */
 export interface RecallScoring {
-  /** The pool holding what was studied — one row comes back per entry. */
-  against: string;
+  /**
+   * The pool holding what was STUDIED — one row comes back per entry, recalled or missed.
+   *
+   * Leave it out for a free list with no right answers: "name as many uses for a brick as
+   * you can". One row then comes back per thing the participant said, carrying the text
+   * itself and the position it came in. That is the shape the data wants either way — how
+   * MANY someone produced is the measure of a divergent-thinking task, and a single row
+   * holding a comma-blob can be counted only by splitting it again in a spreadsheet.
+   */
+  against?: string;
   /** Which field of a pool item holds the word to compare against what was typed. */
-  match: string;
+  match?: string;
   /**
    * Also write a row for each typed word matching nothing, marked `intrusion`.
    *
@@ -636,6 +656,17 @@ export type CorrectRule =
    * comparable with the recognition accuracy beside it.
    */
   | { kind: 'within'; factor: string; tolerance: Bound<number> }
+  /**
+   * A TYPED answer matched against a factor, ignoring case and surrounding space.
+   *
+   * `matchesFactor` compares strings exactly, which is right for a button's value and wrong
+   * for something a person typed: "Cheese" and "cheese " are the same answer, and marking
+   * one of them wrong makes a class look worse at the task than it is.
+   *
+   * `plural: true` also accepts a trailing s or es either way, for tasks where the answer is
+   * a noun and the number was never the point.
+   */
+  | { kind: 'textMatch'; factor: string; plural?: boolean }
   /** Preference tasks with no correct answer — ratings, free choice. */
   | { kind: 'none' };
 

@@ -1,4 +1,4 @@
-import { AUTObject, RATTriplet } from '@/types/creativity';
+import type { AUTObject, RATTriplet } from '@/types/creativity';
 
 export const AUT_OBJECTS: AUTObject[] = [
   { index: 0, nameEn: 'Brick',     nameHe: 'לבנה' },
