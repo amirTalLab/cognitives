@@ -117,5 +117,6 @@ export const config = {
     '/run/creativity/:path*',
     '/run/bRMS/:path*',
     '/run/twoStepTask/:path*',
+    '/run/testingEffect/:path*',
   ],
 };

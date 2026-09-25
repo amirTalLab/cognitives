@@ -666,7 +666,20 @@ export type CorrectRule =
    * `plural: true` also accepts a trailing s or es either way, for tasks where the answer is
    * a noun and the number was never the point.
    */
-  | { kind: 'textMatch'; factor: string; plural?: boolean }
+  | {
+      kind: 'textMatch';
+      factor: string;
+      plural?: boolean;
+      /**
+       * Also accept an answer within this many single-character edits of the target.
+       *
+       * For recall typed from memory a week later, where "castel" for "castle" is a
+       * remembered word and a spelling slip rather than a failure to remember. Two is what
+       * the hand-built testing effect allows. Keep it small — at three, short words start
+       * matching each other.
+       */
+      editDistance?: number;
+    }
   /** Preference tasks with no correct answer — ratings, free choice. */
   | { kind: 'none' };
 
@@ -1000,7 +1013,48 @@ export interface ExperimentDefinition {
    *
    * Drawn once when the run starts, so it is the same in the last block as in the first.
    */
-  assign?: { pool: string; as: string };
+  assign?: {
+    pool: string;
+    as: string;
+    /**
+     * Give a returning participant the SAME assignment they had last time.
+     *
+     * For an experiment run over two visits. The testing effect studies word pairs one week
+     * and tests them the next, and which set got which treatment has to match, or the
+     * comparison is between two different people's conditions.
+     *
+     * Names the stored field that identifies the assignment — `"group.label"` — which must
+     * also be in `store`, or there is nothing to recover it from. Looked up by participant
+     * name against this experiment's earlier rows.
+     *
+     * A session that `requires` an earlier one REFUSES when there is no match rather than
+     * drawing fresh: testing someone on pairs they never studied produces a row that looks
+     * perfectly valid and is not.
+     */
+    remember?: string;
+  };
+
+  /**
+   * An experiment taken in more than one sitting, days apart.
+   *
+   * Each session runs some of the blocks, and the landing page offers the choice — which is
+   * what the hand-built version does with two buttons. A session naming `requires` cannot
+   * start until the participant has been found in the earlier one, and what they were
+   * assigned then is what they get now.
+   *
+   * The sessions share a slug, a results table and a dashboard, because they are one
+   * experiment: the whole finding is the comparison between what happened in the first
+   * sitting and what is remembered in the second.
+   */
+  sessions?: {
+    id: string;
+    title: { en: string; he: string };
+    description: { en: string; he: string };
+    /** Block names this session runs, in order. The first block is named by `stageName`. */
+    blocks: string[];
+    /** The session that must already have been completed. */
+    requires?: string;
+  }[];
 
   /** Whether to shuffle the finished list. Shuffled when absent. */
   order?: TrialOrder;

@@ -196,6 +196,56 @@ export async function saveTrial(args: SaveArgs): Promise<boolean> {
  * Paginated because the Supabase server silently caps a select at 1000 rows regardless of
  * .limit() — the bug that made several hand-written dashboards show only ~15 participants.
  */
+/**
+ * What a returning participant was assigned last time, for an experiment run in two visits.
+ *
+ * The testing effect is why: it studies word pairs one week and tests them the next, and
+ * which set of pairs got which treatment has to be the SAME both times, or the comparison is
+ * between two different people's conditions.
+ *
+ * Only ONE value is recovered — the assignment label — and everything else follows from it
+ * in the definition. That keeps the lookup to a single narrow read.
+ *
+ * Three answers, and the difference matters:
+ *   null        — no earlier visit. The caller refuses rather than drawing a fresh
+ *                 assignment, which would test someone on pairs they never studied and
+ *                 produce a row that looks perfectly valid.
+ *   AMBIGUOUS   — more than one distinct assignment under that name, so two people share it.
+ *                 Guessing would silently put one of them in the other's condition.
+ *   a label     — what they were given.
+ */
+export const AMBIGUOUS = Symbol('ambiguous participant');
+
+export async function previousAssignment(
+  slug: string,
+  participantName: string,
+  field: string,
+): Promise<string | null | typeof AMBIGUOUS> {
+  const sb = getSupabase();
+  if (!sb) return null;
+
+  const { data, error } = await sb
+    .from(TABLE)
+    .select('payload')
+    .eq('experiment_slug', slug)
+    .eq('participant_name', participantName)
+    .eq('is_practice', false)
+    .limit(500);
+
+  if (error || !data || data.length === 0) return null;
+
+  const key = field.replace(/\./g, '_');
+  const found = new Set<string>();
+  for (const row of data as { payload?: Record<string, unknown> }[]) {
+    const value = row.payload?.[key];
+    if (value !== undefined && value !== null) found.add(String(value));
+  }
+
+  if (found.size === 0) return null;
+  if (found.size > 1) return AMBIGUOUS;
+  return [...found][0];
+}
+
 export async function fetchRows(slug: string): Promise<ResultRow[]> {
   const sb = getSupabase();
   if (!sb) return [];

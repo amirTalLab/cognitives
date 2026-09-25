@@ -380,14 +380,19 @@ export function Runner({
   // the old trial's phases do not keep running while the screen is blank.
   useEffect(() => {
     if (!phase || feedback || iti) return;
-    if (phase.awaitsResponse) {
+    // A response phase with nothing bound to it on THIS trial passes by like a timed one.
+    // A block can mix trials that ask something with trials that do not — the testing effect
+    // interleaves pairs to restudy, which are only shown, with pairs to recall, which are
+    // typed — and without this the shown ones would wait for an answer that never comes.
+    const bound = steps.some(s => s.phase === phase.name);
+    if (phase.awaitsResponse && bound) {
       if (phase.startsClock) clock.current = performance.now();
       return;
     }
     const ms = trial ? phaseDuration(phase, trial, phaseIdx) : 0;
     const timer = setTimeout(() => setPhaseIdx(i => i + 1), ms);
     return () => clearTimeout(timer);
-  }, [phaseIdx, trialIdx, phase, feedback, iti, trial]);
+  }, [phaseIdx, trialIdx, phase, feedback, iti, trial, steps]);
 
   // A response phase with a time limit ends on its own, answered "none" — which is a miss on
   // a go trial and the correct answer on a catch or no-go trial.

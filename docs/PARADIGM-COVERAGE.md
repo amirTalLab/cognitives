@@ -45,6 +45,12 @@ present without asking (a study list), be bounded by a clock rather than a trial
 filled delay), keep its trials in a fixed order, and score a typed recall list into a row
 per studied item.
 
+> **Update — the migration is finished.** All 18 experiments on the homepage run on the
+> definition runtime, so every one of them can be edited from /create. The last three needed,
+> between them: within-trial contingency (a choice decides what comes next), a remembered
+> between-subject assignment (an experiment taken in two sittings a week apart), and two
+> phases of code behind the escape hatch. Nothing needed a second kind of experiment.
+
 ### What the 16 never needed
 
 1. **Trial history** — the next trial depending on preceding ones

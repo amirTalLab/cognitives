@@ -1,4 +1,4 @@
-import { CueTargetPair, Condition, CounterbalanceGroup } from '@/types/testing-effect';
+import type { CueTargetPair, Condition, CounterbalanceGroup } from '@/types/testing-effect';
 
 export const SET_A: CueTargetPair[] = [
   { cue: 'navo', target: 'cheese' },

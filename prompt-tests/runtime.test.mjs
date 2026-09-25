@@ -2175,18 +2175,15 @@ test('a ported experiment can be opened for editing before it has ever been publ
   );
 });
 
-test('the catalogue and the runtime agree on the two hand-built pages that remain', () => {
-  // A sanity check on the migration itself: everything the homepage still serves from its
-  // own route has no /run href, and everything with one is gone from app/<slug>/ or kept
-  // only for its old results.
+test('every experiment on the homepage runs on the definition runtime', () => {
+  // The migration is finished: every card points at /run. This used to assert the opposite —
+  // that SOME were still hand-built — which was the right check while any were.
+  //
+  // What it guards now is a regression: a card pointed back at a hand-built page would take
+  // an experiment out of the edit list and split its results across two tables.
   const stillHandBuilt = catalogue.EXPERIMENTS.filter(e => !e.href).map(e => e.id);
-  for (const id of stillHandBuilt) {
-    assert.ok(
-      !ports.PORTS.some(p => p.slug === id),
-      `"${id}" is ported but its card still points at the hand-built page`,
-    );
-  }
-  assert.ok(stillHandBuilt.length > 0, 'expected some experiments still to be hand-built');
+  assert.deepEqual(stillHandBuilt, [],
+    `${stillHandBuilt.join(', ')} no longer point at /run`);
 });
 
 test('the catalogue is a plain data module with no page imports', () => {
@@ -3472,4 +3469,165 @@ test('the port says which analysis it cannot draw yet', () => {
   assert.ok(TWO_STEP.simplifications?.length);
   const text = TWO_STEP.simplifications.map(s => `${s.what} ${s.why}`).join(' ');
   assert.match(text, /previous|before it/i);
+});
+
+
+// ── AE. The testing effect ────────────────────────────────────────────────────
+//
+// Learn thirty-six pairs; reread a third, be tested on a third, leave a third alone; come
+// back a week later. The pairs you had to RETRIEVE are the ones that stay. Two sittings,
+// which is the thing the runtime had to learn — and it turned out to need only that one
+// assignment be remembered rather than redrawn.
+
+const TESTING = ports.PORTS.find(p => p.slug === 'testingEffect');
+const testingStimuli = await import('../lib/testing-effect/stimuli.ts');
+const testingBlock = (name, remembered) =>
+  planStages(TESTING, seededRandom(31), remembered).find(b => b.stage === name);
+
+test('testingEffect studies 36 pairs, practises 24 twice, then tests all 36', () => {
+  const rng = seededRandom(31);
+  const plan = planStages(TESTING, rng);
+  assert.deepEqual(plan.map(b => b.stage), ['study', 'practice', 'test']);
+
+  const counts = plan.map(b => buildTrials(b.design, { rng, context: b.context }).length);
+  const pairs = testingStimuli.SET_A.length * 3;
+  assert.deepEqual(counts, [pairs, (pairs / 3) * 2 * 2, pairs]);
+});
+
+test('each sitting runs its own blocks, and only its own', () => {
+  // A second visit that reran the study block would teach the pairs again, and the test
+  // would measure ten minutes of memory rather than a week of it.
+  const [learn, test] = TESTING.sessions;
+  assert.deepEqual(learn.blocks, ['study', 'practice']);
+  assert.deepEqual(test.blocks, ['test']);
+  assert.equal(test.requires, 'learn');
+  assert.equal(learn.requires, undefined, 'the first sitting must not require anything');
+});
+
+test('the second sitting remembers the assignment rather than redrawing it', () => {
+  // The whole reason this needed anything new. A fresh draw would test someone on pairs
+  // they never studied, and every row would look perfectly valid.
+  assert.equal(TESTING.assign.remember, 'group.label');
+  assert.ok(TESTING.store.includes('group.label'), 'the field it recovers is not stored');
+
+  for (const label of ['1', '2', '3']) {
+    const block = testingBlock('test', label);
+    assert.equal(String(block.context.group.label), label,
+      `asking for group ${label} gave group ${block.context.group.label}`);
+  }
+});
+
+test('a remembered group brings back exactly the same pairs in the same conditions', () => {
+  // What session two depends on: the same word in the same treatment, a week later.
+  const first = testingBlock('study', '2');
+  const second = testingBlock('test', '2');
+  const conditionOf = block => Object.fromEntries(
+    buildTrials(block.design, { rng: seededRandom(2), context: block.context })
+      .map(t => [t.values.pair.cue, t.values.pair.condition]));
+
+  assert.deepEqual(conditionOf(second), conditionOf(first));
+});
+
+test('the sets rotate through the conditions, so no word set is tied to a treatment', () => {
+  // Without this a difference between conditions could just be a difference between word
+  // lists, and the experiment would measure nothing.
+  const seen = { A: new Set(), B: new Set(), C: new Set() };
+  for (const label of ['1', '2', '3']) {
+    const block = testingBlock('study', label);
+    for (const trial of buildTrials(block.design, { rng: seededRandom(3), context: block.context })) {
+      seen[trial.values.pair.set].add(trial.values.pair.condition);
+    }
+  }
+  for (const set of ['A', 'B', 'C']) {
+    assert.deepEqual([...seen[set]].sort(), ['baseline', 'restudy', 'retrieval'],
+      `set ${set} does not appear in all three conditions across the groups`);
+  }
+});
+
+test('the baseline third is studied once and then left alone', () => {
+  // Its entire role. A baseline that got any further exposure would not be one.
+  const practice = testingBlock('practice');
+  const trials = buildTrials(practice.design, { rng: seededRandom(4), context: practice.context });
+  assert.ok(trials.length > 0);
+  for (const trial of trials) {
+    assert.notEqual(trial.values.pair.condition, 'baseline',
+      'a baseline pair appeared in the practice block');
+  }
+  const conditions = new Set(trials.map(t => t.values.pair.condition));
+  assert.deepEqual([...conditions].sort(), ['restudy', 'retrieval']);
+});
+
+test('restudy pairs are shown and retrieval pairs are asked, in the same block', () => {
+  // Interleaved on purpose: knowing which is coming would change how the screen is read,
+  // and the comparison is between two ways of spending the same minute.
+  const practice = testingBlock('practice');
+  const responses = practice.design.trial.response;
+  assert.equal(responses.by, 'pair.condition');
+  assert.equal(responses.sets.restudy.kind, 'none', 'a restudy pair should ask nothing');
+  assert.equal(responses.sets.retrieval.kind, 'text');
+
+  // And the showing phase is four seconds for one and skipped for the other.
+  const trials = buildTrials(practice.design, { rng: seededRandom(5), context: practice.context });
+  for (const trial of trials) {
+    const expected = trial.values.pair.condition === 'restudy' ? testingStimuli.RESTUDY_DISPLAY_MS : 0;
+    assert.equal(trial.values.pair.showMs, expected);
+  }
+});
+
+test('a response phase with nothing bound to it does not wait', () => {
+  // The runtime half of the above. Without it a restudy trial would sit on the recall phase
+  // waiting for an answer that was never going to be asked for.
+  const source = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'Runner.tsx'), 'utf8');
+  assert.match(source, /const bound = steps\.some/);
+  assert.match(source, /phase\.awaitsResponse && bound/);
+});
+
+test('recall typed a week later forgives a slip but not a different word', () => {
+  const test = testingBlock('test');
+  const trials = buildTrials(test.design, { rng: seededRandom(6), context: test.context });
+  const castle = trials.find(t => t.values.pair.target === 'castle');
+  assert.ok(castle, 'expected the castle pair');
+
+  for (const answer of ['castle', 'CASTLE', ' castle ', 'castel', 'castles']) {
+    assert.equal(isCorrect(test.design, castle, answer), true, `"${answer}" should be accepted`);
+  }
+  for (const answer of ['cat', 'palace', '']) {
+    assert.equal(isCorrect(test.design, castle, answer), false, `"${answer}" should not be accepted`);
+  }
+});
+
+test('the test gives no feedback, because it is the measure', () => {
+  // Telling someone the answer would turn the measurement into another round of learning.
+  const test = testingBlock('test');
+  assert.equal(test.design.trial.feedback, undefined);
+  // Practice does give it — that is what makes retrieval practice practice.
+  assert.ok(testingBlock('practice').design.trial.feedback);
+});
+
+test('a returning participant is found by name, or refused', () => {
+  // Exactly three answers, and the difference matters: no earlier visit, an ambiguous name,
+  // or the assignment. Guessing at either of the first two corrupts the comparison.
+  const storeSource = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'store.ts'), 'utf8');
+  assert.match(storeSource, /export const AMBIGUOUS/);
+  assert.match(storeSource, /found\.size > 1\) return AMBIGUOUS/);
+
+  const pageSource = readFileSync(
+    join(process.cwd(), 'app', 'run', '[slug]', 'page.tsx'), 'utf8');
+  // Refused, not drawn fresh.
+  assert.match(pageSource, /setLookupError\('missing'\); return;/);
+  assert.match(pageSource, /setLookupError\('ambiguous'\); return;/);
+});
+
+test('mock data shows retrieval practice beating rereading a week later', () => {
+  const rows = generateMockRows(TESTING);
+  const recall = condition => {
+    const ofCondition = rows.filter(r => r.stage === 'test' && r.pair_condition === condition);
+    return ofCondition.filter(r => r.is_correct).length / ofCondition.length;
+  };
+  assert.ok(recall('retrieval') > recall('restudy'),
+    `tested ${recall('retrieval').toFixed(2)} did not beat reread ${recall('restudy').toFixed(2)}`);
+  assert.ok(recall('restudy') > recall('baseline'),
+    'rereading did not beat studying once');
 });

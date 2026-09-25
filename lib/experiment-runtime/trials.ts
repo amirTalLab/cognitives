@@ -336,13 +336,26 @@ export interface PlannedBlock {
 export function planStages(
   def: ExperimentDefinition,
   rng: () => number = Math.random,
+  /**
+   * The assignment this participant already has, for an experiment taken in two sittings.
+   *
+   * Given, the draw is skipped and the item whose `assign.remember` field matches is used —
+   * so the second visit tests the pairs the first one studied. The page looks it up before
+   * planning, because a plan drawn first would already have chosen the wrong condition.
+   */
+  remembered?: string,
 ): PlannedBlock[] {
   // Drawn once, before anything else, and merged into every block's context — including the
   // first. A between-subject condition that differed between blocks would not be one.
   const assigned: Record<string, unknown> = {};
   if (def.assign) {
     const pool = def.pools?.[def.assign.pool] ?? [];
-    if (pool.length) assigned[def.assign.as] = shuffle(pool, rng)[0];
+    const field = def.assign.remember;
+    const recovered = remembered !== undefined && field
+      ? pool.find(item => String(lookup(field.split('.').slice(1).join('.') || field, item)) === remembered)
+      : undefined;
+    if (recovered) assigned[def.assign.as] = recovered;
+    else if (pool.length) assigned[def.assign.as] = shuffle(pool, rng)[0];
   }
 
   const blocks: PlannedBlock[] = [
@@ -572,6 +585,31 @@ export function phaseDuration(
 // ─── Scoring ──────────────────────────────────────────────────────────────────
 
 /**
+ * Single-character edits between two words — insertions, deletions, substitutions.
+ *
+ * Used to accept a misspelling as the word it obviously is. Plain Levenshtein, iterative,
+ * because the words here are short and the clarity is worth more than the micro-optimisation.
+ */
+function editDistance(a: string, b: string): number {
+  const rows = a.length;
+  const cols = b.length;
+  if (rows === 0) return cols;
+  if (cols === 0) return rows;
+
+  let previous = Array.from({ length: cols + 1 }, (_, i) => i);
+  for (let i = 1; i <= rows; i++) {
+    const current = [i, ...Array<number>(cols).fill(0)];
+    for (let j = 1; j <= cols; j++) {
+      current[j] = a[i - 1] === b[j - 1]
+        ? previous[j - 1]
+        : 1 + Math.min(previous[j], current[j - 1], previous[j - 1]);
+    }
+    previous = current;
+  }
+  return previous[cols];
+}
+
+/**
  * The rule that judges THIS trial.
  *
  * A block interleaving two tasks carries one rule per kind, keyed by the same factor its
@@ -610,10 +648,28 @@ export function isCorrect(def: TrialDesign, trial: Trial, response: string): boo
     const target = String(lookup(rule.factor, trial.values) ?? '').trim().toLowerCase();
     if (!target) return false;
     if (given === target) return true;
-    if (!rule.plural) return false;
     // A trailing s or es either way: the answer is a noun and the number was never the point.
-    return given === `${target}s` || `${given}s` === target
-      || given === `${target}es` || `${given}es` === target;
+    const singular = (word: string) =>
+      word.endsWith('ies') ? `${word.slice(0, -3)}y`
+        : word.endsWith('es') ? word.slice(0, -2)
+          : word.endsWith('s') ? word.slice(0, -1)
+            : word;
+    if (rule.plural) {
+      // Both forms of the comparison. Stripping a root alone fails where the SINGULAR ends
+      // in -es: "cheese" reduces to "chee" and "cheeses" to "chees", which do not match even
+      // though one is plainly the plural of the other.
+      if (given === `${target}s` || `${given}s` === target) return true;
+      if (given === `${target}es` || `${given}es` === target) return true;
+      if (singular(given) === singular(target)) return true;
+    }
+
+    // A word typed from memory a week later: a spelling slip is still the word.
+    const slack = rule.editDistance ?? 0;
+    if (slack > 0) {
+      if (editDistance(given, target) <= slack) return true;
+      if (rule.plural && editDistance(singular(given), singular(target)) <= slack) return true;
+    }
+    return false;
   }
 
   if (rule.kind === 'within') {

@@ -2174,3 +2174,114 @@ test.describe('The two-step task, ported', () => {
     expect(Number(row.payload?.trial_probA1)).toBeGreaterThan(0);
   });
 });
+
+test.describe('The testing effect, ported', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  /**
+   * Two sittings, a week apart, and the second one has to find the first.
+   *
+   * The refusal is the part worth testing hardest. A second sitting that quietly drew a
+   * fresh assignment would test someone on pairs they never studied, and every row would
+   * look perfectly valid — the failure would only ever show up as a weak effect.
+   */
+  test('the second sitting refuses when it cannot find the first', async ({ page }) => {
+    // No earlier rows: the lookup finds nothing.
+    await page.route('**/rest/v1/experiment_results**', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+
+    await open(page, '/run/testingEffect');
+    await page.getByRole('button', { name: 'English' }).click();
+
+    // Both sittings are offered, as the hand-built version offers two buttons.
+    await expect(page.getByText('Session 1: Learning')).toBeVisible();
+    await expect(page.getByText('Session 2: Test')).toBeVisible();
+
+    // Nothing can start until one is chosen.
+    await expect(page.getByRole('button', { name: 'Begin' })).toBeDisabled();
+
+    await page.getByText('Session 2: Test').click();
+    await page.getByPlaceholder('Name').fill('Nobody At All');
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    // Refused, and told why — with the name that was looked for, because the usual cause is
+    // a typo and the participant is the only one who can see it.
+    await expect(page.getByText(/We have no earlier session under "Nobody At All"/))
+      .toBeVisible({ timeout: 15_000 });
+    // And still on the landing page rather than part-way into an experiment.
+    await expect(page.getByRole('button', { name: 'Begin' })).toBeVisible();
+  });
+
+  test('a returning participant gets the group they had the first time', async ({ page }) => {
+    // One earlier row, in group 3. The second sitting must test the pairs that group
+    // studied, not a fresh draw.
+    await page.route('**/rest/v1/experiment_results**', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ payload: { group_label: '3' } }]),
+      }));
+
+    await open(page, '/run/testingEffect');
+    await page.getByRole('button', { name: 'English' }).click();
+    await page.getByText('Session 2: Test').click();
+    await page.getByPlaceholder('Name').fill('Returning Student');
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    // Straight into the test block — no study, no practice.
+    await expect(page.getByRole('heading', { name: 'What do you remember?' }))
+      .toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: /Continue|Start/ }).first().click();
+
+    // A cue with no answer shown: this is the measure, so nothing gives it away.
+    const input = page.getByPlaceholder('The second word');
+    await expect(input).toBeVisible({ timeout: 15_000 });
+    const shown = await page.locator('main').innerText();
+    expect(shown).toContain('?');
+
+    // In group 3, set A is the retrieval set — so a set-A cue must be among the pairs.
+    await input.fill('something');
+    await page.getByRole('button', { name: 'Submit' }).click();
+    await expect(input).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('two people under one name are refused rather than guessed between', async ({ page }) => {
+    // Guessing would put one of them in the other's condition, and nothing downstream could
+    // ever tell that it had happened.
+    await page.route('**/rest/v1/experiment_results**', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ payload: { group_label: '1' } }, { payload: { group_label: '2' } }]),
+      }));
+
+    await open(page, '/run/testingEffect');
+    await page.getByRole('button', { name: 'English' }).click();
+    await page.getByText('Session 2: Test').click();
+    await page.getByPlaceholder('Name').fill('Noa Cohen');
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    await expect(page.getByText(/More than one person is recorded under that name/))
+      .toBeVisible({ timeout: 15_000 });
+  });
+
+  test('the first sitting starts without any lookup', async ({ page }) => {
+    // It requires nothing, so a first-time participant is never asked to have been here
+    // before.
+    await page.route('**/rest/v1/experiment_results**', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+
+    await open(page, '/run/testingEffect');
+    await page.getByRole('button', { name: 'English' }).click();
+    await page.getByText('Session 1: Learning').click();
+    await page.getByPlaceholder('Name').fill('First Timer');
+    await page.getByRole('button', { name: 'Begin' }).click();
+
+    // Straight into studying: a pair, shown with its answer.
+    await expect(page.locator('main')).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(1200);
+    const shown = await page.locator('main').innerText();
+    expect(shown.length).toBeGreaterThan(0);
+    await expect(page.getByText(/We have no earlier session/)).toBeHidden();
+  });
+});

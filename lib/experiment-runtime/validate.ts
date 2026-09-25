@@ -577,8 +577,12 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
             bad(`${at}'s "trial.phases"`, 'at least one phase');
           }
           if (trial.response === undefined) bad(`${at}'s "trial.response"`, 'a response');
-          if (!isObj(trial.correct) || !isStr((trial.correct as Record<string, unknown>).kind)) {
-            bad(`${at}'s "trial.correct"`, 'an object with a "kind"');
+          // One rule, or one per kind of trial — a block may interleave trials that are
+          // scored with trials that are only shown.
+          const stageCorrect = trial.correct as Record<string, unknown> | undefined;
+          const branching = !!stageCorrect && isObj(stageCorrect) && 'sets' in stageCorrect;
+          if (!stageCorrect || !isObj(stageCorrect) || (!branching && !isStr(stageCorrect.kind))) {
+            bad(`${at}'s "trial.correct"`, 'an object with a "kind", or a "by"/"sets" pair');
           }
         }
         if (!Array.isArray(stage.store)) bad(`${at}'s "store"`, 'a list of fields to save');

@@ -15,6 +15,7 @@ import { getDefinition } from '@/lib/experiment-runtime/registry';
 import { Runner, TrialRow } from '@/lib/experiment-runtime/Runner';
 import { ONBOARDING_COMPONENT_MAP } from '@/lib/experiment-runtime/components';
 import { buildTrials, planStages, resolve, type PlannedBlock } from '@/lib/experiment-runtime/trials';
+import { previousAssignment } from '@/lib/experiment-runtime/store';
 import { DisplayView } from '@/lib/experiment-runtime/DisplayView';
 
 // 'main' is the definition's own design — the first block. 'stageIntro' and 'stageRun'
@@ -36,10 +37,27 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   // Which block of the plan is next. Index 0 is the definition's own design.
   const [stageIdx, setStageIdx] = useState(0);
 
+  // An experiment taken in two sittings: which one this is, what the participant was
+  // assigned the first time, and why we could not start when we could not.
+  const [session, setSession] = useState<string | null>(null);
+  const [remembered, setRemembered] = useState<string | undefined>();
+  const [lookupError, setLookupError] = useState<'missing' | 'ambiguous' | null>(null);
+  const [looking, setLooking] = useState(false);
+
   // The blocks this participant will run, with any stage groups already expanded. Drawn
   // once: a group picks its order at random, so asking again mid-run would give a different
   // one and a participant could study one list and then be tested on another.
-  const plan = useMemo(() => (def ? planStages(def) : []), [def]);
+  // Filtered to the chosen session where there is one, so a second visit runs the blocks
+  // that test and not the blocks it is testing.
+  const plan = useMemo(() => {
+    if (!def) return [];
+    const all = planStages(def, undefined, remembered);
+    const chosen = def.sessions?.find(s => s.id === session);
+    if (!chosen) return all;
+    return chosen.blocks
+      .map(name => all.find(b => b.stage === name))
+      .filter((b): b is PlannedBlock => b !== undefined);
+  }, [def, session, remembered]);
 
   // For the practice-complete screen. Counted from the design, since the block's runner has
   // not been built yet when that screen is up. `stageIdx` rather than the definition,
@@ -79,9 +97,28 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
   }
 
   if (stage === 'landing') {
-    const begin = (e: FormEvent) => {
+    const chosenSession = def.sessions?.find(s => s.id === session);
+
+    const begin = async (e: FormEvent) => {
       e.preventDefault();
       if (!def.nameOptional && !name.trim()) return;
+
+      // A second sitting has to be the SAME person in the SAME condition, or it tests them
+      // on material they never studied and writes a row that looks perfectly valid.
+      if (chosenSession?.requires && def.assign?.remember) {
+        setLooking(true);
+        setLookupError(null);
+        const found = await previousAssignment(def.slug, name.trim(), def.assign.remember);
+        setLooking(false);
+        // Refused rather than drawn fresh, and refused loudly: a participant who mistyped
+        // their name can see what we looked for.
+        if (found === null) { setLookupError('missing'); return; }
+        // Two people under one name. Guessing would put one of them in the other's
+        // condition, and nothing downstream could ever tell.
+        if (typeof found !== 'string') { setLookupError('ambiguous'); return; }
+        setRemembered(found);
+      }
+
       sessionStorage.setItem(`${def.slug}_name`, name.trim());
       sessionStorage.setItem(`${def.slug}_language`, language);
       sessionStorage.setItem(`${def.slug}_session_id`, crypto.randomUUID());
@@ -90,7 +127,19 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
       // Only when the named gate actually exists — a name this site does not have must not
       // strand a participant on a screen that will never render.
       const gated = def.onboarding && ONBOARDING_COMPONENT_MAP[def.onboarding];
-      setStage(gated ? 'onboarding' : def.practice ? 'practice' : 'main');
+      if (gated) { setStage('onboarding'); return; }
+      if (def.practice) { setStage('practice'); return; }
+
+      // A later sitting starts on a block that is not the definition's own, and that block
+      // carries its own instructions — "you will see the first word of each pair". Going
+      // straight to the trials would drop them, and the landing page cannot say them because
+      // it has to describe both sittings.
+      const opening = plan[0];
+      const source = opening?.source as { title?: unknown; instructions?: unknown } | undefined;
+      const introduces = opening && opening.stage !== (def.stageName ?? 'main')
+        && !!(source?.title || source?.instructions);
+      setStageIdx(0);
+      setStage(introduces ? 'stageIntro' : 'main');
     };
 
     return (
@@ -121,13 +170,52 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
             {resolve(rtl ? def.instructions.he : def.instructions.en, plan[0]?.context ?? {})}
           </p>
 
+          {/* Which sitting this is. An experiment taken over two visits offers the choice
+              here, as the hand-built version does with two buttons — a participant arriving
+              a week later has to be able to say which one they are here for. */}
+          {def.sessions?.length ? (
+            <div className="flex flex-col gap-3 mb-6" dir={rtl ? 'rtl' : 'ltr'}>
+              {def.sessions.map(entry => (
+                <button key={entry.id} type="button"
+                  onClick={() => { setSession(entry.id); setLookupError(null); }}
+                  className={`text-start px-5 py-4 rounded-xl border-2 transition-colors ${entry.id === session
+                    ? 'border-purple-400 bg-purple-400/10'
+                    : 'border-gray-700 hover:border-purple-400'}`}>
+                  <div className="text-gray-100 font-semibold">
+                    {rtl ? entry.title.he : entry.title.en}
+                  </div>
+                  <div className="text-gray-400 text-sm mt-0.5">
+                    {rtl ? entry.description.he : entry.description.en}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Why a second sitting could not start. Said plainly, with the name that was
+              looked for, because the usual cause is a typo and the participant is the only
+              one who can see it. */}
+          {lookupError && (
+            <p className="text-amber-400 text-sm mb-4" dir={rtl ? 'rtl' : 'ltr'}>
+              {lookupError === 'missing'
+                ? (rtl
+                    ? `לא מצאנו מפגש קודם בשם "${name.trim()}". בדקו את האיות — יש להזין בדיוק את השם מהמפגש הראשון.`
+                    : `We have no earlier session under "${name.trim()}". Check the spelling — it has to match the name you used the first time.`)
+                : (rtl
+                    ? 'יותר מאדם אחד רשום בשם הזה, ולכן אי אפשר לדעת איזה מהם אתם. פנו למרצה.'
+                    : 'More than one person is recorded under that name, so we cannot tell which one you are. Ask your lecturer.')}
+            </p>
+          )}
+
           <form onSubmit={begin} dir={rtl ? 'rtl' : 'ltr'} className="flex flex-col gap-3">
             <input type="text" required={!def.nameOptional} value={name} onChange={e => setName(e.target.value)}
               placeholder={rtl ? 'שם' : 'Name'}
               className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 outline-none focus:border-purple-400" />
+            {/* A session has to be chosen before there is anything to begin. */}
             <button type="submit"
-              className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-lg touch-manipulation">
-              {rtl ? 'התחלה' : 'Begin'}
+              disabled={looking || (!!def.sessions?.length && !session)}
+              className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-lg touch-manipulation disabled:opacity-40">
+              {looking ? (rtl ? 'מחפשים…' : 'Looking you up…') : (rtl ? 'התחלה' : 'Begin')}
             </button>
           </form>
         </motion.div>

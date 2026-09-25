@@ -48,7 +48,8 @@ export const EXPERIMENTS: Exp[] = [
   { id: 'twoStepTask',     title: 'Two-Step Task',          titleHe: 'משימת שני השלבים',    icon: GitFork,   color: 'text-violet-400', href: '/run/twoStepTask' },
   // Ported. app/serialOrder/ still serves its own rows at /serialOrder/teacher.
   { id: 'serialOrder',     title: 'Serial Position',        titleHe: 'זיכרון סדרתי',        icon: List,      color: 'text-sky-400', href: '/run/serialOrder' },
-  { id: 'testingEffect',   title: 'Testing Effect',         titleHe: 'אפקט הבחינה',         icon: BookOpen,  color: 'text-blue-400'    },
+  // Ported. app/testingEffect/ still serves its own rows at /testingEffect/teacher.
+  { id: 'testingEffect',   title: 'Testing Effect',         titleHe: 'אפקט הבחינה',         icon: BookOpen,  color: 'text-blue-400', href: '/run/testingEffect' },
   // Ported. app/logics/ still serves its own rows at /logics/teacher.
   { id: 'logics',          title: 'Reasoning Biases',       titleHe: 'הטיות בחשיבה',         icon: Lightbulb, color: 'text-yellow-400', href: '/run/logics' },
   // Ported. app/creativity/ still serves its own rows at /creativity/teacher.
