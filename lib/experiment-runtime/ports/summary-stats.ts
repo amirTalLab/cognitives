@@ -184,10 +184,15 @@ export const SUMMARY_STATS_PORT: ExperimentDefinition = {
     },
 
     itiMs: 400,
+    // The message comes from the ITEM, because the two questions deserve different ones. A
+    // recognition probe was or was not there, so "correct" means something. An estimate has
+    // no verdict — the original shows the true average beside what was given, and calling a
+    // number within a tolerance "correct" tells someone their guess was right when it may
+    // have been well off.
     feedback: {
-      durationMs: 700,
-      correct: { en: 'Correct', he: 'נכון' },
-      incorrect: { en: 'Not quite', he: 'לא מדויק' },
+      durationMs: 900,
+      correct: { en: '{display.feedbackRightEn}', he: '{display.feedbackRightHe}' },
+      incorrect: { en: '{display.feedbackWrongEn}', he: '{display.feedbackWrongHe}' },
     },
   },
 

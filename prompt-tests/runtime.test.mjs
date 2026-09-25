@@ -2365,6 +2365,45 @@ test('every figure a rotation trial names exists on disk', () => {
   }
 });
 
+test('no rotation figure is cut off by its own frame', () => {
+  // The figures were drawn with the origin a sixth of the way below the middle of a 200x200
+  // box, so the lower cubes of most of them fell outside it and were clipped — 54 of the 64,
+  // by up to 26px. A figure with a corner sliced off is a different figure, and "is this the
+  // same shape rotated?" is the entire question being asked.
+  //
+  // They also all share one frame. A figure drawn to fit its own extent would be drawn at
+  // its own scale, and two drawings of one shape at two sizes is a different question again.
+  const dir = join(process.cwd(), 'public', 'mental-rep');
+  const files = readdirSync(dir).filter(f => f.startsWith('figure_') && f.endsWith('.svg'));
+  assert.equal(files.length, 64, `expected 64 figures, found ${files.length}`);
+
+  const frames = new Set();
+  for (const file of files) {
+    const svg = readFileSync(join(dir, file), 'utf8');
+    const box = /viewBox="([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)"/.exec(svg);
+    assert.ok(box, `${file} has no viewBox`);
+    frames.add(box[0]);
+
+    // The polygon coordinates are compared against the frame directly, so there must be
+    // nothing between them moving the drawing around — otherwise this checks arithmetic
+    // that is not the arithmetic the browser does.
+    assert.ok(!/transform=/.test(svg), `${file} moves its drawing, so these coordinates are not where it lands`);
+
+    const [x0, y0, w, h] = box.slice(1).map(Number);
+    for (const points of svg.matchAll(/points="([^"]+)"/g)) {
+      for (const point of points[1].trim().split(/\s+/)) {
+        const [x, y] = point.split(',').map(Number);
+        // Half a pixel in from each edge, because half the 1px stroke sits outside the
+        // polygon and is ink like any other.
+        assert.ok(x >= x0 + 0.5 && x <= x0 + w - 0.5 && y >= y0 + 0.5 && y <= y0 + h - 0.5,
+          `${file} draws at ${x},${y}, outside its frame ${box[0]}`);
+      }
+    }
+  }
+
+  assert.equal(frames.size, 1, `the figures are drawn at ${frames.size} different scales`);
+});
+
 test('scanning takes seven pairs from each distance band', () => {
   const scanning = mrBlock('scanning');
   const trials = buildTrials(scanning.design, { rng: seededRandom(7), context: scanning.context });

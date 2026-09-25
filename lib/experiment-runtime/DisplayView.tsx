@@ -6,7 +6,7 @@
 // actually put on screen. Shapes are inline SVG rather than image files so a generated
 // experiment never needs an asset sourced, shipped or pathed.
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Display } from './schema';
 import { lookup, resolve, seededRandom } from './trials';
 
@@ -116,6 +116,20 @@ function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>
   const area = node.area ?? { width: 600, height: 400 };
   const seed = Number(values[SEED_KEY] ?? 1);
 
+  // How much room there is to draw in. Measured rather than assumed: the array's own size is
+  // in pixels chosen for a laptop, and a phone has neither the width nor the height.
+  // Two thirds of the height, so the response buttons below are on screen with it.
+  const [room, setRoom] = useState({ width: area.width, height: area.height });
+  useEffect(() => {
+    const measure = () => setRoom({
+      width: Math.max(120, window.innerWidth - 32),
+      height: Math.max(120, window.innerHeight * 0.62),
+    });
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
   // One flat list of what to draw. `groups` is the general form — a conjunction search holds
   // three kinds at once — and the older target-and-distractor pair is the two-group case of
   // the same thing, kept working so no existing experiment changes.
@@ -180,8 +194,30 @@ function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>
     return placed;
   }, [targets, distractors, area.width, area.height, seed]);
 
+  // Scaled to whatever room there is, as ONE piece. The area is designed in pixels — 600 by
+  // 500 for a search array — which is wider than a phone, so items fell off the side and the
+  // page scrolled to reach them. A participant who has to scroll to see the array is not
+  // doing a visual search.
+  //
+  // Scaling the whole thing rather than repositioning keeps the layout exactly as designed:
+  // the gaps between items stay proportional, so nothing crowds or overlaps that did not
+  // before. Never above 1 — a small array is not blown up to fill a desktop.
+  const scale = Math.min(1, room.width / area.width, room.height / area.height);
+
   return (
-    <div style={{ position: 'relative', width: area.width, height: area.height, maxWidth: '100%' }}>
+    <div style={{
+      // The footprint AFTER scaling, so the layout around it reserves the right space.
+      width: area.width * scale,
+      height: area.height * scale,
+      maxWidth: '100%',
+    }}>
+    <div style={{
+      position: 'relative',
+      width: area.width,
+      height: area.height,
+      transform: `scale(${scale})`,
+      transformOrigin: 'top left',
+    }}>
       {positions.map((p, i) => (
         <div key={i} style={{
           position: 'absolute', left: p.x, top: p.y,
@@ -195,6 +231,7 @@ function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>
             values={(drawn[i] as { values?: Values })?.values ?? values} />
         </div>
       ))}
+    </div>
     </div>
   );
 }

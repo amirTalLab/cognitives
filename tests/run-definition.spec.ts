@@ -2595,4 +2595,75 @@ test.describe('Everything a trial needs is on screen at once', () => {
       document.documentElement.scrollHeight > document.documentElement.clientHeight + 1);
     expect(scrollable, 'the trial screen scrolls').toBe(false);
   });
+
+  test('a search array fits on the screen, with nothing to scroll to', async ({ page }) => {
+    // Visual search lays its items out in a 600x500 field. That is wider than a phone, so
+    // items near the right edge were simply off it and the page scrolled to reach them —
+    // and an item a participant has to scroll to find is not one they searched for. The
+    // array now scales as a whole, which keeps every item's position relative to the others.
+    await runBuiltIn(page, 'visualSearch');
+
+    for (let i = 0; i < 3; i++) {
+      const answer = page.getByRole('button', { name: /^Present/ });
+      await expect(answer).toBeVisible({ timeout: 20_000 });
+
+      expect(await nothingOffScreen(page), 'part of the search array is unreachable').toEqual([]);
+      const scrollable = await page.evaluate(() =>
+        document.documentElement.scrollHeight > document.documentElement.clientHeight + 1);
+      expect(scrollable, 'the search screen scrolls').toBe(false);
+
+      // Scaled, not cropped: the items are all still drawn. A set size is drawn per trial
+      // and can be as low as one, so this only asks that the array is not empty.
+      const items = await page.locator('main div[style*="rotate"]').count();
+      expect(items, 'the array lost its items').toBeGreaterThan(0);
+
+      await answer.click();
+      await page.waitForTimeout(1300);
+    }
+  });
+
+  test('an ensemble array fits, and practice gives an estimate no verdict', async ({ page }) => {
+    // Two things at once, because they are both about the same ten practice trials.
+    //
+    // The group of shapes is laid out in a 520x460 field, so it had the same problem the
+    // search array had — and here a member that falls off the edge changes the average the
+    // participant is being asked for.
+    //
+    // And an estimate is not right or wrong. The original never says so: it shows the true
+    // average beside what was given. Calling a number inside a tolerance "correct" tells
+    // someone their guess was right when it may have been well off.
+    await runBuiltIn(page, 'summaryStats');
+
+    let sawEstimate = false;
+    let sawRecognition = false;
+
+    for (let i = 0; i < 10 && !(sawEstimate && sawRecognition); i++) {
+      const slider = page.locator('input[type="range"]');
+      const yes = page.getByRole('button', { name: /^Yes/ });
+      await expect(slider.or(yes).first()).toBeVisible({ timeout: 20_000 });
+
+      expect(await nothingOffScreen(page), 'part of the trial is off screen').toEqual([]);
+
+      if (await slider.count() > 0) {
+        const min = Number(await slider.getAttribute('min'));
+        await slider.fill(String(min));
+        await page.getByRole('button', { name: 'Confirm' }).click();
+
+        // The true average, and no verdict either way. The slider was dragged to the very
+        // bottom of the scale, so a verdict here would almost certainly be the wrong one.
+        await expect(page.getByText(/^The average was \d+$/)).toBeVisible({ timeout: 5000 });
+        await expect(page.getByText(/^(Correct|Incorrect)$/)).toHaveCount(0);
+        sawEstimate = true;
+      } else {
+        await yes.click();
+        // Recognition DOES have a right answer, so it still gets one.
+        await expect(page.getByText(/^(Correct|Incorrect)$/)).toBeVisible({ timeout: 5000 });
+        sawRecognition = true;
+      }
+      await page.waitForTimeout(1400);
+    }
+
+    expect(sawEstimate, 'no practice trial asked for an average').toBe(true);
+    expect(sawRecognition, 'no practice trial asked about a single item').toBe(true);
+  });
 });

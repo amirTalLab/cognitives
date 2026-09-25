@@ -7,7 +7,6 @@
 // is what makes the whole approach scale to many lecturers without a deploy each time.
 
 import { use, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FlaskConical, Check } from 'lucide-react';
 import { ExperimentDefinition } from '@/lib/experiment-runtime/schema';
@@ -27,7 +26,6 @@ type Stage =
 
 export default function RunPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const router = useRouter();
 
   const [def, setDef] = useState<ExperimentDefinition | null>(null);
   const [stage, setStage] = useState<Stage>('loading');
@@ -381,12 +379,12 @@ export default function RunPage({ params }: { params: Promise<{ slug: string }> 
           </div>
         </div>
 
-        <p className="text-xs text-gray-600 mb-6">{rows.length} {rtl ? 'ניסיונות' : 'trials'}</p>
+        <p className="text-xs text-gray-600">{rows.length} {rtl ? 'ניסיונות' : 'trials'}</p>
 
-        <button onClick={() => router.push('/')}
-          className="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-600">
-          {rtl ? 'סיום' : 'Done'}
-        </button>
+        {/* No way onward from here. The homepage is behind the site password, so a button to
+            it offers a student a door they cannot open — and there is nothing for them to do
+            next anyway. The hand-built experiments end the same way: a thank-you and a stop.
+            Their work is already saved by the time this screen appears. */}
       </motion.div>
     </main>
   );

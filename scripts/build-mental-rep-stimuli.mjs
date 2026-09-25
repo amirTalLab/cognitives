@@ -42,7 +42,18 @@ const CUBE_COLORS = { top: '#4A90D9', left: '#2E5B8A', right: '#1E3D5C' };
 const ROTATION_ANGLES = [0, 60, 120, 180];
 const SIZE = 200;
 
-function figureSvg(figureId, rotation, isMirror) {
+/**
+ * The drawing for one figure, in coordinates centred on the axis it rotates about, together
+ * with how far it reaches from that centre.
+ *
+ * Kept separate from the SVG wrapper because the frame cannot be chosen one figure at a
+ * time. A figure that is drawn to fit its own extent is drawn at its own scale, and scale
+ * is the one thing that must not vary here: the participant is asked whether two figures
+ * are the same shape, and two drawings of the same shape at different sizes are a different
+ * question. So every figure gets the same frame, large enough for the one that reaches
+ * furthest — see FRAME below.
+ */
+function figureBody(figureId, rotation, isMirror) {
   const cubeSize = SIZE / 6;
   const config = FIGURE_CONFIGS[figureId];
 
@@ -86,9 +97,14 @@ function figureSvg(figureId, rotation, isMirror) {
   };
 
   const round = n => Math.round(n * 100) / 100;
-  const polygon = (points, fill) =>
-    `<polygon points="${points.map(([x, y]) => `${round(x)},${round(y)}`).join(' ')}" `
-    + `fill="${fill}" stroke="#1a1a1a" stroke-width="1"/>`;
+  let reach = 0;
+  const polygon = (points, fill) => {
+    // Half the stroke sits outside the polygon, so the ink reaches half a pixel further
+    // than the geometry does.
+    for (const [x, y] of points) reach = Math.max(reach, Math.abs(x) + 0.5, Math.abs(y) + 0.5);
+    return `<polygon points="${points.map(([x, y]) => `${round(x)},${round(y)}`).join(' ')}" `
+      + `fill="${fill}" stroke="#1a1a1a" stroke-width="1"/>`;
+  };
 
   const body = cubes.map(cube => {
     const f = faces(cube);
@@ -96,26 +112,37 @@ function figureSvg(figureId, rotation, isMirror) {
       + `${polygon(f.right, CUBE_COLORS.right)}</g>`;
   }).join('');
 
-  const centerX = SIZE / 2;
-  const centerY = SIZE / 2 + cubeSize;
+  return { body, reach };
+}
+
+/** One figure, drawn in the shared frame. */
+function figureSvg(body, half) {
+  const round = n => Math.round(n * 100) / 100;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" `
-    + `viewBox="0 0 ${SIZE} ${SIZE}"><g transform="translate(${centerX}, ${round(centerY)})">`
-    + `${body}</g></svg>`;
+    + `viewBox="${round(-half)} ${round(-half)} ${round(half * 2)} ${round(half * 2)}">`
+    + `${body}</svg>`;
 }
 
 const figureFile = (figureId, angle, mirror) =>
   `${figureId}_${angle}${mirror ? '_m' : ''}.svg`;
 
-let figureCount = 0;
+// Every figure first, then the frame, then the files. The frame is the furthest any of the
+// 64 reaches from its centre — a figure drawn with the origin a sixth of the way down a
+// 200px box, which is what this used to do, has its lower cubes outside the box and cut off
+// by it. 54 of the 64 were clipped that way, most of them at the bottom; a shape with a
+// corner sliced off is a different shape, which is the judgement being asked for.
+const drawings = [];
 for (const figureId of Object.keys(FIGURE_CONFIGS)) {
   for (const angle of ROTATION_ANGLES) {
     for (const mirror of [false, true]) {
-      writeFileSync(join(OUT_SVG, figureFile(figureId, angle, mirror)),
-        figureSvg(figureId, angle, mirror));
-      figureCount++;
+      drawings.push({ file: figureFile(figureId, angle, mirror), ...figureBody(figureId, angle, mirror) });
     }
   }
 }
+
+const FRAME = Math.ceil(Math.max(...drawings.map(d => d.reach)));
+for (const { file, body } of drawings) writeFileSync(join(OUT_SVG, file), figureSvg(body, FRAME));
+const figureCount = drawings.length;
 
 // ─── The island map (components/mental-rep/IslandMap.tsx) ─────────────────────
 

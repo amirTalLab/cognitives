@@ -70,6 +70,24 @@ const RECOGNITION_PROMPT = {
   he: 'האם פריט זה הופיע בתצוגה?',
 };
 
+// What practice says afterwards. A RECOGNITION trial has a right answer, so it gets one;
+// an ESTIMATE does not — the original shows the true average beside what was given, and
+// calling a number within a tolerance "correct" would tell someone their guess was right
+// when it may have been well off.
+//
+// The number is written into the sentence HERE rather than left as a binding for the
+// runtime to fill in. A binding resolves once: '{display.feedbackRightEn}' would come back
+// as the sentence with '{display.trueMean}' still sitting in it, and a participant would
+// read that. The mean is known at this point, so there is nothing to defer.
+const ensembleFeedback = mean => ({
+  en: `The average was ${mean}`,
+  he: `הממוצע היה ${mean}`,
+});
+const RECOGNITION_FEEDBACK = {
+  right: { en: 'Correct', he: 'נכון' },
+  wrong: { en: 'Incorrect', he: 'לא נכון' },
+};
+
 /** Shared by every trial of a cell: what to draw, what to ask, and how it is scored. */
 function common(type, n, values) {
   const { min, max } = VALUE_RANGES[type];
@@ -103,6 +121,10 @@ for (const type of Object.keys(VALUE_RANGES)) {
           ...common(type, n, ens.values),
           question: 'ensemble',
           trueMean: ens.mean,
+          feedbackRightEn: ensembleFeedback(ens.mean).en,
+          feedbackRightHe: ensembleFeedback(ens.mean).he,
+          feedbackWrongEn: ensembleFeedback(ens.mean).en,
+          feedbackWrongHe: ensembleFeedback(ens.mean).he,
           // Every row carries every stored field, so a trial with no probe says so rather
           // than leaving a hole that reads as missing data in the export.
           probeType: 'none',
@@ -131,6 +153,10 @@ for (const type of Object.keys(VALUE_RANGES)) {
           ...common(type, n, rec.values),
           question: 'recognition',
           trueMean: rec.mean,
+          feedbackRightEn: RECOGNITION_FEEDBACK.right.en,
+          feedbackRightHe: RECOGNITION_FEEDBACK.right.he,
+          feedbackWrongEn: RECOGNITION_FEEDBACK.wrong.en,
+          feedbackWrongHe: RECOGNITION_FEEDBACK.wrong.he,
           probeValue,
           probeType,
           // Only a member of the array was actually shown. The mean was not, however
@@ -166,6 +192,10 @@ for (const [type, n] of PRACTICE_ENSEMBLE) {
     question: 'ensemble',
     trueMean: arr.mean,
     probeType: 'none',
+    feedbackRightEn: ensembleFeedback(arr.mean).en,
+    feedbackRightHe: ensembleFeedback(arr.mean).he,
+    feedbackWrongEn: ensembleFeedback(arr.mean).en,
+    feedbackWrongHe: ensembleFeedback(arr.mean).he,
     promptEn: PROMPT[type].en,
     promptHe: PROMPT[type].he,
   });
@@ -180,6 +210,10 @@ for (const [type, probeType] of PRACTICE_RECOGNITION) {
     ...common(type, n, arr.values),
     question: 'recognition',
     trueMean: arr.mean,
+    feedbackRightEn: RECOGNITION_FEEDBACK.right.en,
+    feedbackRightHe: RECOGNITION_FEEDBACK.right.he,
+    feedbackWrongEn: RECOGNITION_FEEDBACK.wrong.en,
+    feedbackWrongHe: RECOGNITION_FEEDBACK.wrong.he,
     probeValue,
     probeType,
     probeIsTarget: probeType === 'target',
@@ -219,6 +253,11 @@ export interface SsDisplay {
   answer?: string;
   promptEn: string;
   promptHe: string;
+  /** What practice says afterwards — a verdict for recognition, the true average for an estimate. */
+  feedbackRightEn: string;
+  feedbackRightHe: string;
+  feedbackWrongEn: string;
+  feedbackWrongHe: string;
 }
 
 ${Object.entries(pools).map(([name, rows]) =>

@@ -532,7 +532,12 @@ export function Runner({
         {feedback && feedback.message && (
           <p dir={rtl ? 'rtl' : 'ltr'}
             className={`text-lg font-semibold ${feedback.correct ? 'text-emerald-400' : 'text-red-400'}`}>
-            {rtl ? feedback.message.he : feedback.message.en}
+            {/* Resolved against the trial, so a message can name what the answer WAS rather
+                than only whether it was right. An estimate on a scale has no obvious verdict
+                — "correct" for a number within a tolerance tells a participant their guess
+                was right when it may have been well off — so the honest feedback there is
+                the true value beside their own. */}
+            {resolve(rtl ? feedback.message.he : feedback.message.en, values) ?? ''}
           </p>
         )}
 
