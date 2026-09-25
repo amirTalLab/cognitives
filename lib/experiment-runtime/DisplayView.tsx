@@ -239,31 +239,42 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
       // of the viewport. `min` means this only ever makes text smaller.
       const asked = Number(resolve(node.size, values) ?? 40);
       const chars = Math.max(1, String(text).length);
-      const fitted = `min(${asked}px, ${(92 / (chars * 0.6)).toFixed(2)}vw)`;
+      // 86vw, not 100: the runner pads the stage by 24px a side, so the space a stimulus
+      // actually has is narrower than the window. 0.68em per character rather than 0.6,
+      // because these are capitals — AMARILLO at 8 characters was the one that overflowed.
+      const fitted = `min(${asked}px, ${(86 / (chars * 0.68)).toFixed(2)}vw)`;
+      // ONE WORD STAYS ON ONE LINE. A stimulus broken across two lines is not the stimulus:
+      // the eye reads it in two fixations instead of one, which is the thing being timed.
+      // Only text with a space in it may wrap, which is instructions rather than stimuli.
+      const oneWord = !/\s/.test(String(text));
       // Direction follows the CONTENT, not the run's language. A string of neutral
       // characters — "_ _ ? _", marking which position is being asked about — has no
       // direction of its own, so it takes the surrounding one and silently mirrors on a
       // Hebrew run: the marker would point at the second letter while the question is about
       // the third, and nothing on screen would say so.
+      // An explicit direction wins, for text whose content cannot decide — a marker made of
+      // underscores and a question mark has no direction of its own and would otherwise take
+      // the one around it, pointing at the letter from the wrong end.
       const hebrew = /[֐-׿]/.test(String(text));
       return (
         <div
           className="select-none"
-          dir={hebrew ? 'rtl' : 'ltr'}
+          dir={node.dir ?? (hebrew ? 'rtl' : 'ltr')}
           style={{
             fontSize: fitted,
-            maxWidth: '92vw',
-            // A multi-word line wraps rather than overflowing; a single long word shrinks,
-            // which the size above already handles.
-            overflowWrap: 'break-word',
+            maxWidth: '86vw',
+            // Only text with a space in it may wrap.
+            overflowWrap: oneWord ? undefined : 'break-word',
             textAlign: 'center',
             color: color(resolve(node.color, values) as string | undefined),
             fontFamily: node.font === 'mono' ? 'monospace' : undefined,
             // HTML collapses runs of spaces, so "H   H" renders as "H H" and any stimulus
             // built from alignment — a compound letter, a grid, a matrix — comes out
-            // silently wrong. Asking for mono IS the request for alignment to be kept;
-            // proportional text stays wrappable, which instructions need.
-            whiteSpace: node.font === 'mono' ? 'pre' : undefined,
+            // silently wrong. Asking for mono IS the request for alignment to be kept.
+            //
+            // `nowrap` for a single word, so a stimulus is never split across two lines: the
+            // size above is what keeps it on the screen, not wrapping.
+            whiteSpace: node.font === 'mono' ? 'pre' : oneWord ? 'nowrap' : undefined,
           }}
         >
           {String(text)}
@@ -300,7 +311,18 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
           alt=""
           width={size}
           height={size}
-          style={{ transform: `rotate(${rotation}deg)`, display: 'block', objectFit: 'contain' }}
+          // The asked-for size on a laptop, and no more than the screen allows on a phone.
+          // Two 200px figures side by side are 448px with their gap, which is wider than a
+          // phone — half of the right-hand one was simply not there. Height is capped too,
+          // or a tall stimulus is cut off at the bottom with the buttons below it.
+          style={{
+            transform: `rotate(${rotation}deg)`,
+            display: 'block',
+            objectFit: 'contain',
+            maxWidth: '100%',
+            maxHeight: '55vh',
+            height: 'auto',
+          }}
         />
       );
     }
@@ -338,9 +360,18 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
 
     case 'pair':
       return (
-        <div className="flex items-center" style={{ gap: node.gap ?? 40 }}>
-          <DisplayView node={node.left} values={values} />
-          <DisplayView node={node.right} values={values} />
+        // Bounded to the screen, and the gap shrinks with it: a pair of figures at their
+        // full size is wider than a phone, and the right-hand one went off the edge.
+        <div className="flex items-center justify-center"
+          style={{ gap: `min(${node.gap ?? 40}px, 6vw)`, maxWidth: '100%', width: '100%' }}>
+          {/* Each half in a box that is allowed to shrink. A flex item defaults to
+              `min-width: auto`, which is its intrinsic width — so two 200px figures simply
+              refuse to fit a 375px screen and the right-hand one goes over the edge. */}
+          {[node.left, node.right].map((half, i) => (
+            <div key={i} style={{ minWidth: 0, flex: '0 1 auto', display: 'flex', justifyContent: 'center' }}>
+              <DisplayView node={half} values={values} />
+            </div>
+          ))}
         </div>
       );
 

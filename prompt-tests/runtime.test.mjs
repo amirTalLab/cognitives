@@ -3647,7 +3647,7 @@ test('a stimulus can never be wider than the screen', () => {
   // The whole file rather than a slice: splitting on "case " is brittle and was cutting
   // away the very block this checks.
   assert.match(source, /min\(\$\{asked\}px/, 'the requested size is not capped against the viewport');
-  assert.match(source, /maxWidth: '92vw'/);
+  assert.match(source, /maxWidth: '86vw'/);
   // `min` only ever shrinks: a short word on a laptop still gets the size it asked for.
   assert.ok(!source.includes('fontSize: `max('),
     'the cap must never make text larger than asked');
@@ -3676,28 +3676,39 @@ test('text direction follows the content, not the language of the run', () => {
   const source = readFileSync(
     join(process.cwd(), 'lib', 'experiment-runtime', 'DisplayView.tsx'), 'utf8');
   assert.match(source, /const hebrew = \/\[/, 'direction is not decided by the content');
-  assert.match(source, /dir=\{hebrew \? 'rtl' : 'ltr'\}/);
+  // An explicit direction wins where the content cannot decide — a marker of underscores
+  // and a question mark has none of its own, and has to run the way its word runs.
+  assert.match(source, /dir=\{node\.dir \?\? \(hebrew \? 'rtl' : 'ltr'\)\}/);
 });
 
-test('the marker asks about the letter the experiment is actually testing', () => {
-  // Third from the left, matching the third letter of an English word. The hand-built page
-  // lays the same boxes out with `direction: rtl` on a FLEX row, which reverses them — so it
-  // highlights the third box from the right, which is the second letter. Latin text is
-  // protected from that by bidi; flex items are not.
+test('the marker points at the letter under test, in a Hebrew word', () => {
+  // These stimuli are HEBREW, so a word runs right to left and its third letter is the third
+  // FROM THE RIGHT. The marker is made entirely of directionally neutral characters, so it
+  // has none of its own: left to right it would mark the third letter from the END, which is
+  // a different letter and not the one in question.
   const ws = ports.PORTS.find(p => p.slug === 'wordSuperiority');
   const trials = firstBlock(ws, seededRandom(12));
+
+  // The whole trial is declared right to left, so the marker runs the way the word does.
+  for (const phase of ws.trial.phases) {
+    if (phase.display?.kind === 'text') {
+      assert.equal(phase.display.dir, 'rtl', `phase "${phase.name}" does not run right to left`);
+    }
+  }
+
   for (const trial of trials.slice(0, 12)) {
     const marker = String(trial.values.item.shape).split(' ');
     const at = marker.indexOf('?');
-    const word = String(trial.values.item.stimulus);
+    const word = [...String(trial.values.item.stimulus)];
     assert.ok(at >= 0, 'no position is marked');
     assert.equal(marker.length, word.length, 'the marker is not the length of the word');
-    // The marked position is where the two candidate letters actually differ.
-    // The marked position is the one where the two candidate letters differ — which is the
-    // letter the trial is actually asking about.
+    // Both are in LOGICAL order and both render right to left, so the marked slot sits over
+    // the same letter however either one is displayed.
     assert.equal(word[at], trial.values.item.correctLetter,
       'the marker does not point at the letter that was shown');
     assert.notEqual(trial.values.item.correctLetter, trial.values.item.foilLetter);
+    // And the letter really is Hebrew, which is why direction matters here at all.
+    assert.match(String(trial.values.item.correctLetter), /[֐-׿]/);
   }
 });
 

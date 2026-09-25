@@ -230,7 +230,13 @@ function BRMSSuppression({ values, language, onDone }: PhaseComponentProps) {
       const h = window.innerHeight;
       let fw = w;
       let fh = Math.round(fw / FRAME_ASPECT);
-      if (fh > h) { fh = h; fw = Math.round(fh * FRAME_ASPECT); }
+      // Two thirds of the height at most, so the LEFT and RIGHT buttons are on screen with
+      // it. Sized against the window alone, the frame filled the display and pushed them
+      // below the fold — a participant had to scroll to answer, which is time inside the
+      // breakthrough measurement and makes it meaningless.
+      const roomForFrame = Math.round(h * 0.66);
+      if (fh > roomForFrame) { fh = roomForFrame; fw = Math.round(fh * FRAME_ASPECT); }
+      if (fw > w) { fw = w; fh = Math.round(fw / FRAME_ASPECT); }
       setSize({ w: fw, h: fh });
     };
     measure();

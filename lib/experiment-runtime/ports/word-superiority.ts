@@ -77,7 +77,11 @@ const WS_PRACTICE: PoolItem[] = [
   wsItem(WS_WORD_PAIRS[23], 'single-letter', 1),
 ];
 
-const WS_STIMULUS_STYLE = { size: 36, font: 'mono' as const };
+// The words are HEBREW, so everything about a trial runs right to left — including the
+// marker, which is made of underscores and a question mark and therefore has no direction
+// of its own. Left to right it would point at the third letter from the END of the word,
+// which is not the letter under test.
+const WS_STIMULUS_STYLE = { size: 36, font: 'mono' as const, dir: 'rtl' as const };
 
 export const WORD_SUPERIORITY_PORT: ExperimentDefinition = {
   version: 1,

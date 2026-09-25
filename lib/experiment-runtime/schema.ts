@@ -123,7 +123,24 @@ export type Display =
    * stimulus — a question beside a scale, a label on a prompt. Omit it for a stimulus word,
    * which must not be translated. With it absent, `text` is used in both languages.
    */
-  | { kind: 'text'; text: string; textHe?: string; size?: number; color?: string; font?: 'sans' | 'mono' }
+  | {
+      kind: 'text';
+      text: string;
+      textHe?: string;
+      size?: number;
+      color?: string;
+      font?: 'sans' | 'mono';
+      /**
+       * Which way the text runs. Decided by the content when absent — Hebrew reads
+       * right-to-left, everything else left-to-right.
+       *
+       * Set it where the content CANNOT decide. A marker like `_ _ ? _`, saying which letter
+       * of a word is being asked about, is made entirely of directionally neutral characters,
+       * so it has no direction of its own and will take whatever surrounds it. It has to run
+       * the same way as the word it refers to, or it points at the letter from the wrong end.
+       */
+      dir?: 'ltr' | 'rtl';
+    }
   | { kind: 'fixation'; symbol?: string }
   | { kind: 'blank' }
   | { kind: 'mask'; pattern?: string }

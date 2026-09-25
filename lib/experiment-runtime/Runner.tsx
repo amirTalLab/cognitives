@@ -640,7 +640,12 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
           return (
             <button key={i} {...press(() => onAnswer(value))} style={style}
               aria-label={String(resolve(rtl && opt.labelHe ? opt.labelHe : opt.label, values) ?? '')}
+              // Centred as a FLEX box: the dot inside is an SVG with display:block, and a
+              // block element sits at the left of its container however the text around it
+              // is aligned. In serial reaction time that put every dot off-centre in its
+              // square, which is the one thing a participant is aiming at.
               className={`w-20 h-20 rounded-lg border-2 touch-manipulation transition-colors
+                          flex items-center justify-center
                           active:scale-95 ${marked
                             ? 'border-emerald-400 bg-emerald-400/20'
                             : 'border-gray-500 bg-gray-100 hover:border-purple-400'}`}>
@@ -665,7 +670,10 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
           const marked = highlight != null && highlight === value;
           return (
             <button key={i} {...press(() => onAnswer(value))}
+              // Same reason as the positioned buttons: a shape inside one is a block-level
+              // SVG, which does not centre itself just because the text would.
               className={`min-w-20 min-h-20 px-6 py-4 rounded-2xl border-2 text-gray-200 text-lg
+                         flex flex-col items-center justify-center
                          transition-colors touch-manipulation ${marked
                            ? 'border-emerald-400 bg-emerald-400/10'
                            : 'border-gray-700 hover:border-purple-400'}`}>

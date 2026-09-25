@@ -2340,9 +2340,10 @@ test.describe('On a phone', () => {
   });
 
   test('the word-superiority marker points at the third letter in both languages', async ({ page }) => {
-    // "_ _ ? _" is made entirely of directionally NEUTRAL characters, so it takes the
-    // direction of whatever surrounds it. On a Hebrew run it would mirror, and the marker
-    // would point at the second letter while the question is about the third.
+    // The stimuli here are HEBREW words, so a word runs right to left and its third letter
+    // is the third FROM THE RIGHT. The marker is made entirely of directionally neutral
+    // characters, so it has none of its own — left to right it would mark the third letter
+    // from the END, which is a different letter and not the one in question.
     for (const language of ['he', 'en'] as const) {
       await isolateFromDatabase(page);
       await open(page, '/run/wordSuperiority');
@@ -2354,14 +2355,244 @@ test.describe('On a phone', () => {
       const marker = page.getByText(/[_?] [_?] [_?] [_?]/);
       await expect(marker).toBeVisible({ timeout: 20_000 });
 
-      // Rendered left to right, so the "?" is the third of four — whichever language the
-      // run is in.
+      // Right to left, the way the Hebrew word runs, in either interface language — the
+      // stimulus does not change when the buttons do.
       const direction = await marker.evaluate(el => getComputedStyle(el).direction);
-      expect(direction, `the marker rendered ${direction} on a ${language} run`).toBe('ltr');
+      expect(direction, `the marker rendered ${direction} on a ${language} run`).toBe('rtl');
 
       const text = (await marker.innerText()).trim().split(/\s+/);
       expect(text).toHaveLength(4);
       expect(text.indexOf('?'), 'the marked position moved').toBe(2);
     }
+  });
+});
+
+test.describe('A stimulus on a narrow screen', () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  test('a one-word stimulus stays on one line, whatever its length', async ({ page }) => {
+    // Shrinking a word until it fits is right; breaking it over two lines is not. A stimulus
+    // split across lines is read in two fixations instead of one, and the time between them
+    // is inside the reaction time this experiment exists to measure.
+    //
+    // AMARILLO is the longest word in the set at eight capitals, which is what overflowed.
+    const def = {
+      version: 1,
+      slug: 'e2eLongWord',
+      title: 'Long word',
+      titleHe: 'מילה ארוכה',
+      category: 'EXECUTIVE CONTROL',
+      instructions: { en: 'Press the button.', he: 'לחצו על הכפתור.' },
+      pools: {
+        words: [
+          { label: 'AMARILLO' },
+          { label: 'TSAHOV' },
+          { label: 'RED' },
+        ],
+      },
+      factors: [{ name: 'item', from: 'words' }],
+      repetitions: 1,
+      order: 'fixed',
+      trial: {
+        phases: [{
+          name: 'word',
+          // The size Stroop asks for.
+          display: { kind: 'text', text: '{item.label}', size: 96, color: '#f8fafc' },
+          awaitsResponse: true,
+          startsClock: true,
+        }],
+        response: { kind: 'choice', layout: 'row', options: [{ value: 'ok', label: 'OK' }] },
+        correct: { kind: 'none' },
+        itiMs: 0,
+      },
+      store: ['item.label'],
+      thanks: { showResults: false },
+      dashboard: { charts: [{ title: 'c', kind: 'bar', groupBy: 'item.label', measure: 'count' }] },
+    };
+
+    await runPreview(page, def as never);
+
+    for (const word of ['AMARILLO', 'TSAHOV', 'RED']) {
+      const stimulus = page.getByText(word, { exact: true });
+      await expect(stimulus).toBeVisible({ timeout: 15_000 });
+
+      const measured = await stimulus.evaluate(el => {
+        const style = getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return {
+          height: rect.height,
+          left: rect.left,
+          right: rect.right,
+          lineHeight: parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2,
+          fontSize: parseFloat(style.fontSize),
+          viewport: document.documentElement.clientWidth,
+        };
+      });
+
+      // One line: the box is no taller than a single line of its own text.
+      expect(measured.height, `"${word}" wrapped onto more than one line`)
+        .toBeLessThan(measured.lineHeight * 1.6);
+      // And still inside the screen.
+      expect(measured.left, `"${word}" starts off the left edge`).toBeGreaterThanOrEqual(-1);
+      expect(measured.right, `"${word}" runs past the right edge`)
+        .toBeLessThanOrEqual(measured.viewport + 1);
+      // A short word is not shrunk — the cap only ever takes size away when it has to.
+      if (word === 'RED') expect(measured.fontSize).toBe(96);
+
+      await page.getByRole('button', { name: 'OK' }).click();
+      await page.waitForTimeout(300);
+    }
+  });
+});
+
+test.describe('A shape drawn inside a button', () => {
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  test('the serial-reaction-time dot sits in the middle of its square', async ({ page }) => {
+    // The dot is drawn INSIDE the button, as an SVG with display:block — and a block element
+    // sits at the left of its container however the text around it is aligned. That put every
+    // dot off-centre in its square, which is the one thing a participant is aiming at.
+    await runBuiltIn(page, 'srt');
+
+    const boxes = page.locator('main button');
+    await expect(boxes.first()).toBeVisible({ timeout: 20_000 });
+    await expect(boxes).toHaveCount(4);
+
+    // Whichever box currently holds the visible dot.
+    const measured = await page.evaluate(() => {
+      const buttons = [...document.querySelectorAll('main button')];
+      return buttons.map(button => {
+        const svg = button.querySelector('svg');
+        if (!svg) return null;
+        const b = button.getBoundingClientRect();
+        const s = svg.getBoundingClientRect();
+        return {
+          dx: (s.left + s.width / 2) - (b.left + b.width / 2),
+          dy: (s.top + s.height / 2) - (b.top + b.height / 2),
+          size: s.width,
+        };
+      });
+    });
+
+    const found = measured.filter(Boolean) as { dx: number; dy: number; size: number }[];
+    expect(found.length, 'no box drew a shape at all').toBe(4);
+
+    for (const [i, m] of found.entries()) {
+      // Within a pixel of the square's centre, both ways.
+      expect(Math.abs(m.dx), `the shape in box ${i} is ${m.dx.toFixed(1)}px off centre horizontally`)
+        .toBeLessThanOrEqual(1);
+      expect(Math.abs(m.dy), `the shape in box ${i} is ${m.dy.toFixed(1)}px off centre vertically`)
+        .toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+test.describe('Everything a trial needs is on screen at once', () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  /** Nothing in `main` may extend past the viewport, in either direction. */
+  async function nothingOffScreen(page: import('@playwright/test').Page) {
+    return page.evaluate(() => {
+      const w = document.documentElement.clientWidth;
+      const h = document.documentElement.clientHeight;
+      const bad: string[] = [];
+      for (const el of document.querySelectorAll('main *')) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        if (r.left < -1 || r.right > w + 1) bad.push(`${el.tagName} off the side`);
+        if (r.bottom > h + 1) bad.push(`${el.tagName} below the fold`);
+      }
+      return bad.slice(0, 3);
+    });
+  }
+
+  test('two figures side by side fit, and are not cut off at the bottom', async ({ page }) => {
+    // Mental rotation shows two 200px block figures with a 48px gap — 448px, wider than a
+    // phone — so the right-hand one ran off the edge and both were cut where the buttons
+    // began. Tested directly rather than by walking the experiment, which opens with a
+    // thirty-second map study and twenty-one scanning trials before the figures appear.
+    const def = {
+      version: 1,
+      slug: 'e2ePair',
+      title: 'Pair',
+      titleHe: 'זוג',
+      category: 'IMAGINATION',
+      instructions: { en: 'Same or different?', he: 'זהה או שונה?' },
+      factors: [{ name: 'only', levels: ['a'] }],
+      repetitions: 1,
+      trial: {
+        phases: [{
+          name: 'figures',
+          // The real figures, at the size the port asks for.
+          display: {
+            kind: 'pair',
+            gap: 48,
+            left: { kind: 'image', src: '/mental-rep/figure_1_0.svg', size: 200 },
+            right: { kind: 'image', src: '/mental-rep/figure_1_120.svg', size: 200 },
+          },
+          awaitsResponse: true,
+          startsClock: true,
+        }],
+        response: {
+          kind: 'choice',
+          layout: 'row',
+          options: [
+            { value: 'same', label: 'Same' },
+            { value: 'different', label: 'Different' },
+          ],
+        },
+        correct: { kind: 'none' },
+        itiMs: 0,
+      },
+      store: ['only'],
+      thanks: { showResults: false },
+      dashboard: { charts: [{ title: 'c', kind: 'bar', groupBy: 'only', measure: 'count' }] },
+    };
+
+    await runPreview(page, def as never);
+
+    const figures = page.locator('main img');
+    await expect(figures.first()).toBeVisible({ timeout: 15_000 });
+    await expect(figures).toHaveCount(2);
+
+    // Both on screen, side by side, with the answer buttons visible below them.
+    expect(await nothingOffScreen(page), 'part of the trial is off screen').toEqual([]);
+    await expect(page.getByRole('button', { name: 'Same' })).toBeVisible();
+
+    const [a, b] = await figures.all();
+    const boxA = await a.boundingBox();
+    const boxB = await b.boundingBox();
+    expect(boxA!.width, 'the figures were shrunk to nothing').toBeGreaterThan(60);
+    // Still side by side rather than stacked.
+    expect(Math.abs(boxA!.y - boxB!.y), 'the figures wrapped onto two rows').toBeLessThan(4);
+  });
+
+  test('the bRMS answer buttons are on screen with the frame', async ({ page }) => {
+    // The frame was sized from the window alone, which filled the display and pushed LEFT and
+    // RIGHT below the fold. Scrolling to answer is time inside the breakthrough measurement.
+    await runBuiltIn(page, 'bRMS');
+
+    await page.locator('input[type="range"]').fill('90');
+    await page.getByRole('button', { name: 'That looks right' }).click();
+    await expect(page.getByText(/display is steady enough|not perfectly steady/)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'That looks right' }).click();
+    await page.getByRole('button', { name: 'Start' }).click();
+
+    const left = page.getByRole('button', { name: 'Left', exact: true });
+    await expect(left).toBeVisible({ timeout: 20_000 });
+
+    // Visible is not enough — it has to be in the viewport without scrolling.
+    const box = await left.boundingBox();
+    const height = await page.evaluate(() => document.documentElement.clientHeight);
+    expect(box, 'the Left button has no position').toBeTruthy();
+    expect(box!.y + box!.height, 'the answer buttons are below the fold')
+      .toBeLessThanOrEqual(height + 1);
+
+    // And the page does not scroll at all.
+    const scrollable = await page.evaluate(() =>
+      document.documentElement.scrollHeight > document.documentElement.clientHeight + 1);
+    expect(scrollable, 'the trial screen scrolls').toBe(false);
   });
 });
