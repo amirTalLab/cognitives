@@ -171,10 +171,11 @@ export const SRT_PORT: ExperimentDefinition = {
       instructions: {
         en: 'There was a sequence of twelve locations that repeated throughout the task. '
           + 'You will now see the last two of it, and then be asked to reproduce the whole '
-          + 'sequence by pressing the boxes. After each press the correct one is shown.',
+          + 'sequence by pressing the boxes. After each press the correct one is shown — that '
+          + 'is part of the task, not practice.',
         he: 'במהלך הניסוי הייתה סדרה של 12 מיקומים שחזרה על עצמה. כעת יוצגו שני המיקומים '
-          + 'האחרונים שלה, ואז תתבקשי לשחזר את הסדרה כולה בלחיצה על הריבועים. אחרי כל לחיצה '
-          + 'תוצג התשובה הנכונה.',
+          + 'האחרונים שלה, ואז תתבקשו לשחזר את הסדרה כולה בלחיצה על הריבועים. אחרי כל לחיצה '
+          + 'תוצג התשובה הנכונה — זה חלק מהמשימה, לא תרגול.',
       },
       factors: [{ name: 'prime', from: '{group.primes}' }],
       repetitions: 1,
@@ -197,7 +198,14 @@ export const SRT_PORT: ExperimentDefinition = {
 
     {
       name: 'generation',
-      autoAdvanceMs: 0,
+      title: { en: 'Reproduce the sequence', he: 'שחזרו את הסדרה' },
+      instructions: {
+        en: '12 presses. Press where you think each location of the sequence was. The correct '
+          + 'one is shown after every press — that is how the task works, and it is not '
+          + 'practice.',
+        he: '12 לחיצות. לחצו היכן לדעתכם היה כל מיקום בסדרה. אחרי כל לחיצה תוצג התשובה '
+          + 'הנכונה — כך המשימה עובדת, וזה אינו תרגול.',
+      },
       factors: [
         { name: 'item', from: '{group.generation}' },
         ...dotColours('item.answer'),

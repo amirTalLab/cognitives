@@ -161,10 +161,12 @@ export const DRM_PORT: ExperimentDefinition = {
       + 'Phase 3: Free recall — type as many words as you remember from that list.\n'
       + 'Phase 4: Recognition — decide whether you saw each word before.\n\n'
       + 'Study + Recall (~12 min) + Recognition (~3 min).',
-    he: 'שלב 1: למידה — תראי רשימות של מילים באנגלית. נסי לזכור אותן.\n'
-      + 'שלב 2: חשבון — לאחר כל רשימה תבצעי משימה קצרה של זוגי/אי-זוגי.\n'
-      + 'שלב 3: שחזור חופשי — הקלידי כמה שיותר מילים שזכרת מהרשימה.\n'
-      + 'שלב 4: זיהוי — תראי מילים ותחליטי: האם ראית את המילה קודם?\n\n'
+    // Plural, like every other experiment on the site. The hand-built page addressed one
+    // woman, which reads as written for someone else to half a class.
+    he: 'שלב 1: למידה — תראו רשימות של מילים באנגלית. נסו לזכור אותן.\n'
+      + 'שלב 2: חשבון — לאחר כל רשימה תבצעו משימה קצרה של זוגי/אי-זוגי.\n'
+      + 'שלב 3: שחזור חופשי — הקלידו כמה שיותר מילים שזכרתם מהרשימה.\n'
+      + 'שלב 4: זיהוי — תראו מילים ותחליטו: האם ראיתם את המילה קודם?\n\n'
       + 'למידה + שחזור (כ-12 דקות) + זיהוי (כ-3 דקות).',
   },
 
@@ -232,8 +234,8 @@ export const DRM_PORT: ExperimentDefinition = {
       instructions: {
         en: 'You will see words one at a time. For each, decide whether it appeared in any '
           + 'of the lists you studied, and how sure you are.',
-        he: 'תראי מילים אחת אחרי השנייה. לכל מילה החליטי האם הופיעה באחת הרשימות שלמדת, '
-          + 'וכמה את בטוחה.',
+        he: 'תראו מילים אחת אחרי השנייה. לכל מילה החליטו האם הופיעה באחת הרשימות שלמדתם, '
+          + 'וכמה אתם בטוחים.',
       },
       factors: [{
         name: 'item',

@@ -101,9 +101,9 @@ export const SERIAL_ORDER_PORT: ExperimentDefinition = {
       + 'After the list you will do some arithmetic, and then type every word you remember, '
       + 'one per line, in any order.\n'
       + 'The whole thing happens twice, with a different list each time.',
-    he: 'תראי רשימת מילים, אחת בכל פעם. נסי לזכור אותן.\n'
-      + 'אל תרשמי דבר במהלך ההצגה.\n'
-      + 'אחרי הרשימה תפתרי תרגילי חשבון, ואז תקלידי את כל המילים שאת זוכרת, מילה בכל שורה, '
+    he: 'תראו רשימת מילים, אחת בכל פעם. נסו לזכור אותן.\n'
+      + 'אל תרשמו דבר במהלך ההצגה.\n'
+      + 'אחרי הרשימה תפתרו תרגילי חשבון, ואז תקלידו את כל המילים שאתם זוכרים, מילה בכל שורה, '
       + 'בכל סדר.\n'
       + 'כל זה יקרה פעמיים, עם רשימה אחרת בכל פעם.',
   },
@@ -125,7 +125,7 @@ export const SERIAL_ORDER_PORT: ExperimentDefinition = {
       title: { en: 'Arithmetic', he: 'חשבון' },
       instructions: {
         en: 'Solve as many as you can. Type the answer and press Enter.',
-        he: 'פתרי כמה שיותר. הקלידי את התשובה ולחצי Enter.',
+        he: 'פתרו כמה שיותר. הקלידו את התשובה ולחצו Enter.',
       },
       factors: [{ name: 'sum', from: 'problems' }],
       repetitions: 1,
@@ -155,7 +155,7 @@ export const SERIAL_ORDER_PORT: ExperimentDefinition = {
       instructions: {
         en: 'Now a different list of words. This time you will be asked to recall them '
           + 'straight away, with no arithmetic in between.',
-        he: 'עכשיו רשימת מילים אחרת. הפעם תתבקשי להיזכר בהן מיד, בלי חשבון באמצע.',
+        he: 'עכשיו רשימת מילים אחרת. הפעם תתבקשו להיזכר בהן מיד, בלי חשבון באמצע.',
       },
     },
 

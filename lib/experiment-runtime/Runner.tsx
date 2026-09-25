@@ -18,7 +18,7 @@ import {
   buildTrials, EARLY_RESPONSE, expandRecall, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf,
   lookup, phaseDuration, resolve, SHOWN, Trial,
 } from './trials';
-import { DisplayView, SEED_KEY, ASSET_BASE_KEY, LANGUAGE_KEY } from './DisplayView';
+import { DisplayView, SEED_KEY, ASSET_BASE_KEY, LANGUAGE_KEY, POSITIONED_OFFSET } from './DisplayView';
 import { PHASE_COMPONENT_MAP } from './components';
 import { saveTrial } from './store';
 
@@ -631,8 +631,8 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
           const at = String(resolve(opt.at, values) ?? 'center');
           const style: React.CSSProperties = {
             position: 'absolute',
-            left: at === 'left' ? 'calc(50% - 180px)' : at === 'right' ? 'calc(50% + 180px)' : '50%',
-            top: at === 'top' ? 'calc(50% - 180px)' : at === 'bottom' ? 'calc(50% + 180px)' : '50%',
+            left: at === 'left' ? `calc(50% - ${POSITIONED_OFFSET})` : at === 'right' ? `calc(50% + ${POSITIONED_OFFSET})` : '50%',
+            top: at === 'top' ? `calc(50% - ${POSITIONED_OFFSET})` : at === 'bottom' ? `calc(50% + ${POSITIONED_OFFSET})` : '50%',
             transform: 'translate(-50%, -50%)',
           };
           const value = String(resolve(opt.value, values) ?? opt.value);

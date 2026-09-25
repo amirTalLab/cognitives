@@ -86,10 +86,10 @@ export const COMPOSITE_FACE_PORT: ExperimentDefinition = {
       + 'The second face is split: the top half belongs to one person, the bottom to another.\n'
       + 'Judge: is the top half of the second face the same person as the first face?\n'
       + 'Press "Yes" or "No" accordingly.',
-    he: 'בכל ניסוי תראה פנים לזמן קצר, ולאחר מכן פנים נוספות.\n'
+    he: 'בכל ניסוי תראו פנים לזמן קצר, ולאחר מכן פנים נוספות.\n'
       + 'הפנים השניות מחולקות: החצי העליון שייך לאדם אחד, התחתון לאדם אחר.\n'
-      + 'עליך לשפוט: האם החצי העליון של הפנים השניות הוא אותו אדם כמו הפנים הראשונות?\n'
-      + 'לחץ "כן" או "לא" בהתאם.',
+      + 'עליכם לשפוט: האם החצי העליון של הפנים השניות הוא אותו אדם כמו הפנים הראשונות?\n'
+      + 'לחצו "כן" או "לא" בהתאם.',
   },
 
   pools: {

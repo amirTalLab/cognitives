@@ -166,7 +166,7 @@ export const MENTAL_REP_PORT: ExperimentDefinition = {
       instructions: {
         en: 'Imagine the starting location, then mentally scan to the target. '
           + 'Press SPACE when you "arrive" at the target.',
-        he: 'דמיין את מיקום ההתחלה, ואז סרוק מנטלית אל היעד. לחץ רווח כשאתה "מגיע" ליעד.',
+        he: 'דמיינו את מיקום ההתחלה, ואז סרקו מנטלית אל היעד. לחצו רווח כשאתם "מגיעים" ליעד.',
       },
       pools: {
         scanShort: asScan(MR_SCAN_SHORT),
@@ -201,10 +201,10 @@ export const MENTAL_REP_PORT: ExperimentDefinition = {
           + 'Decide if they are the SAME object (just rotated) or DIFFERENT objects.\n'
           + 'Press S for SAME, D for DIFFERENT.\n'
           + 'You will receive feedback during practice.',
-        he: 'תראה שני אובייקטים תלת-ממדיים זה לצד זה.\n'
-          + 'החלט אם הם אותו האובייקט (רק מסובב) או אובייקטים שונים.\n'
-          + 'לחץ S עבור זהה, D עבור שונה.\n'
-          + 'תקבל משוב במהלך התרגול.',
+        he: 'תראו שני אובייקטים תלת-ממדיים זה לצד זה.\n'
+          + 'החליטו אם הם אותו האובייקט (רק מסובב) או אובייקטים שונים.\n'
+          + 'לחצו S עבור זהה, D עבור שונה.\n'
+          + 'תקבלו משוב במהלך התרגול.',
       },
       pools: {
         rot0Same: asRotation(MR_ROT0_SAME),

@@ -2285,3 +2285,83 @@ test.describe('The testing effect, ported', () => {
     await expect(page.getByText(/We have no earlier session/)).toBeHidden();
   });
 });
+
+test.describe('On a phone', () => {
+  // A real phone viewport. Everything below was reported by taking the experiments on one,
+  // and none of it was visible to any test — they are all questions about pixels.
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test.beforeEach(async ({ page }) => { await isolateFromDatabase(page); });
+
+  test('a Stroop word never runs off the side of the screen', async ({ page }) => {
+    await runBuiltIn(page, 'stroop');
+
+    // Through practice, checking every stimulus that appears. The longest Hebrew colour word
+    // at the size this asks for is wider than the screen, and the half that does not fit is
+    // simply missing — which a participant reads as part of the task.
+    for (let i = 0; i < 6; i++) {
+      const buttons = page.locator('main button');
+      await expect(buttons.first()).toBeVisible({ timeout: 15_000 });
+
+      const overflow = await page.evaluate(() => {
+        const width = document.documentElement.clientWidth;
+        return [...document.querySelectorAll('main div')]
+          .map(el => el.getBoundingClientRect())
+          .filter(r => r.width > 0)
+          .some(r => r.left < -1 || r.right > width + 1);
+      });
+      expect(overflow, 'something on screen extends past the viewport').toBe(false);
+
+      await buttons.first().click();
+      await page.waitForTimeout(500);
+    }
+  });
+
+  test('every serial-reaction-time box is fully on screen, and pressable', async ({ page }) => {
+    await runBuiltIn(page, 'srt');
+
+    // The four boxes sit in a diamond, two of them at the sides. At 375px wide a flat
+    // 180px offset put those two partly past the edge — and in this task the box IS the
+    // answer, so a participant cannot press what they cannot see.
+    const boxes = page.locator('main button');
+    await expect(boxes.first()).toBeVisible({ timeout: 20_000 });
+    await expect(boxes).toHaveCount(4);
+
+    const width = await page.evaluate(() => document.documentElement.clientWidth);
+    for (let i = 0; i < 4; i++) {
+      const box = await boxes.nth(i).boundingBox();
+      expect(box, `box ${i} has no position`).toBeTruthy();
+      expect(box!.x, `box ${i} starts off the left edge`).toBeGreaterThanOrEqual(-1);
+      expect(box!.x + box!.width, `box ${i} runs past the right edge`).toBeLessThanOrEqual(width + 1);
+    }
+
+    // And one can actually be pressed.
+    await boxes.nth(0).click();
+  });
+
+  test('the word-superiority marker points at the third letter in both languages', async ({ page }) => {
+    // "_ _ ? _" is made entirely of directionally NEUTRAL characters, so it takes the
+    // direction of whatever surrounds it. On a Hebrew run it would mirror, and the marker
+    // would point at the second letter while the question is about the third.
+    for (const language of ['he', 'en'] as const) {
+      await isolateFromDatabase(page);
+      await open(page, '/run/wordSuperiority');
+      if (language === 'en') await page.getByRole('button', { name: 'English' }).click();
+      await page.getByPlaceholder(/Name|שם/).fill('E2E');
+      await page.getByRole('button', { name: /Begin|התחלה/ }).click();
+
+      // Wait for the response screen, where the marker is shown.
+      const marker = page.getByText(/[_?] [_?] [_?] [_?]/);
+      await expect(marker).toBeVisible({ timeout: 20_000 });
+
+      // Rendered left to right, so the "?" is the third of four — whichever language the
+      // run is in.
+      const direction = await marker.evaluate(el => getComputedStyle(el).direction);
+      expect(direction, `the marker rendered ${direction} on a ${language} run`).toBe('ltr');
+
+      const text = (await marker.innerText()).trim().split(/\s+/);
+      expect(text).toHaveLength(4);
+      expect(text.indexOf('?'), 'the marked position moved').toBe(2);
+    }
+  });
+});

@@ -81,8 +81,8 @@ export const VISUAL_SEARCH_PORT: ExperimentDefinition = {
       // else — no automatic trial count — so a length the original page promised is simply
       // gone unless it is written here. 128 trials with no warning is how people quit.
       + 'About 8–10 minutes • 8 practice + 128 trials',
-    he: 'חפשי את האות T בצבע המוצג למעלה.\n\n'
-      + 'בכל מסך יופיעו אותיות מפוזרות — חלקן T וחלקן L, בשני צבעים. החליטי מהר ככל האפשר '
+    he: 'חפשו את האות T בצבע המוצג למעלה.\n\n'
+      + 'בכל מסך יופיעו אותיות מפוזרות — חלקן T וחלקן L, בשני צבעים. החליטו מהר ככל האפשר '
       + 'האם קיימת T זקופה {group.targetNameHe}.\n'
       + 'אותיות T בצבע השני אינן נחשבות, וגם לא אותיות L {group.targetNameHe}.\n\n'
       + 'כ-8–10 דקות • 8 ניסיונות תרגול + 128 ניסיונות',

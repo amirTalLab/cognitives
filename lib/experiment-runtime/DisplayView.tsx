@@ -36,6 +36,20 @@ export const ASSET_BASE_KEY = '__assetBase';
 export const LANGUAGE_KEY = '__language';
 
 /**
+ * How far a `positioned` item sits from the centre.
+ *
+ * Capped in viewport units as well as pixels, because a flat 180px runs off a phone: at
+ * 375px wide the centre is 187px, so a box at +180 spans past the right edge and part of it
+ * is simply not there. In serial reaction time the box IS the answer, so a participant
+ * cannot press what they cannot see.
+ *
+ * Exported because the RESPONSE buttons are laid out to the same geometry — if the two
+ * drifted apart, a button would sit somewhere other than the stimulus it answers for, and
+ * the task would quietly get harder for everyone.
+ */
+export const POSITIONED_OFFSET = 'min(180px, 32vw)';
+
+/**
  * Turns a manifest filename into a URL.
  *
  * Anything already addressable is left alone, so a definition can point straight at
@@ -216,11 +230,33 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
       const rtl = values[LANGUAGE_KEY] === 'he';
       const source = rtl && node.textHe !== undefined ? node.textHe : node.text;
       const text = resolve(source, values) ?? '';
+      // A stimulus must never run off the screen. The size a definition asks for is what it
+      // gets on a laptop; on a phone the longest Hebrew colour word at 96px is wider than
+      // the display, and half of it would simply be missing — which a participant reads as
+      // part of the task rather than as a fault.
+      //
+      // Scaled by the number of characters, taking a character as roughly 0.6em, against 92%
+      // of the viewport. `min` means this only ever makes text smaller.
+      const asked = Number(resolve(node.size, values) ?? 40);
+      const chars = Math.max(1, String(text).length);
+      const fitted = `min(${asked}px, ${(92 / (chars * 0.6)).toFixed(2)}vw)`;
+      // Direction follows the CONTENT, not the run's language. A string of neutral
+      // characters — "_ _ ? _", marking which position is being asked about — has no
+      // direction of its own, so it takes the surrounding one and silently mirrors on a
+      // Hebrew run: the marker would point at the second letter while the question is about
+      // the third, and nothing on screen would say so.
+      const hebrew = /[֐-׿]/.test(String(text));
       return (
         <div
           className="select-none"
+          dir={hebrew ? 'rtl' : 'ltr'}
           style={{
-            fontSize: Number(resolve(node.size, values) ?? 40),
+            fontSize: fitted,
+            maxWidth: '92vw',
+            // A multi-word line wraps rather than overflowing; a single long word shrinks,
+            // which the size above already handles.
+            overflowWrap: 'break-word',
+            textAlign: 'center',
             color: color(resolve(node.color, values) as string | undefined),
             fontFamily: node.font === 'mono' ? 'monospace' : undefined,
             // HTML collapses runs of spaces, so "H   H" renders as "H H" and any stimulus
@@ -346,12 +382,12 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
 
     case 'positioned': {
       const at = resolve(node.at, values) ?? 'center';
-      const offset = 180;
+      const offset = POSITIONED_OFFSET;
       const style: React.CSSProperties = { position: 'absolute' };
-      if (at === 'left') { style.left = `calc(50% - ${offset}px)`; style.top = '50%'; }
-      else if (at === 'right') { style.left = `calc(50% + ${offset}px)`; style.top = '50%'; }
-      else if (at === 'top') { style.left = '50%'; style.top = `calc(50% - ${offset}px)`; }
-      else if (at === 'bottom') { style.left = '50%'; style.top = `calc(50% + ${offset}px)`; }
+      if (at === 'left') { style.left = `calc(50% - ${offset})`; style.top = '50%'; }
+      else if (at === 'right') { style.left = `calc(50% + ${offset})`; style.top = '50%'; }
+      else if (at === 'top') { style.left = '50%'; style.top = `calc(50% - ${offset})`; }
+      else if (at === 'bottom') { style.left = '50%'; style.top = `calc(50% + ${offset})`; }
       else { style.left = '50%'; style.top = '50%'; }
       style.transform = 'translate(-50%, -50%)';
 

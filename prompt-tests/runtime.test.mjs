@@ -3631,3 +3631,91 @@ test('mock data shows retrieval practice beating rereading a week later', () => 
   assert.ok(recall('restudy') > recall('baseline'),
     'rereading did not beat studying once');
 });
+
+
+// ── AF. What a phone shows ────────────────────────────────────────────────────
+//
+// Found by taking the experiments on a phone, which is what most students use. None of it
+// was visible to any test here, because these are all questions about pixels and direction.
+
+test('a stimulus can never be wider than the screen', () => {
+  // The longest Hebrew colour word at the size Stroop asks for is wider than a phone, and
+  // the half that does not fit is simply missing — which a participant reads as part of the
+  // task rather than as a fault.
+  const source = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'DisplayView.tsx'), 'utf8');
+  // The whole file rather than a slice: splitting on "case " is brittle and was cutting
+  // away the very block this checks.
+  assert.match(source, /min\(\$\{asked\}px/, 'the requested size is not capped against the viewport');
+  assert.match(source, /maxWidth: '92vw'/);
+  // `min` only ever shrinks: a short word on a laptop still gets the size it asked for.
+  assert.ok(!source.includes('fontSize: `max('),
+    'the cap must never make text larger than asked');
+});
+
+test('a positioned stimulus and its button use one geometry, and it fits a phone', () => {
+  // The two boxes at the sides of serial reaction time ran off a 375px screen. The button IS
+  // the answer there, so a participant cannot press what they cannot see.
+  const display = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'DisplayView.tsx'), 'utf8');
+  const runner = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'Runner.tsx'), 'utf8');
+
+  assert.match(display, /export const POSITIONED_OFFSET = 'min\(180px, 32vw\)'/);
+  // One constant, used by both — if they drifted, a button would sit somewhere other than
+  // the stimulus it answers for.
+  assert.ok(!/calc\(50% [-+] 180px\)/.test(display), 'the display still hard-codes 180px');
+  assert.ok(!/calc\(50% [-+] 180px\)/.test(runner), 'the response buttons still hard-code 180px');
+  assert.match(runner, /POSITIONED_OFFSET/);
+});
+
+test('text direction follows the content, not the language of the run', () => {
+  // "_ _ ? _" marks which letter is being asked about, and every character in it is
+  // directionally NEUTRAL — so it takes the direction around it and mirrors on a Hebrew run.
+  // The marker would point at the second letter while the question is about the third.
+  const source = readFileSync(
+    join(process.cwd(), 'lib', 'experiment-runtime', 'DisplayView.tsx'), 'utf8');
+  assert.match(source, /const hebrew = \/\[/, 'direction is not decided by the content');
+  assert.match(source, /dir=\{hebrew \? 'rtl' : 'ltr'\}/);
+});
+
+test('the marker asks about the letter the experiment is actually testing', () => {
+  // Third from the left, matching the third letter of an English word. The hand-built page
+  // lays the same boxes out with `direction: rtl` on a FLEX row, which reverses them — so it
+  // highlights the third box from the right, which is the second letter. Latin text is
+  // protected from that by bidi; flex items are not.
+  const ws = ports.PORTS.find(p => p.slug === 'wordSuperiority');
+  const trials = firstBlock(ws, seededRandom(12));
+  for (const trial of trials.slice(0, 12)) {
+    const marker = String(trial.values.item.shape).split(' ');
+    const at = marker.indexOf('?');
+    const word = String(trial.values.item.stimulus);
+    assert.ok(at >= 0, 'no position is marked');
+    assert.equal(marker.length, word.length, 'the marker is not the length of the word');
+    // The marked position is where the two candidate letters actually differ.
+    // The marked position is the one where the two candidate letters differ — which is the
+    // letter the trial is actually asking about.
+    assert.equal(word[at], trial.values.item.correctLetter,
+      'the marker does not point at the letter that was shown');
+    assert.notEqual(trial.values.item.correctLetter, trial.values.item.foilLetter);
+  }
+});
+
+test('every Hebrew instruction addresses a group, not one person', () => {
+  // The site speaks to a class. A few ports inherited singular forms from their originals —
+  // one addressed one woman, another one man — which reads as written for somebody else.
+  const singular = [
+    'תראי ', 'נסי ', 'הקלידי', 'תחליטי', 'החליטי', 'בטוחה', 'תפתרי', 'תקלידי', 'תתבקשי',
+    'דמיין ', 'סרוק ', 'החלט ', 'תקבל ', 'לחץ ', 'הזן ', 'תראה ',
+  ];
+  const offenders = [];
+  for (const def of ports.PORTS) {
+    const texts = [def.instructions.he, ...(def.stages ?? []).map(s => s?.instructions?.he)];
+    for (const text of texts.filter(Boolean)) {
+      for (const form of singular) {
+        if (String(text).includes(form)) offenders.push(`${def.slug}: "${form.trim()}"`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], `singular Hebrew in: ${offenders.join(', ')}`);
+});
