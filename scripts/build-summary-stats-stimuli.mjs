@@ -75,14 +75,11 @@ const RECOGNITION_PROMPT = {
 // calling a number within a tolerance "correct" would tell someone their guess was right
 // when it may have been well off.
 //
-// The number is written into the sentence HERE rather than left as a binding for the
-// runtime to fill in. A binding resolves once: '{display.feedbackRightEn}' would come back
-// as the sentence with '{display.trueMean}' still sitting in it, and a participant would
-// read that. The mean is known at this point, so there is nothing to defer.
-const ensembleFeedback = mean => ({
-  en: `The average was ${mean}`,
-  he: `הממוצע היה ${mean}`,
-});
+// An estimate is answered by dragging a shape until it looks right, so the correction is a
+// shape too: the port draws what was chosen beside what the average was. There is nothing
+// left for a sentence to add, and "the average was 43" cannot be compared to a drag anyway,
+// so the words are empty on an estimate.
+const ensembleFeedback = () => ({ en: '', he: '' });
 const RECOGNITION_FEEDBACK = {
   right: { en: 'Correct', he: 'נכון' },
   wrong: { en: 'Incorrect', he: 'לא נכון' },
@@ -121,10 +118,10 @@ for (const type of Object.keys(VALUE_RANGES)) {
           ...common(type, n, ens.values),
           question: 'ensemble',
           trueMean: ens.mean,
-          feedbackRightEn: ensembleFeedback(ens.mean).en,
-          feedbackRightHe: ensembleFeedback(ens.mean).he,
-          feedbackWrongEn: ensembleFeedback(ens.mean).en,
-          feedbackWrongHe: ensembleFeedback(ens.mean).he,
+          feedbackRightEn: ensembleFeedback().en,
+          feedbackRightHe: ensembleFeedback().he,
+          feedbackWrongEn: ensembleFeedback().en,
+          feedbackWrongHe: ensembleFeedback().he,
           // Every row carries every stored field, so a trial with no probe says so rather
           // than leaving a hole that reads as missing data in the export.
           probeType: 'none',
@@ -192,10 +189,10 @@ for (const [type, n] of PRACTICE_ENSEMBLE) {
     question: 'ensemble',
     trueMean: arr.mean,
     probeType: 'none',
-    feedbackRightEn: ensembleFeedback(arr.mean).en,
-    feedbackRightHe: ensembleFeedback(arr.mean).he,
-    feedbackWrongEn: ensembleFeedback(arr.mean).en,
-    feedbackWrongHe: ensembleFeedback(arr.mean).he,
+    feedbackRightEn: ensembleFeedback().en,
+    feedbackRightHe: ensembleFeedback().he,
+    feedbackWrongEn: ensembleFeedback().en,
+    feedbackWrongHe: ensembleFeedback().he,
     promptEn: PROMPT[type].en,
     promptHe: PROMPT[type].he,
   });

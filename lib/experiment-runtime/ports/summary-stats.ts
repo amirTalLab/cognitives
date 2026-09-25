@@ -73,6 +73,47 @@ const QUESTION_DISPLAY: Display = {
   },
 };
 
+/**
+ * What practice shows once an answer is in.
+ *
+ * An estimate has no verdict, so the original does not give one: it draws the shape the
+ * participant settled on beside the shape the average actually was, and lets them see the
+ * difference. A number ("the average was 43") is not the same thing — the answer was given
+ * by dragging a shape until it looked right, so the correction has to be a shape too, or it
+ * cannot be compared to what was done. Recognition keeps its plain right-or-wrong.
+ */
+const FEEDBACK_DISPLAY: Display = {
+  kind: 'switch' as const,
+  by: 'display.question',
+  cases: {
+    ensemble: {
+      kind: 'row' as const,
+      gap: 28,
+      items: [
+        {
+          kind: 'stack' as const,
+          items: [
+            { kind: 'text' as const, text: 'Your answer', textHe: 'התשובה שלך', size: 14, color: '#9ca3af' },
+            // The size the slider was left at, which the runtime keeps until the next trial
+            // starts for exactly this.
+            { kind: 'shape' as const, shape: '{display.shape}', size: '{answer.question}', color: '#fb923c' },
+          ],
+        },
+        { kind: 'text' as const, text: 'vs', textHe: 'מול', size: 18, color: '#6b7280' },
+        {
+          kind: 'stack' as const,
+          items: [
+            { kind: 'text' as const, text: 'True value', textHe: 'ערך אמיתי', size: 14, color: '#9ca3af' },
+            { kind: 'shape' as const, shape: '{display.shape}', size: '{display.trueMean}', color: '#34d399' },
+          ],
+        },
+      ],
+    },
+    // Nothing to compare: the words below say whether the probe was there.
+    recognition: { kind: 'blank' as const },
+  },
+};
+
 /** Six from each type-and-size cell, and two of each probe kind — the original's balance. */
 const ENSEMBLE_CELLS = ['EnsCircles3', 'EnsCircles5', 'EnsCircles7', 'EnsLines3', 'EnsLines5', 'EnsLines7'];
 const RECOGNITION_CELLS = ['Circles3', 'Circles5', 'Circles7', 'Lines3', 'Lines5', 'Lines7']
@@ -185,12 +226,13 @@ export const SUMMARY_STATS_PORT: ExperimentDefinition = {
 
     itiMs: 400,
     // The message comes from the ITEM, because the two questions deserve different ones. A
-    // recognition probe was or was not there, so "correct" means something. An estimate has
-    // no verdict — the original shows the true average beside what was given, and calling a
-    // number within a tolerance "correct" tells someone their guess was right when it may
-    // have been well off.
+    // recognition probe was or was not there, so "correct" means something and is said. An
+    // estimate has no verdict — calling a number inside a tolerance "correct" tells someone
+    // their guess was right when it may have been well off — so it says nothing, and the
+    // comparison above says it all instead.
     feedback: {
-      durationMs: 900,
+      durationMs: 1600,
+      display: FEEDBACK_DISPLAY,
       correct: { en: '{display.feedbackRightEn}', he: '{display.feedbackRightHe}' },
       incorrect: { en: '{display.feedbackWrongEn}', he: '{display.feedbackWrongHe}' },
     },

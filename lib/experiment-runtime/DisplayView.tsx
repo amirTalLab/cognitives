@@ -6,7 +6,7 @@
 // actually put on screen. Shapes are inline SVG rather than image files so a generated
 // experiment never needs an asset sourced, shipped or pathed.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Display } from './schema';
 import { lookup, resolve, seededRandom } from './trials';
 
@@ -116,18 +116,43 @@ function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>
   const area = node.area ?? { width: 600, height: 400 };
   const seed = Number(values[SEED_KEY] ?? 1);
 
-  // How much room there is to draw in. Measured rather than assumed: the array's own size is
-  // in pixels chosen for a laptop, and a phone has neither the width nor the height.
-  // Two thirds of the height, so the response buttons below are on screen with it.
-  const [room, setRoom] = useState({ width: area.width, height: area.height });
-  useEffect(() => {
-    const measure = () => setRoom({
-      width: Math.max(120, window.innerWidth - 32),
-      height: Math.max(120, window.innerHeight * 0.62),
-    });
+  // How much room there is to draw in. The array's own size is in pixels chosen for a laptop
+  // — 600 by 500 for a search — and a phone has neither the width nor the height, so it has
+  // to be measured. Measured from the CONTAINER the array sits in, minus its padding and
+  // minus whatever else that container is already holding: on a trial screen that is the
+  // answer buttons, and a guess at how much of the screen they need is a guess that is wrong
+  // on the next phone. Nothing here depends on the array's own size, so measuring cannot
+  // chase its own tail.
+  const slot = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState<{ width: number; height: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = slot.current;
+    const parent = el?.parentElement;
+    if (!el || !parent) return;
+
+    const measure = () => {
+      const style = getComputedStyle(parent);
+      const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const gap = parseFloat(style.rowGap) || 0;
+      const siblings = [...parent.children].filter(child => child !== el);
+      const used = siblings.reduce((total, child) => total + child.getBoundingClientRect().height, 0)
+        + gap * parent.children.length - gap;
+
+      setRoom({
+        width: Math.max(160, parent.clientWidth - padX),
+        height: Math.max(160, parent.clientHeight - padY - used),
+      });
+    };
+
     measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    // The container resizes when the phone turns; the buttons below can change height when
+    // their labels wrap at that new width.
+    const observer = new ResizeObserver(measure);
+    observer.observe(parent);
+    for (const child of parent.children) if (child !== el) observer.observe(child);
+    return () => observer.disconnect();
   }, []);
 
   // One flat list of what to draw. `groups` is the general form — a conjunction search holds
@@ -202,36 +227,41 @@ function ArrayView({ node, values }: { node: Extract<Display, { kind: 'array' }>
   // Scaling the whole thing rather than repositioning keeps the layout exactly as designed:
   // the gaps between items stay proportional, so nothing crowds or overlaps that did not
   // before. Never above 1 — a small array is not blown up to fill a desktop.
-  const scale = Math.min(1, room.width / area.width, room.height / area.height);
+  const scale = room ? Math.min(1, room.width / area.width, room.height / area.height) : 1;
 
   return (
-    <div style={{
-      // The footprint AFTER scaling, so the layout around it reserves the right space.
-      width: area.width * scale,
-      height: area.height * scale,
-      maxWidth: '100%',
-    }}>
-    <div style={{
-      position: 'relative',
-      width: area.width,
-      height: area.height,
-      transform: `scale(${scale})`,
-      transformOrigin: 'top left',
-    }}>
-      {positions.map((p, i) => (
-        <div key={i} style={{
-          position: 'absolute', left: p.x, top: p.y,
-          // The rotation rides on the wrapper, so any item kind can be turned — a letter as
-          // easily as a shape — without every display variant growing its own rotation.
-          transform: `translate(-50%, -50%) rotate(${drawn[i]?.rotation ?? 0}deg)`,
+    // The slot is what gets measured, and it is measured against its container rather than
+    // its contents, so it must not be sized by them: width 100%, and a height that follows
+    // the scaled footprint.
+    <div ref={slot} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+      <div style={{
+        // The footprint AFTER scaling, so the layout around it reserves the right space.
+        // A transform does not change what an element takes up.
+        width: area.width * scale,
+        height: area.height * scale,
+      }}>
+        <div style={{
+          position: 'relative',
+          width: area.width,
+          height: area.height,
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
         }}>
-          {/* An element-driven array gives each item its own values; every other array
-              shares the trial's. */}
-          <DisplayView node={drawn[i]?.item ?? node.item}
-            values={(drawn[i] as { values?: Values })?.values ?? values} />
+          {positions.map((p, i) => (
+            <div key={i} style={{
+              position: 'absolute', left: p.x, top: p.y,
+              // The rotation rides on the wrapper, so any item kind can be turned — a letter
+              // as easily as a shape — without every display variant growing its own.
+              transform: `translate(-50%, -50%) rotate(${drawn[i]?.rotation ?? 0}deg)`,
+            }}>
+              {/* An element-driven array gives each item its own values; every other array
+                  shares the trial's. */}
+              <DisplayView node={drawn[i]?.item ?? node.item}
+                values={(drawn[i] as { values?: Values })?.values ?? values} />
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
     </div>
   );
 }

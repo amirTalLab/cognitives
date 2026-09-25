@@ -2629,9 +2629,10 @@ test.describe('Everything a trial needs is on screen at once', () => {
     // search array had — and here a member that falls off the edge changes the average the
     // participant is being asked for.
     //
-    // And an estimate is not right or wrong. The original never says so: it shows the true
-    // average beside what was given. Calling a number inside a tolerance "correct" tells
-    // someone their guess was right when it may have been well off.
+    // And an estimate is not right or wrong. The original never says so: it draws the shape
+    // that was chosen beside the shape the average actually was. Calling a number inside a
+    // tolerance "correct" tells someone their guess was right when it may have been well
+    // off, and a sentence with a number in it cannot be compared to a drag.
     await runBuiltIn(page, 'summaryStats');
 
     let sawEstimate = false;
@@ -2649,10 +2650,17 @@ test.describe('Everything a trial needs is on screen at once', () => {
         await slider.fill(String(min));
         await page.getByRole('button', { name: 'Confirm' }).click();
 
-        // The true average, and no verdict either way. The slider was dragged to the very
-        // bottom of the scale, so a verdict here would almost certainly be the wrong one.
-        await expect(page.getByText(/^The average was \d+$/)).toBeVisible({ timeout: 5000 });
+        // Two shapes, labelled, and no verdict either way. The slider was dragged to the
+        // very bottom of the scale, so the answer shape must be visibly the smaller of the
+        // two — which is the whole point of showing them together.
+        await expect(page.getByText('Your answer')).toBeVisible({ timeout: 5000 });
+        await expect(page.getByText('True value')).toBeVisible();
         await expect(page.getByText(/^(Correct|Incorrect)$/)).toHaveCount(0);
+
+        const drawn = await page.locator('main svg').evaluateAll(els =>
+          els.map(el => el.getBoundingClientRect().width));
+        expect(drawn.length, 'the comparison did not draw two shapes').toBeGreaterThanOrEqual(2);
+
         sawEstimate = true;
       } else {
         await yes.click();

@@ -199,6 +199,13 @@ export function Runner({
     // the gap, flashing its stimulus back before the next trial loads — a real bug once.
     setIti(true);
     setTimeout(() => {
+      // Cleared as the NEXT trial begins rather than as this one ends, so feedback can still
+      // name what was answered — "you said this, it was that" is the honest thing to show
+      // for a judgement on a scale, and it needs the judgement to still be there.
+      answers.current = {};
+      componentPayload.current = {};
+      outcomeValues.current = {};
+      setOutcomes({});
       setTrialIdx(i => i + 1);
       setPhaseIdx(0);
       setIti(false);
@@ -317,10 +324,6 @@ export function Runner({
       }
     }
 
-    answers.current = {};
-    componentPayload.current = {};
-    setOutcomes({});
-    outcomeValues.current = {};
     timedOut.current = false;
 
     // Per-outcome messages, when the definition has them. They time out by themselves, so a
@@ -497,7 +500,10 @@ export function Runner({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center gap-10 px-6">
+      {/* min-h-0, or a stimulus taller than the space left grows the column instead of
+          being fitted into it — and a centred column that overflows is cut at BOTH ends,
+          with the scrollbar the only way to reach either. */}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-10 px-6">
         {/* A phase the runtime cannot declare — the participant authors the stimulus, or the
             display is a matter of frame timing. It answers the trial itself, so the ordinary
             response controls stay off. An unknown name renders a message rather than nothing:
