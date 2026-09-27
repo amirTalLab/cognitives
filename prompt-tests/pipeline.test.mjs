@@ -408,3 +408,60 @@ test('publishing and reloading an experiment keeps its comparison numbers', () =
   const plain = structuredClone(MINIMAL);
   assert.equal(specFromDefinition(plain).fields.find(f => f.key === 'originalResults').value, '');
 });
+
+// ─── The output budget ────────────────────────────────────────────────────────
+//
+// Thinking tokens are spent out of max_tokens and arrive as "thinking_delta", which the
+// stream reader does not collect. A model that thinks is therefore spending the answer's
+// budget on something this pipeline discards, and on a hard prompt it spends all of it:
+// one definition call burned its whole 16,000 thinking and returned no JSON, which the
+// route reported as a design too large to emit. The design was 3,000 tokens.
+
+const { callClaude } = await import('../lib/create-project/anthropic.ts');
+
+/** Captures the request body callClaude would send, and replies with a tiny valid stream. */
+async function captureRequest(opts) {
+  const realFetch = globalThis.fetch;
+  const realKey = process.env.ANTHROPIC_API_KEY;
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  let sent = null;
+  globalThis.fetch = async (_url, init) => {
+    sent = JSON.parse(init.body);
+    return new Response(sseStream([start(), delta('{"ok":true}'), stop('end_turn')]), { status: 200 });
+  };
+  try {
+    await callClaude({ model: 'm', system: 's', maxTokens: 16000, messages: [], ...opts });
+  } finally {
+    globalThis.fetch = realFetch;
+    if (realKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = realKey;
+  }
+  return sent;
+}
+
+test('the whole output budget is left for the answer', async () => {
+  const sent = await captureRequest({});
+
+  assert.deepEqual(sent.thinking, { type: 'disabled' },
+    'thinking is billed against max_tokens and then discarded unread — with it on, no '
+    + 'maxTokens in this pipeline means what it says');
+  assert.equal(sent.max_tokens, 16000, 'the ceiling must reach the request unchanged');
+});
+
+test('every stage asks for enough room to answer in', async () => {
+  // The definition this pipeline generates for a real paper is around 5,000 tokens. A stage
+  // that rewrites one whole needs room for it and for the prose around it; refine sat at
+  // 8,000, which put a large definition permanently beyond editing.
+  const { readFileSync } = await import('node:fs');
+  const routes = {
+    'app/api/create/definition/route.ts': 16000,
+    'app/api/create/refine/route.ts': 16000,
+  };
+  for (const [path, floor] of Object.entries(routes)) {
+    const found = [...readFileSync(path, 'utf8').matchAll(/maxTokens:\s*(\d+)/g)].map(m => Number(m[1]));
+    assert.ok(found.length, `${path} sets no maxTokens`);
+    for (const n of found) {
+      assert.ok(n >= floor, `${path} asks for ${n} tokens, below the ${floor} a whole definition needs`);
+    }
+  }
+});

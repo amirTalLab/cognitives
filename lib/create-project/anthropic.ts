@@ -154,6 +154,18 @@ export async function callClaude(opts: {
   const body = JSON.stringify({
     model: opts.model,
     max_tokens: opts.maxTokens,
+    // Thinking tokens are spent out of max_tokens and arrive as `thinking_delta`, which the
+    // reader below does not collect. So a model that thinks is spending the answer's budget
+    // on something this pipeline then throws away — and on a hard prompt it can spend ALL of
+    // it: one definition call burned its entire 16,000 on thinking and returned no JSON at
+    // all, reported as "the design is too large" when the design was 3,000 tokens.
+    //
+    // Off, rather than budgeted around, because every maxTokens in this file was chosen as
+    // room for an answer. Leaving thinking on would make each of those numbers mean
+    // "thinking plus answer, in some proportion the model picks", which cannot be sized:
+    // the current models think adaptively, so a bigger ceiling invites more thinking rather
+    // than guaranteeing more output. Disabled, each number means again what it says.
+    thinking: { type: 'disabled' },
     // The system prompt carries the whole skill document — several thousand tokens that
     // are byte-identical on every call of a stage — so it is always a cache prefix.
     system: [{ type: 'text', text: opts.system, ...CACHE }],

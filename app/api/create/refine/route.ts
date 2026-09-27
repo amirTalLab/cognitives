@@ -57,7 +57,11 @@ export async function POST(req: NextRequest) {
       model: MODEL_STRONG,
       stage: 'refine',
       system: definitionSystem(skill, schema),
-      maxTokens: 8000,
+      // A refine returns the prose reply AND the whole definition rewritten, so it needs at
+      // least as much room as writing that definition took in the first place. At 8000 it
+      // had less than half, which put every definition past about 7,500 tokens permanently
+      // beyond editing. Matching the build stage costs nothing — output is billed as used.
+      maxTokens: 16000,
       messages: [{ role: 'user', content: [{ type: 'text', text: prompt, ...CACHE }] }],
     });
 
