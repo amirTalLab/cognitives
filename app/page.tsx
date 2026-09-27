@@ -9,7 +9,8 @@ import { verifyPassword } from '@/lib/auth';
 import { PASSWORD_KEY, setExperimentLock, storedPassword } from '@/lib/protected-writes';
 import { ExperimentQr } from '@/components/ExperimentQr';
 
-import { EXPERIMENTS, CATEGORIES } from '@/lib/experiments';
+import { catalogue, type PublishedCard } from '@/lib/experiments';
+import { listPublished } from '@/lib/experiment-runtime/store';
 
 export default function HomePage() {
   const router = useRouter();
@@ -22,6 +23,10 @@ export default function HomePage() {
   // Which experiment's QR code is on screen. Here rather than on the teacher dashboard:
   // projecting the link should not mean projecting the class's results as well.
   const [qrFor, setQrFor] = useState<{ path: string; title: string } | null>(null);
+  // Published experiments that have no card in the source catalogue. Anything published
+  // from the deployed site is one of these: the wizard can write the database row but not
+  // this repo, so without them the experiment runs at its URL and appears nowhere.
+  const [published, setPublished] = useState<PublishedCard[]>([]);
 
   // Re-hydrate auth from session. The password itself is needed, not just the flag:
   // changing a lock goes through a database function that checks it, so a session that
@@ -35,6 +40,10 @@ export default function HomePage() {
   }, []);
 
   async function loadLocks() {
+    // Alongside the locks, and never fatal to them: an unreachable definitions table should
+    // cost the extra cards, not the whole page.
+    listPublished().then(setPublished).catch(() => {});
+
     const sb = getSupabase();
     if (!sb) return;
     const { data } = await sb.from('experiment_locks').select('experiment_id, is_locked');
@@ -112,7 +121,8 @@ export default function HomePage() {
     );
   }
 
-  const expMap = Object.fromEntries(EXPERIMENTS.map(e => [e.id, e]));
+  const { experiments, categories } = catalogue(published);
+  const expMap = Object.fromEntries(experiments.map(e => [e.id, e]));
 
   return (
     <main className="min-h-screen flex flex-col items-center px-6 py-10">
@@ -138,7 +148,7 @@ export default function HomePage() {
 
         {/* Category rows */}
         <div className="divide-y divide-gray-800/60">
-          {CATEGORIES.map(cat => (
+          {categories.map(cat => (
             <div key={cat.name} className="flex gap-6 py-5">
 
               {/* Category label */}

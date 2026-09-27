@@ -215,9 +215,13 @@ for (const slug of runSlugs) {
 
   test(`[${slug}] has a matcher entry for its real URL`, () => {
     const matcher = middleware.split('export const config')[1] ?? '';
+    // Covered, not spelled: '/run/:path*' matches every experiment including the ones
+    // published after this build, which a per-slug list cannot. A matcher is static config
+    // compiled into the bundle, so enumerating slugs there meant anything published from
+    // the deployed site shipped unlockable.
     assert.ok(
-      matcher.includes(`'/run/${slug}/:path*'`),
-      `"${slug}" lives at /run/${slug} but has no '/run/${slug}/:path*' matcher entry — ` +
+      matcher.includes(`'/run/:path*'`) || matcher.includes(`'/run/${slug}/:path*'`),
+      `"${slug}" lives at /run/${slug} and no matcher entry covers it — ` +
       'middleware never runs for it and locking silently fails',
     );
     // A bare '/{slug}/:path*' entry is only wrong when nothing serves that URL — the
@@ -2104,21 +2108,31 @@ test('the homepage no longer keeps its own copy of the catalogue', () => {
 });
 
 test('the edit list is exactly what the homepage links, and nothing else', () => {
-  // Three rows were published under slugs the homepage does not link: an abandoned demo and
-  // two near-identical generations of the same experiment. Listing them invited a lecturer
-  // to spend an afternoon refining an experiment no student can reach.
+  // The invariant, not a fixed list: an experiment a class can reach is one a lecturer can
+  // correct, and an experiment nobody can reach is not worth an afternoon of refining. Both
+  // sides of that used to be a hardcoded catalogue; now both grow with what is published,
+  // and they have to grow together or one of them is lying.
   const rows = [
     { slug: 'lexicalDecisionPairs', title: 'Lexical decision', category: 'language', revision: 5 },
+    // Published from the deployed site, so in neither source file.
+    { slug: 'wmLoadAssociation', title: 'WM load', category: 'MEMORY', revision: 2 },
+    // Retired: reachable at its URL, but off both lists on purpose.
     { slug: 'boubaKikiDemo', title: 'Bouba/Kiki demo', category: 'perception', revision: 1 },
     { slug: 'kanizsaWordPrime', title: 'Kanizsa prime', category: 'perception', revision: 1 },
   ];
-  const listed = editableFrom(rows).map(e => e.slug);
 
-  assert.deepEqual(listed, [...catalogue.RUN_SLUGS],
-    'the edit list does not match the homepage catalogue, in its order');
+  const listed = editableFrom(rows).map(e => e.slug);
+  const onHomepage = catalogue.catalogue(rows).categories.flatMap(c => c.ids);
+
+  assert.deepEqual([...listed].sort(), [...onHomepage].sort(),
+    'the edit list and the homepage no longer agree on which experiments exist');
+  assert.ok(listed.includes('wmLoadAssociation'),
+    'an experiment published from the live site cannot be edited afterwards');
   for (const orphan of ['boubaKikiDemo', 'kanizsaWordPrime']) {
-    assert.ok(!listed.includes(orphan), `${orphan} is not on the homepage but is offered for editing`);
+    assert.ok(!listed.includes(orphan), `${orphan} is retired but is offered for editing`);
   }
+  // The curated ones keep their order at the front, which is the order a lecturer knows.
+  assert.deepEqual(listed.slice(0, catalogue.RUN_SLUGS.length), [...catalogue.RUN_SLUGS]);
 });
 
 test('a published row supersedes the built-in it was refined from', () => {
@@ -3768,4 +3782,102 @@ test('every Hebrew instruction addresses a group, not one person', () => {
     }
   }
   assert.deepEqual(offenders, [], `singular Hebrew in: ${offenders.join(', ')}`);
+});
+
+// ─── An experiment published from the deployed site ───────────────────────────
+//
+// Publishing writes a database row. It cannot write this repo — the homepage catalogue and
+// the lock list are source files, and Vercel's filesystem is read-only at runtime — so the
+// registration step that adds a card is skipped in production without saying so. The result
+// was an experiment that ran at its URL, appeared on no page, could not be edited again and
+// could not be locked, while the wizard reported success.
+
+const PUBLISHED = [
+  { slug: 'wmLoadAssociation', title: 'Working Memory Load and Free Association', titleHe: 'עומס זיכרון עבודה', category: 'MEMORY' },
+];
+
+test('a published experiment gets a card without a deploy', () => {
+  const { experiments, categories } = catalogue.catalogue(PUBLISHED);
+
+  const card = experiments.find(e => e.id === 'wmLoadAssociation');
+  assert.ok(card, 'a published experiment still has no card');
+  assert.equal(card.href, '/run/wmLoadAssociation', 'the card must point at where it runs');
+  assert.ok(card.titleHe, 'the homepage is Hebrew-first, so a card needs a Hebrew title');
+
+  // In the category it declared, not dumped at the end.
+  const memory = categories.find(c => c.name === 'MEMORY');
+  assert.ok(memory.ids.includes('wmLoadAssociation'), `expected it under MEMORY, got ${memory.ids}`);
+});
+
+test('the curated catalogue keeps its order and is never duplicated', () => {
+  // lexicalDecisionPairs is both in the source list and published; it must appear once.
+  const { experiments, categories } = catalogue.catalogue([
+    { slug: 'lexicalDecisionPairs', title: 'Word Pair Lexical Decision', category: 'LANGUAGE' },
+    ...PUBLISHED,
+  ]);
+  const seen = experiments.filter(e => e.id === 'lexicalDecisionPairs');
+  assert.equal(seen.length, 1, 'an experiment in both places was listed twice');
+
+  const plain = catalogue.catalogue();
+  assert.deepEqual(
+    plain.experiments.map(e => e.id),
+    catalogue.EXPERIMENTS.map(e => e.id),
+    'with nothing published the homepage must be exactly the curated list',
+  );
+});
+
+test('a retired experiment stays off the homepage', () => {
+  // These are still published and still reachable at their URLs — hiding a card is not a
+  // way to retire an experiment, which is what exp:unpublish is for. But resurrecting them
+  // as cards would undo a deliberate removal.
+  const { experiments } = catalogue.catalogue(
+    [...catalogue.HIDDEN_SLUGS].map(slug => ({ slug, title: slug, category: 'PERCEPTION' })),
+  );
+  for (const slug of catalogue.HIDDEN_SLUGS) {
+    assert.ok(!experiments.some(e => e.id === slug), `"${slug}" is hidden but got a card`);
+  }
+});
+
+test('an experiment whose category is unknown is still findable', () => {
+  // Better a row called OTHER than an experiment that is published, runnable and invisible.
+  const { categories } = catalogue.catalogue([
+    { slug: 'oddOne', title: 'Odd One', category: 'PSYCHOPHYSICS' },
+  ]);
+  const other = categories.find(c => c.name === 'OTHER');
+  assert.ok(other?.ids.includes('oddOne'), 'an unrecognised category lost the experiment');
+
+  // And that row does not exist when nothing needs it.
+  assert.ok(!catalogue.catalogue().categories.some(c => c.name === 'OTHER'),
+    'an empty OTHER row is a heading with nothing under it');
+});
+
+test('the lock reaches an experiment published after the build', () => {
+  const matcher = middleware.split('export const config')[1] ?? '';
+  assert.ok(matcher.includes(`'/run/:path*'`),
+    'the matcher enumerates slugs, so anything published later ships unlockable');
+
+  // And the function must not re-impose a list on what the matcher let through: the guard
+  // may only turn away a NON-/run path that is not a known hand-built experiment.
+  const fn = middleware.split('export const config')[0];
+  const guard = /if \(rest\.length === 0 \|\| \(!isRun && !EXPERIMENT_SLUGS\.has\(rest\[0\]\)\)\)/;
+  assert.ok(guard.test(fn),
+    'the slug list is still gating /run paths, so a new experiment cannot be locked');
+});
+
+test('a published experiment can be opened for editing', () => {
+  const editable = editableFrom(
+    PUBLISHED.map(p => ({ ...p, revision: 2, updatedAt: '2026-09-26' })),
+  );
+  const row = editable.find(e => e.slug === 'wmLoadAssociation');
+  assert.ok(row, 'a published experiment cannot be refined, so it can never be corrected');
+  assert.equal(row.builtIn, false);
+  assert.equal(row.revision, 2);
+
+  // Retired ones stay out of the edit list too, as they always did.
+  const hidden = editableFrom(
+    [...catalogue.HIDDEN_SLUGS].map(slug => ({ slug, title: slug, category: 'PERCEPTION' })),
+  );
+  for (const slug of catalogue.HIDDEN_SLUGS) {
+    assert.ok(!hidden.some(e => e.slug === slug), `"${slug}" is retired but offered for editing`);
+  }
 });

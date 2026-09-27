@@ -86,3 +86,72 @@ export const CATEGORIES = [
 export const RUN_SLUGS: string[] = EXPERIMENTS
   .filter(e => e.href?.startsWith('/run/'))
   .map(e => e.href!.slice('/run/'.length));
+
+/**
+ * Published experiments deliberately kept off the homepage.
+ *
+ * A DENY list, where the homepage used to be an allow list. That is the whole change: a
+ * published experiment is live at its own URL whether or not it has a card, so the default
+ * has to be that it shows — a card missing from the homepage does not protect anyone, it
+ * only means the lecturer who made it cannot find it again.
+ *
+ * These three are abandoned drafts and one /create demo. boubaKikiDemo sat beside the real
+ * bouba-kiki in the LANGUAGE row and made it unclear which card was which. They stay
+ * runnable at their URLs; `npm run exp:unpublish <slug>` retires one for good, which is the
+ * real way to remove an experiment rather than hiding its card.
+ */
+export const HIDDEN_SLUGS = new Set(['boubaKikiDemo', 'kanizsaWordPrime', 'kanizsaWordPriming']);
+
+/** The shape the homepage needs from a published row. */
+export type PublishedCard = { slug: string; title: string; titleHe?: string; category: string };
+
+export type Catalogue = {
+  experiments: Exp[];
+  categories: { name: string; nameHe: string; ids: string[] }[];
+};
+
+/** Anything published that has no curated card yet, so it is findable rather than lost. */
+const OTHER = { name: 'OTHER', nameHe: 'נוספים', ids: [] as string[] };
+
+/**
+ * The homepage list: the curated catalogue, plus whatever else is published.
+ *
+ * Publishing from the deployed site writes a database row and nothing else — it cannot add
+ * a card, because this file is source and Vercel's filesystem is read-only at runtime. So
+ * an experiment published from the live site used to run at its URL and appear nowhere,
+ * with the wizard reporting success. Merging the rows in here is what closes that: the
+ * catalogue below stays the curated order, and anything published beyond it is appended to
+ * the category it declared.
+ *
+ * Pure, and separate from the page, so the merge can be tested without a browser.
+ */
+export function catalogue(published: PublishedCard[] = []): Catalogue {
+  const curated = new Set(EXPERIMENTS.map(e => e.id));
+  const extra = published.filter(p => !curated.has(p.slug) && !HIDDEN_SLUGS.has(p.slug));
+
+  const experiments: Exp[] = [
+    ...EXPERIMENTS,
+    ...extra.map(p => ({
+      id: p.slug,
+      title: p.title || p.slug,
+      // Falls back to the English title rather than the slug: a lecturer reading a Hebrew
+      // page recognises "Working Memory Load", not "wmLoadAssociation".
+      titleHe: p.titleHe || p.title || p.slug,
+      icon: Shapes,
+      color: 'text-purple-400',
+      href: `/run/${p.slug}`,
+    })),
+  ];
+
+  const bucket = (category: string) =>
+    CATEGORIES.find(c => c.name.toUpperCase() === category.trim().toUpperCase())?.name ?? OTHER.name;
+
+  const categories = [...CATEGORIES, OTHER].map(cat => ({
+    name: cat.name,
+    nameHe: cat.nameHe,
+    ids: [...cat.ids, ...extra.filter(p => bucket(p.category) === cat.name).map(p => p.slug)],
+  }));
+
+  // An empty OTHER row would be a heading with nothing under it on every normal visit.
+  return { experiments, categories: categories.filter(c => c.name !== OTHER.name || c.ids.length > 0) };
+}

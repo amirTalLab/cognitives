@@ -8,7 +8,7 @@
 import type { ExperimentDefinition } from './schema';
 import { getPreview } from './preview-store';
 import { listPublished, loadDefinition } from './store';
-import { RUN_SLUGS } from '@/lib/experiments';
+import { HIDDEN_SLUGS, RUN_SLUGS } from '@/lib/experiments';
 // WORD_SUPERIORITY and VISUAL_SEARCH (round-trips) are deliberately NOT registered: the
 // ports below share their slugs and supersede them. A round-trip was an outline that
 // simplified the design to fit; a port is the hand-built experiment itself.
@@ -165,6 +165,25 @@ export function editableFrom(
       revision: row?.revision,
       updatedAt: row?.updatedAt,
       builtIn: !row,
+    });
+  }
+
+  // Then everything else that is published, which the homepage now shows too. Leaving these
+  // out was right while the homepage was the only catalogue — an unlisted row was an
+  // abandoned draft nobody should spend an afternoon refining. It stopped being right once
+  // publishing from the deployed site became the normal way to make an experiment: those
+  // rows are the new work, not the discarded work, and they were the only ones that could
+  // never be edited. HIDDEN_SLUGS still holds back the genuinely retired ones.
+  const listed = new Set(RUN_SLUGS);
+  for (const row of published) {
+    if (listed.has(row.slug) || HIDDEN_SLUGS.has(row.slug)) continue;
+    live.push({
+      slug: row.slug,
+      title: row.title,
+      category: row.category,
+      revision: row.revision,
+      updatedAt: row.updatedAt,
+      builtIn: false,
     });
   }
 

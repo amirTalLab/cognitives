@@ -28,8 +28,12 @@ export async function middleware(request: NextRequest) {
   const isRun = segments[0] === 'run';
   const rest = isRun ? segments.slice(1) : segments;
 
-  // Must start with a known experiment slug
-  if (rest.length === 0 || !EXPERIMENT_SLUGS.has(rest[0])) {
+  // A hand-built route has to be on the list, because the list is what distinguishes
+  // /stroop from any other path on the site. Anything under /run is an experiment by
+  // definition, so it needs no list — and must not have one: a published experiment whose
+  // slug nobody added here would show a working lock toggle on the homepage and stay open
+  // to students, which is what happened to every experiment published from the live site.
+  if (rest.length === 0 || (!isRun && !EXPERIMENT_SLUGS.has(rest[0]))) {
     return NextResponse.next();
   }
 
@@ -92,31 +96,13 @@ export const config = {
     '/creativity/:path*',
     '/bRMS/:path*',
     '/boubaKikiDemo/:path*',
-    // Definition experiments live under /run/{slug}. Registering one as a bare
-    // '/{slug}/:path*' matches a route that does not exist, so middleware never runs and
-    // the lock toggle silently does nothing — which is what happened to flankerLetterTask.
-    '/run/flanker/:path*',
-    '/run/lexicalDecisionPairs/:path*',
-    // Ported experiments keep their slug, so one lock covers the hand-built route and the
-    // port. Both entries stay while app/{slug}/ is still on disk and still reachable —
-    // dropping the bare one would leave the old link open to a student who still has it.
-    '/run/stroop/:path*',
-    '/run/wordSuperiority/:path*',
-    '/run/bouba-kiki/:path*',
-    // The definition port of posnerCueing shares its slug, so the one lock covers both
-    // versions — locking Posner cannot leave the /run copy open to students.
-    '/run/posnerCueing/:path*',
-    '/run/drm/:path*',
-    '/run/serialOrder/:path*',
-    '/run/srt/:path*',
-    '/run/CompositeFace/:path*',
-    '/run/visualSearch/:path*',
-    '/run/mentalRep/:path*',
-    '/run/summaryStats/:path*',
-    '/run/logics/:path*',
-    '/run/creativity/:path*',
-    '/run/bRMS/:path*',
-    '/run/twoStepTask/:path*',
-    '/run/testingEffect/:path*',
+    // Every definition experiment, listed once. A matcher is static config, compiled into
+    // the build, so it cannot name a slug that did not exist at build time — and publishing
+    // from the deployed site creates exactly those. Enumerating them here meant each new
+    // experiment shipped unlockable until someone remembered to add a line, which nothing
+    // warned about: the toggle wrote its row and the redirect never fired.
+    //
+    // The function decides what to do with these; this only decides what it gets to see.
+    '/run/:path*',
   ],
 };

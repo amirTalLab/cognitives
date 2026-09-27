@@ -99,6 +99,8 @@ export async function loadDefinition(slug: string): Promise<ExperimentDefinition
 export interface PublishedSummary {
   slug: string;
   title: string;
+  /** The homepage is Hebrew-first, so a card without this reads as a English-only stub. */
+  titleHe?: string;
   category: string;
   revision?: number;
   updatedAt: string;
@@ -121,14 +123,15 @@ export async function listPublished(): Promise<PublishedSummary[]> {
     .eq('is_published', true)
     .order('updated_at', { ascending: false });
 
-  let { data, error } = await read('slug, title, category, updated_at, revision');
+  let { data, error } = await read('slug, title, title_he, category, updated_at, revision');
   // A database without the revision column still lists fine; the version is simply unknown.
-  if (error && /revision/i.test(error.message)) ({ data, error } = await read('slug, title, category, updated_at'));
+  if (error && /revision/i.test(error.message)) ({ data, error } = await read('slug, title, title_he, category, updated_at'));
   if (error || !data) return [];
 
   return (data as unknown as Record<string, unknown>[]).map(row => ({
     slug: String(row.slug),
     title: String(row.title ?? row.slug),
+    titleHe: row.title_he ? String(row.title_he) : undefined,
     category: String(row.category ?? ''),
     revision: typeof row.revision === 'number' ? row.revision : undefined,
     updatedAt: String(row.updated_at ?? ''),
