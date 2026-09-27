@@ -147,6 +147,7 @@ export function blankSpec(): Spec {
       field('expectedEffect', 'Expected effect'),
       field('charts', 'Teacher dashboard charts'),
       field('stimuli', 'Stimuli & assets'),
+      field('originalResults', 'Reported results'),
     ],
   };
 }
@@ -196,6 +197,18 @@ export function specFromDefinition(def: ExperimentDefinition): Spec {
   set('dv', scored ? 'Accuracy and reaction time' : 'Choice proportion (no correct answer)');
   set('charts', def.dashboard.charts.map(c => c.title).join('; '));
 
+  // Read back off the charts that carry them, so the paper's numbers survive the round trip.
+  // Without this, loading a published experiment and rebuilding it from its spec silently
+  // drops every comparison overlay — the charts still draw, so nobody notices until a class
+  // is looking at a dashboard that no longer says what the study found.
+  const reported = def.dashboard.charts
+    .filter(c => c.original)
+    .map(c => {
+      const pairs = Object.entries(c.original!.values).map(([group, n]) => `${group}: ${n}`).join(', ');
+      return `${c.title} — ${pairs} (${c.original!.source})`;
+    });
+  if (reported.length) set('originalResults', reported.join('\n'));
+
   return {
     ...spec,
     slug: def.slug,
@@ -219,6 +232,11 @@ export const SPEC_PLACEHOLDERS: Record<string, string> = {
   expectedEffect: 'What should happen, with numbers if you know them.',
   charts: 'What the dashboard should plot — e.g. bar of RT by condition with error bars.',
   stimuli: 'Exactly what appears on screen. Text and simple shapes work; image files cannot be created.',
+  // The one field whose absence is invisible: leave it blank and the dashboard still draws
+  // every chart, just with nothing to compare the class against.
+  originalResults: 'The numbers the paper reports, one line per measure, in chart units — '
+    + 'e.g. "Recall accuracy — low load: 96%, high load: 78%". Percent for proportions, ms '
+    + 'for reaction times. Only figures the paper states; "not reported" is a fine answer.',
 };
 
 /** Token counts returned alongside every real API response. */

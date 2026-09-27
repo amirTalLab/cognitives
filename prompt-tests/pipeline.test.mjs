@@ -27,6 +27,8 @@ registerHooks({
 
 const { parseJson, readTextStream } = await import('../lib/create-project/anthropic.ts');
 const { validate } = await import('../lib/experiment-runtime/validate.ts');
+const { specSystem, definitionSystem, specToPrompt } = await import('../lib/create-project/prompts.ts');
+const { blankSpec, specFromDefinition, SPEC_PLACEHOLDERS } = await import('../lib/create-project/types.ts');
 
 /** Builds an SSE stream body like the Messages API sends. */
 function sseStream(frames) {
@@ -318,4 +320,91 @@ test('the restore prompt names the experiment and how long ago it stopped', () =
   // Falls back through the names available at earlier stages rather than saying "undefined".
   assert.match(describeDraft({ ...base, pdfName: 'sternberg.pdf' }), /sternberg\.pdf/);
   assert.match(describeDraft(base), /Untitled experiment/);
+});
+
+// ─── The paper's own numbers ──────────────────────────────────────────────────
+//
+// The dashboard can draw what a study reported beside what the class got, which is the
+// question a lecturer actually wants answered: did we get what they got? Getting a number
+// from the paper onto that axis crosses two stages, and it used to fall down the gap
+// between them.
+//
+// Only the spec stage reads the PDF. The definition stage — the one that writes the charts
+// — receives the spec's fields and nothing else. So a figure the spec does not write down
+// cannot reach a chart, however carefully the build prompt asks for one. There was no field
+// for reported results, so the answer was always "none", and the failure is silent: every
+// chart still draws, just with nothing to compare against.
+
+test('the spec asks for the paper reported figures, in chart units', () => {
+  const prompt = specSystem('(skill)');
+
+  assert.match(prompt, /"key": "originalResults"/, 'the spec has no field for reported results');
+  assert.match(prompt, /ten fields/, 'the field count was not updated with the new field');
+
+  // The two conversions that decide whether a number lands on the axis or off it: a paper
+  // reporting a proportion of .78 has to arrive as 78, and 2.91 s as 2910.
+  assert.match(prompt, /[Pp]ercent for accuracy and proportions/);
+  assert.match(prompt, /milliseconds for reaction times/);
+
+  // The honesty rule travels with the request, or the field becomes an invitation to guess.
+  assert.match(prompt, /[Nn]ever estimate/);
+  assert.match(prompt, /not reported/);
+});
+
+test('a blank spec offers the field, and every field has a placeholder', () => {
+  const spec = blankSpec();
+  assert.ok(spec.fields.some(f => f.key === 'originalResults'),
+    'the form a lecturer types into by hand has no place for the paper numbers');
+
+  // A field with no placeholder renders as an empty box with no hint about what belongs in
+  // it, which for this one means it silently stays empty.
+  for (const field of spec.fields) {
+    assert.ok(SPEC_PLACEHOLDERS[field.key], `"${field.key}" has no placeholder`);
+  }
+});
+
+test('the reported figures reach the stage that draws the charts', () => {
+  // The regression test for the gap itself. Everything else here is wording; this is the
+  // one that fails if the field stops being carried across the stage boundary.
+  const spec = blankSpec();
+  spec.slug = 'wmFreeAssociation';
+  const reported = 'Recall accuracy — low load: 96%, high load: 78%\n'
+    + 'Free-association RT — low load: 3160ms, high load: 2910ms (n.s.)';
+  spec.fields.find(f => f.key === 'originalResults').value = reported;
+
+  const prompt = specToPrompt(spec);
+  for (const line of reported.split('\n')) {
+    assert.ok(prompt.includes(line), `the build stage never sees: ${line}`);
+  }
+});
+
+test('the build stage is told to use them, and told not to invent them', () => {
+  const prompt = definitionSystem('(skill)', '(schema)');
+
+  assert.match(prompt, /Reported results/, 'nothing points the build stage at the field');
+  assert.match(prompt, /"original"/, 'the overlay is never mentioned');
+  assert.match(prompt, /never estimate|Never estimate/);
+  // A reported measure with no chart is a missing chart, not a number to drop — the
+  // manipulation check is the one this loses every time.
+  assert.match(prompt, /[Mm]anipulation check/);
+});
+
+test('publishing and reloading an experiment keeps its comparison numbers', () => {
+  // "Start over from spec" rebuilds from the spec alone. Without this the overlays are
+  // dropped on the way back in, every chart still draws, and the dashboard quietly stops
+  // saying what the study found.
+  const def = structuredClone(MINIMAL);
+  def.dashboard.charts[0].original = {
+    source: 'Baror & Bar (2016), Exp. 1a',
+    values: { low: 96, high: 78 },
+  };
+
+  const recovered = specFromDefinition(def).fields.find(f => f.key === 'originalResults').value;
+  assert.match(recovered, /low: 96/);
+  assert.match(recovered, /high: 78/);
+  assert.match(recovered, /Baror & Bar \(2016\), Exp\. 1a/);
+
+  // And a chart with no overlay leaves the field empty rather than inventing a line for it.
+  const plain = structuredClone(MINIMAL);
+  assert.equal(specFromDefinition(plain).fields.find(f => f.key === 'originalResults').value, '');
 });

@@ -104,11 +104,41 @@ Choose "definition" whenever the design fits, including when a small, honest sim
     { "key": "dv",             "label": "Dependent variable",       "value": "...", "source": "..." },
     { "key": "expectedEffect", "label": "Expected effect",          "value": "...", "source": "..." },
     { "key": "charts",         "label": "Teacher dashboard charts", "value": "...", "source": "..." },
-    { "key": "stimuli",        "label": "Stimuli & assets",         "value": "...", "source": "..." }
+    { "key": "stimuli",        "label": "Stimuli & assets",         "value": "...", "source": "..." },
+    { "key": "originalResults","label": "Reported results",         "value": "...", "source": "paper" }
   ]
 }
 
-Emit all nine fields in that order. Aim for a 5–10 minute classroom task, and make sure the response modality works by touch, not only by keyboard.`,
+Emit all ten fields in that order. Aim for a 5–10 minute classroom task, and make sure the response modality works by touch, not only by keyboard.
+
+## "originalResults" — the paper's own numbers
+
+This is the ONLY stage that reads the paper, and the build stage that draws the charts never
+sees it. Any figure you do not write down here is gone: the dashboard will plot the class's
+data with nothing to compare it against, and the lecturer will have no way to ask the
+question they actually care about, which is "did we get what they got?".
+
+So work through the RESULTS section of the chosen experiment and write one line per measure
+it reports, whether or not you expect a chart for it:
+
+    <measure name> — <condition>: <number><unit>, <condition>: <number><unit>[, n.s.]
+
+Four rules:
+- **Chart units.** Percent for accuracy and proportions, milliseconds for reaction times.
+  A paper reporting a proportion of .78 is written here as 78%, and 2.91 s as 2910ms. The
+  numbers are drawn straight onto an axis, so a proportion left as .78 plots as nothing.
+- **Reported only.** Copy what is stated. Never estimate, never read a value off a figure,
+  never carry one over from a neighbouring condition or a different experiment in the same
+  paper. An invented comparison is worse than no comparison, because it looks authoritative.
+- **Include the null results.** "No RT difference" is a finding, and usually the one that
+  rules out the boring explanation of the main effect. Write the two means and mark it n.s.
+- **Include the manipulation check.** How well subjects did on the loading, distractor or
+  secondary task is what shows the manipulation worked at all. It is rarely the dependent
+  variable and it is easy to skip, and skipping it leaves a class unable to tell a failed
+  manipulation from a failed effect.
+
+Write "not reported" when the paper gives no usable figures. That is a normal answer for an
+older paper, or one that only plots its results without stating them.`,
   );
 }
 
@@ -199,7 +229,8 @@ Points worth care, because they are where definitions usually go wrong:
 - When the cross produces a cell the task cannot answer — comparing a number with itself, a "same" trial built from two different items — list it in "exclude" rather than scoring it arbitrarily or inventing an extra response for it.
 - Every "{reference}" must name a factor you defined, or a field of a pool item.
 - Fill in "mock" with the effect the paper reports. It is what lets a lecturer demonstrate the result with no participants, so the numbers should reproduce the published finding.
-- When the paper REPORTS figures for what a chart plots, add "original" to that chart: { "source": "Author (year), Exp. N", "values": { "<group>": <number> } }, one number per group in the chart's own units (ms for meanRt, percent for accuracy and proportion). The dashboard draws it beside the class's own bars, which is how a class sees whether they got what the study got. Include it ONLY for figures the paper actually states — never estimate, never carry a number over from a different measure or condition. A paper that reports no usable figures simply gets no "original".
+- The spec's "Reported results" field is the paper's own numbers, already converted to chart units. You cannot see the paper, so it is the only source you have and everything in it should end up on screen. Add "original" to each chart whose measure it covers: { "source": "Author (year), Exp. N", "values": { "<group>": <number> } }, one number per group, keyed by that group's value (or its label, where "groups" gives one). Never estimate a number that field does not give, and never carry one across to a different measure or condition — a missing comparison is honest, an invented one is not. "not reported" means no chart gets an "original".
+- A measure named in "Reported results" that no chart plots is a chart you have not built yet. Manipulation checks are the usual case: how subjects did on the loading or secondary task is what shows the manipulation worked, and without it a class cannot tell a failed manipulation from a failed effect. A reported null is worth plotting for the same reason — it is what rules out the dull explanation of the main effect. Prefer adding the chart over dropping the numbers.
 - Prefer inline SVG shapes and text: they need nothing sourced and scale to any screen. Use an "image" display ONLY for files listed at the end of the message as uploaded — you cannot create image files, and a src naming anything else renders as a broken picture. The "assets" field is set by the app, not by you.
 
 === BEGIN SCHEMA (TypeScript) ===

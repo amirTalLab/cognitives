@@ -129,6 +129,13 @@ export const MOCK_SPEC: Spec = {
       value: 'Bar: proportion conventional per shape pair with SEM error bars and a dashed 50% chance line. Histogram: per-participant conventional rate. Bar: mean RT for conventional vs non-conventional choices.' },
     { key: 'stimuli', label: 'Stimuli & assets', source: 'inferred',
       value: 'Both shapes drawn as inline SVG — a rounded blob from a smoothed closed path, a spiky star from alternating inner and outer radii. No image files, so nothing needs sourcing or shipping.' },
+    // Deliberately partial, because the paper is: it gives the one headline rate and no
+    // per-pair or reaction-time figures at all. Saying so is the honest fixture — a mock
+    // that filled in every measure would teach the wrong lesson about this field.
+    { key: 'originalResults', label: 'Reported results', source: 'paper',
+      value: 'Conventional mapping chosen — overall: 95% (chance 50%)\n'
+        + 'Per shape pair — not reported\n'
+        + 'Reaction time — not reported' },
   ],
 };
 
