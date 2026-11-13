@@ -81,7 +81,13 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
     headers,
     body: JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
+  // A platform failure (timeout, crash) arrives as plain text rather than the route's JSON,
+  // so name the common ones instead of showing a bare status code.
+  const data = await res.json().catch(() => ({
+    error: res.status === 504
+      ? 'The server ran out of time (the live site allows 5 minutes per step). Try again; if it keeps happening, the design is too large to build in one step from the website.'
+      : `Request failed (${res.status}). This came from the server itself rather than the builder — try again.`,
+  }));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
   return data as T;
 }
@@ -638,6 +644,11 @@ export default function CreateProjectPage() {
   /** Routes to whichever path the spec chose. Code is the fallback for outliers. */
   const generate = () => (spec?.buildTarget === 'code' ? generateCode() : generateDefinition());
 
+  // The code path is three long model calls in one request — well past a deployed
+  // function's 5-minute ceiling, so on the live site it always died as a bare 504. And even
+  // when it finished, a deployed server cannot stage the files. Locally (npm run dev) it works.
+  const codeBlocked = spec?.buildTarget === 'code' && !canWriteFiles;
+
   const refineDefinition = (next: ChatMessage[]) => run('Applying the change…', async () => {
     const result = await postJson<{
       definition: ExperimentDefinition; issues: ValidationIssue[]; reply: string; usage?: Usage;
@@ -1146,6 +1157,25 @@ export default function CreateProjectPage() {
                 {spec.buildTargetReason && (
                   <p className="text-xs text-gray-400 mt-1">{spec.buildTargetReason}</p>
                 )}
+                {codeBlocked && (
+                  <div className="mt-3 text-sm text-amber-200 space-y-2">
+                    <p>
+                      Generated code cannot be built from the live site: writing it takes longer
+                      than the server&apos;s 5-minute limit, and a deployed site cannot add new
+                      pages to itself. Either build it from a terminal with Claude Code
+                      (<code>/experiment</code>, see docs/BUILD-AN-EXPERIMENT.md), or try it as a
+                      definition — if the design does not fit, the problems are listed after
+                      generating and you can adjust the spec.
+                    </p>
+                    <button
+                      onClick={() => setSpec({ ...spec, buildTarget: 'definition' })}
+                      disabled={!!busy}
+                      className={BTN}
+                    >
+                      Try building it as a definition
+                    </button>
+                  </div>
+                )}
                 {spec.simplifications && spec.simplifications.length > 0 && (
                   <div className="mt-3">
                     <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Departures from the paper</p>
@@ -1254,7 +1284,7 @@ export default function CreateProjectPage() {
                   Needs a URL slug, a title, and a design description.
                 </p>
               )}
-              <button onClick={generate} disabled={!!busy || !specReady} className={`${BTN_PRIMARY} ml-auto`}>
+              <button onClick={generate} disabled={!!busy || !specReady || codeBlocked} className={`${BTN_PRIMARY} ml-auto`}>
                 Generate the experiment
               </button>
             </div>
