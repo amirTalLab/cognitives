@@ -22,6 +22,8 @@ import { AssetManifest, ExperimentDefinition } from '@/lib/experiment-runtime/sc
 import { uploadAssets } from '@/lib/experiment-runtime/assets';
 import { ValidationIssue } from '@/lib/experiment-runtime/validate';
 import { putPreview } from '@/lib/experiment-runtime/preview-store';
+import { SandboxSmokeTest, type SmokeResult } from '@/lib/experiment-runtime/CustomFrame';
+import { SANDBOX_REPORT } from '@/lib/experiment-runtime/sandbox';
 import { publishDefinition } from '@/lib/experiment-runtime/store';
 import { listEditable, loadLive, type EditableExperiment } from '@/lib/experiment-runtime/registry';
 import {
@@ -90,6 +92,21 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   }));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
   return data as T;
+}
+
+/** Whether any block of a definition has a phase drawn by a script. */
+function hasCustom(def: ExperimentDefinition): boolean {
+  const phasesOf = (block: unknown): unknown[] => {
+    const trial = (block as { trial?: { phases?: unknown } } | null)?.trial;
+    return Array.isArray(trial?.phases) ? trial.phases : [];
+  };
+  const blocks: unknown[] = [def];
+  for (const entry of def.stages ?? []) {
+    const inner = (entry as { stages?: unknown }).stages;
+    if (Array.isArray(inner)) blocks.push(...inner);
+    else blocks.push(entry);
+  }
+  return blocks.some(b => phasesOf(b).some(p => !!(p as { custom?: unknown } | null)?.custom));
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -169,6 +186,14 @@ export default function CreateProjectPage() {
   const [finishResult, setFinishResult] = useState<string | null>(null);
   const [definition, setDefinition] = useState<ExperimentDefinition | null>(null);
   const [, setIssues] = useState<ValidationIssue[]>([]);
+  // Custom displays (sandboxed scripts) are run for a moment out of sight after every build
+  // and every refine; this is what that found. 'checking' blocks publishing until it is done.
+  const [sandboxCheck, setSandboxCheck] = useState<'none' | 'checking' | 'ok' | 'failed'>('none');
+  const [sandboxErrors, setSandboxErrors] = useState<string[]>([]);
+  // Automatic repairs spent on the current chain of changes, so a script the model cannot
+  // fix does not spend money in a loop. Reset whenever the lecturer asks for something.
+  const autoRepairs = useRef(0);
+  const [smokeNonce, setSmokeNonce] = useState(0);
   const [usage, setUsage] = useState<UsageEntry[]>([]);
   // Unfinished work found in localStorage on load. Offered, never applied automatically —
   // silently dropping someone into a stale half-finished state is its own kind of broken.
@@ -244,6 +269,7 @@ export default function CreateProjectPage() {
 
       setSpec(specFromDefinition(loaded));
       setDefinition(loaded);
+      resetSandboxCheck(loaded);
       setIssues([]);
       setProblems([]);
       setFiles([]);
@@ -313,6 +339,7 @@ export default function CreateProjectPage() {
     setSpec(draft.spec);
     setAssets(draft.assets);
     setDefinition(draft.definition);
+    if (draft.definition) resetSandboxCheck(draft.definition);
     setFiles(draft.files);
     setNotes(draft.notes);
     setProblems(draft.problems);
@@ -481,6 +508,7 @@ export default function CreateProjectPage() {
 
     meter('Generate definition', 'strong', result.usage);
     setDefinition(result.definition);
+    resetSandboxCheck(result.definition);
     setIssues(result.issues);
     putPreview(result.definition);
     setStaged(true);
@@ -579,6 +607,16 @@ export default function CreateProjectPage() {
         setFinishResult('Mock mode — nothing was published. Switch mock mode off and build for real to publish.');
         return;
       }
+      // Students must never get a version whose custom display is known to fail, or one
+      // whose check has not finished yet.
+      if (sandboxCheck === 'checking') {
+        setFinishResult('Not published yet — the custom display is still being checked. Try again in a few seconds.');
+        return;
+      }
+      if (sandboxErrors.length > 0) {
+        setFinishResult(`Not published — a custom display is failing:\n${sandboxErrors.join('\n')}\nUse "Fix it automatically" above, or describe the problem in the box below.`);
+        return;
+      }
       // Validated server-side first, then written from here — the browser holds the
       // Supabase client, and a definition that fails validation must never be saved.
       const check = await postJson<{ ok: boolean; error?: string }>(
@@ -641,13 +679,17 @@ export default function CreateProjectPage() {
     setFinishResult(lines.join('\n'));
   });
 
-  /** Routes to whichever path the spec chose. Code is the fallback for outliers. */
-  const generate = () => (spec?.buildTarget === 'code' ? generateCode() : generateDefinition());
-
-  // The code path is three long model calls in one request — well past a deployed
-  // function's 5-minute ceiling, so on the live site it always died as a bare 504. And even
-  // when it finished, a deployed server cannot stage the files. Locally (npm run dev) it works.
-  const codeBlocked = spec?.buildTarget === 'code' && !canWriteFiles;
+  /**
+   * Every experiment is built as a definition. A design the display kinds cannot show gets a
+   * custom display (a sandboxed script) for that part, so nothing needs generated pages.
+   *
+   * The old code path survives only locally, for a spec that still asks for it: on the live
+   * site it ran past the server's 5-minute limit and could not stage its files anyway.
+   */
+  const generate = () => {
+    autoRepairs.current = 0;
+    return spec?.buildTarget === 'code' && canWriteFiles ? generateCode() : generateDefinition();
+  };
 
   const refineDefinition = (next: ChatMessage[]) => run('Applying the change…', async () => {
     const result = await postJson<{
@@ -661,7 +703,48 @@ export default function CreateProjectPage() {
     putPreview(result.definition);
     setPreviewNonce(n => n + 1);
     setProblems(result.issues.filter(i => i.severity === 'error').map(i => i.message));
+    resetSandboxCheck(result.definition);
   });
+
+  /** A new version of the experiment: whatever was found about the last one no longer holds. */
+  function resetSandboxCheck(next: ExperimentDefinition) {
+    setSandboxErrors([]);
+    setSmokeNonce(n => n + 1);
+    setSandboxCheck(hasCustom(next) ? 'checking' : 'none');
+  }
+
+  /** Sends the failure back to the model as a change request, without the lecturer typing it. */
+  const repairSandbox = (errors: string[]) => {
+    autoRepairs.current += 1;
+    refineDefinition([...messages, {
+      role: 'user',
+      content: `[Automatic check] A custom display failed when it was run:\n${errors.map(e => `- ${e}`).join('\n')}\n`
+        + 'Fix the script so it runs without errors on every trial. Change nothing else.',
+    }]);
+  };
+
+  const onSmokeResult = (result: SmokeResult) => {
+    if (result.ok) { setSandboxCheck('ok'); return; }
+    setSandboxCheck('failed');
+    setSandboxErrors(result.errors);
+    // Twice at most: a script the model fixes at all, it fixes on the first or second go.
+    if (autoRepairs.current < 2 && !busy) repairSandbox(result.errors);
+  };
+
+  // Failures found while the lecturer clicks through the preview — a trial the smoke test
+  // did not sample. The runner inside the preview frame posts them here.
+  useEffect(() => {
+    const listen = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type?: string; phase?: string; message?: string } | null;
+      if (!data || data.type !== SANDBOX_REPORT) return;
+      const line = `The custom display in phase "${data.phase}" failed: ${String(data.message).slice(0, 500)}`;
+      setSandboxErrors(prev => (prev.includes(line) ? prev : [...prev, line]));
+      setSandboxCheck('failed');
+    };
+    window.addEventListener('message', listen);
+    return () => window.removeEventListener('message', listen);
+  }, []);
 
   const sendChat = () => {
     const text = chatInput.trim();
@@ -669,6 +752,7 @@ export default function CreateProjectPage() {
     const next: ChatMessage[] = [...messages, { role: 'user', content: text }];
     setMessages(next);
     setChatInput('');
+    autoRepairs.current = 0;
     if (definition) { refineDefinition(next); return; }
     run('Claude is working…', async () => {
       const result = await postJson<ChatResponse & { usage?: Usage; problems?: string[] }>(
@@ -1151,30 +1235,13 @@ export default function CreateProjectPage() {
                 : 'border-emerald-400/40 bg-emerald-400/10'}`}>
                 <p className={`text-sm font-medium ${spec.buildTarget === 'code' ? 'text-amber-300' : 'text-emerald-300'}`}>
                   {spec.buildTarget === 'code'
-                    ? 'Built as generated code — slower, and reviewed before it runs'
+                    ? (canWriteFiles
+                      ? 'Built as generated code — slower, and reviewed before it runs'
+                      : 'Built with a custom display for the part the standard displays cannot show — instant preview')
                     : 'Built as a definition — instant preview'}
                 </p>
                 {spec.buildTargetReason && (
                   <p className="text-xs text-gray-400 mt-1">{spec.buildTargetReason}</p>
-                )}
-                {codeBlocked && (
-                  <div className="mt-3 text-sm text-amber-200 space-y-2">
-                    <p>
-                      Generated code cannot be built from the live site: writing it takes longer
-                      than the server&apos;s 5-minute limit, and a deployed site cannot add new
-                      pages to itself. Either build it from a terminal with Claude Code
-                      (<code>/experiment</code>, see docs/BUILD-AN-EXPERIMENT.md), or try it as a
-                      definition — if the design does not fit, the problems are listed after
-                      generating and you can adjust the spec.
-                    </p>
-                    <button
-                      onClick={() => setSpec({ ...spec, buildTarget: 'definition' })}
-                      disabled={!!busy}
-                      className={BTN}
-                    >
-                      Try building it as a definition
-                    </button>
-                  </div>
                 )}
                 {spec.simplifications && spec.simplifications.length > 0 && (
                   <div className="mt-3">
@@ -1284,7 +1351,7 @@ export default function CreateProjectPage() {
                   Needs a URL slug, a title, and a design description.
                 </p>
               )}
-              <button onClick={generate} disabled={!!busy || !specReady || codeBlocked} className={`${BTN_PRIMARY} ml-auto`}>
+              <button onClick={generate} disabled={!!busy || !specReady} className={`${BTN_PRIMARY} ml-auto`}>
                 Generate the experiment
               </button>
             </div>
@@ -1305,6 +1372,44 @@ export default function CreateProjectPage() {
                 <p className="text-xs text-gray-500 mt-3">
                   Regenerate from spec, or ask for the missing piece in the box below.
                 </p>
+              </div>
+            )}
+
+            {/* Custom displays are run out of sight for a moment after every change; a broken
+                one is sent back for repair before the lecturer has to find it. */}
+            {definition && sandboxCheck === 'checking' && (
+              <SandboxSmokeTest key={smokeNonce} definition={definition} onResult={onSmokeResult} />
+            )}
+            {definition && sandboxCheck !== 'none' && (
+              <div className={`bg-gray-900 border rounded-2xl p-4 ${sandboxErrors.length ? 'border-red-500/40' : 'border-gray-700'}`}>
+                <div className="flex items-start gap-3">
+                  {sandboxCheck === 'checking'
+                    ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin flex-shrink-0 mt-0.5" />
+                    : sandboxErrors.length
+                      ? <XCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                      : <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />}
+                  <div className="flex-1 text-sm">
+                    {sandboxCheck === 'checking' && <p className="text-gray-400">Testing the custom display…</p>}
+                    {sandboxCheck === 'ok' && sandboxErrors.length === 0 && (
+                      <p className="text-gray-400">The custom display runs without errors.</p>
+                    )}
+                    {sandboxErrors.length > 0 && (
+                      <>
+                        <ul className="text-red-300 list-disc pl-5 space-y-1">
+                          {sandboxErrors.map((e, i) => <li key={i}>{e}</li>)}
+                        </ul>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {busy ? 'Repairing…' : 'Publishing is blocked until this is fixed.'}
+                        </p>
+                        {!busy && (
+                          <button onClick={() => repairSandbox(sandboxErrors)} className={`${BTN} mt-3`}>
+                            Fix it automatically
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

@@ -51,8 +51,10 @@ page gives, in the same order, and wait at each one:
   so and ask for the files rather than substituting shapes.
 - **Say what you assumed.** Papers almost never state trial counts or timings; propose them
   from the closest worked example and mark them as yours.
-- **Refusing is a valid answer.** Some paradigms genuinely do not fit — audio, one-shot
-  deceptions, anything needing a special population. Say so and explain why instead of
-  building a lookalike.
+- **Refusing is a valid answer.** Some paradigms genuinely do not fit — one-shot
+  deceptions, anything needing a special population or apparatus (eye tracking, EEG).
+  Say so and explain why instead of building a lookalike. Motion, flicker, sound and
+  staircases are NOT reasons to refuse: they are built as a custom display (see
+  `CustomDisplay` in `lib/experiment-runtime/schema.ts`).
 - If a command fails in a way that looks like setup rather than design, run
   `npm run exp:setup` and give them the one line it says to fix.

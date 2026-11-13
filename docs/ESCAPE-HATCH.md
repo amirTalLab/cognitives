@@ -117,3 +117,41 @@ breakthrough time in the dataset without anyone noticing.
 One ordering rule is still inexpressible: bRMS reshuffles until no two consecutive trials
 share an identity or a condition. Declared as a simplification on that port rather than
 worked around.
+
+---
+
+## Update — 2026-11-13: a phase may be a sandboxed script
+
+**What changed.** The rule above — "a definition cannot introduce code, so an experiment
+that needs a new kind of phase has to be built by hand" — left the live site with no way to
+build a paper whose stimulus is motion, flicker, sound, or a staircase. The `/create`
+wizard sent those down the generated-pages path, which cannot finish on a deployed server
+(three long model calls past the 5-minute function limit, and a deployed site cannot add
+pages to itself). Found with a random-dot motion paper (Watanabe et al. 2001).
+
+**The decision.** A phase may now carry `custom: { script, responds? }` — the body of a
+function, written by the pipeline, run in an `<iframe sandbox="allow-scripts">` with no
+`allow-same-origin` and a CSP of `default-src 'none'; connect-src 'none'`. It gets an opaque
+origin, so it cannot read the site's storage, cookies or DOM, cannot reach Supabase, and
+cannot fetch anything. It draws in its own frame and posts results back; the runner checks
+the sender and a per-frame token, coerces the response to a capped string, and keeps only
+safely named JSON columns, merged UNDER the definition's own stored columns.
+
+**Why this does not undo the original reasoning.** The worry was code shipping with the site
+and being impossible to edit or regenerate. A custom display is neither: it is data in the
+definition (versioned, validated, editable through Refine), and it is confined to the one
+phase that needs it — factors, scoring, saving and the dashboard stay declarative.
+
+**Safeguards.**
+- `validate` parses every script (`new Function`, never run), caps its size, and checks that
+  a script which answers the trial calls `exp.done`.
+- `/create` runs every custom display for 2.5s on real planned trials, out of sight, after
+  each build and refine. An error goes back to the model as a repair request (twice at most),
+  and publishing is blocked while any is known. Errors hit while previewing are reported up
+  from the preview frame the same way.
+- For students: a script that throws ends its phase (no response recorded, `display_error`
+  stored on the row), and a phase waiting on a silent script offers "Continue" after two
+  minutes. Nobody is left on a blank screen.
+
+The named components (`wasonRuleDiscovery`, `bRMSSuppression`) stay: they are hand-written,
+reviewed code for the ported experiments. New experiments use `custom`.

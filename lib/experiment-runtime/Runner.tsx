@@ -16,10 +16,12 @@ import { motion } from 'framer-motion';
 import type { ExperimentDefinition, ResponseSpec, ResponseStep, TrialDesign } from './schema';
 import {
   buildTrials, EARLY_RESPONSE, expandRecall, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf,
-  lookup, phaseDuration, resolve, SHOWN, Trial,
+  lookup, phaseDuration, REPORTED_CORRECT_KEY, resolve, SHOWN, Trial,
 } from './trials';
 import { DisplayView, SEED_KEY, ASSET_BASE_KEY, LANGUAGE_KEY, POSITIONED_OFFSET } from './DisplayView';
 import { PHASE_COMPONENT_MAP } from './components';
+import { CustomFrame } from './CustomFrame';
+import { SANDBOX_REPORT, type SandboxMessage } from './sandbox';
 import { saveTrial } from './store';
 
 /** One completed trial, ready to be stored. */
@@ -133,6 +135,14 @@ export function Runner({
   // Extra columns a component phase observed — the triples a participant tested, whether the
   // frame timing held. Cleared per trial, with the answers, so nothing leaks into the next.
   const componentPayload = useRef<Record<string, unknown>>({});
+  // The same for a custom display (a sandboxed script), kept apart because it is untrusted:
+  // it is merged UNDER the definition's own columns, so a script can never overwrite a
+  // stored factor or the stage name. Its verdict for the `reported` rule travels separately.
+  const sandboxPayload = useRef<Record<string, unknown>>({});
+  const reportedCorrect = useRef<boolean | null>(null);
+  // What a script handed to exp.keep(), carried from trial to trial within this block — a
+  // staircase level, the letters an n-back stream has shown. A new block starts fresh.
+  const sandboxMemory = useRef<unknown>(null);
   // What followed from what the participant did — which world a choice led to, whether it
   // paid. In state because the phases after it have to re-render, AND in a ref because the
   // row is written from a callback: reading the state there captures the value from the
@@ -144,6 +154,8 @@ export function Runner({
   // The correct option, marked while practice waits for a retry. Null at every other moment,
   // so a main-block trial can never reveal its own answer.
   const [retryHint, setRetryHint] = useState<string | null>(null);
+  // Counts practice retries, so a custom display is remounted for each attempt.
+  const [attempt, setAttempt] = useState(0);
 
   // One row and one advance per trial, however it ends. A click landing in the same instant
   // as a timeout, or a key pressed while a feedback message is up, would otherwise record
@@ -204,6 +216,8 @@ export function Runner({
       // for a judgement on a scale, and it needs the judgement to still be there.
       answers.current = {};
       componentPayload.current = {};
+      sandboxPayload.current = {};
+      reportedCorrect.current = null;
       outcomeValues.current = {};
       setOutcomes({});
       setTrialIdx(i => i + 1);
@@ -225,7 +239,11 @@ export function Runner({
     // "shown" recorded and no answer to score.
     const passive = first === undefined;
     const primary = early ? EARLY_RESPONSE : passive ? SHOWN : (given[first.phase] ?? '');
-    const correct = passive ? null : early ? false : isCorrect(design, trial, primary);
+    const correct = passive ? null : early ? false : isCorrect(
+      design,
+      { ...trial, values: { ...trial.values, [REPORTED_CORRECT_KEY]: reportedCorrect.current } },
+      primary,
+    );
 
     // Practice that teaches the response mapping rather than sampling the design: a wrong
     // answer keeps this same trial on screen with the right option marked, and the clock
@@ -242,7 +260,11 @@ export function Runner({
       && !timedOut.current
     ) {
       answers.current = {};
+      sandboxPayload.current = {};
+      reportedCorrect.current = null;
       setRetryHint(correctOption(design, trial, steps[0]));
+      // A custom display that answered has finished; a fresh frame lets it answer again.
+      setAttempt(a => a + 1);
       clock.current = performance.now();
       return;
     }
@@ -269,7 +291,9 @@ export function Runner({
     // Outcomes are ordinary values by the time a trial ends, so `store` can name them and
     // the row carries what actually happened — which world the choice led to, whether it paid.
     const payload = {
-      ...payloadOf(design, { ...trial, values: { ...trial.values, ...outcomeValues.current } }),
+      // First, so everything the definition itself stores wins over a script's column.
+      ...sandboxPayload.current,
+      ...payloadOf(design,{ ...trial, values: { ...trial.values, ...outcomeValues.current } }),
       ...(stage ? { stage } : {}),
       ...(repetition !== undefined ? { repetition } : {}),
       // A component phase can add columns of its own. Last, so it cannot quietly overwrite
@@ -392,6 +416,11 @@ export function Runner({
       if (phase.startsClock) clock.current = performance.now();
       return;
     }
+    // A custom display with no duration ends itself, by calling exp.done().
+    if (phase.custom && phase.durationMs === undefined) {
+      if (phase.startsClock) clock.current = performance.now();
+      return;
+    }
     const ms = trial ? phaseDuration(phase, trial, phaseIdx) : 0;
     const timer = setTimeout(() => setPhaseIdx(i => i + 1), ms);
     return () => clearTimeout(timer);
@@ -406,7 +435,9 @@ export function Runner({
     // A typed answer submits ITSELF at the deadline, because what the participant has
     // written lives in the input's own state: answering "none" from out here would throw
     // away ninety seconds of recall and record the trial as if nothing had been typed.
-    if (typedStep(steps.find(s => s.phase === phase.name))) return;
+    // Not so for a script that answers: the "text" response it declares is only the shape of
+    // its answer, and nothing on screen would submit it at the deadline.
+    if (!phase.custom?.responds && typedStep(steps.find(s => s.phase === phase.name))) return;
     const timer = setTimeout(() => {
       if (phase.name === steps[0]?.phase) timedOut.current = true;
       answer(NO_RESPONSE);
@@ -481,7 +512,59 @@ export function Runner({
   const PhaseComponent = phase.component ? PHASE_COMPONENT_MAP[phase.component] : undefined;
   // A component collects its own answer, so the declarative controls would be a second way
   // to end the same trial.
-  const showResponse = (phase.awaitsResponse || inEarlyWindow) && !feedback && !iti && !phase.component;
+  const showResponse = (phase.awaitsResponse || inEarlyWindow) && !feedback && !iti && !phase.component
+    && !phase.custom?.responds;
+
+  // What a custom display (a sandboxed script) says, applied to the trial it belongs to.
+  // Everything in `message` has already been type-checked and capped by readSandboxMessage.
+  const custom = phase.custom;
+  const onSandbox = (message: SandboxMessage) => {
+    if (!custom) return;
+    // A display-only phase with no duration of its own moves on when the script says so.
+    const endsItself = !phase.awaitsResponse && phase.durationMs === undefined;
+    switch (message.type) {
+      case 'keep':
+        sandboxMemory.current = message.memory;
+        return;
+      case 'record':
+        sandboxPayload.current = { ...sandboxPayload.current, ...message.data };
+        return;
+      case 'error': {
+        // Recorded with the trial, so a lecturer reading the results can see it happened,
+        // and passed up to /create when this runs inside its preview, which repairs it.
+        sandboxPayload.current = { ...sandboxPayload.current, display_error: message.message };
+        console.error(`Custom display "${phase.name}" failed:`, message.message);
+        if (window.parent !== window) {
+          window.parent.postMessage(
+            { type: SANDBOX_REPORT, slug: definition.slug, phase: phase.name, message: message.message },
+            window.location.origin,
+          );
+        }
+        // A participant must never be stranded on a frame that will not answer: a script
+        // that was to answer the trial records no response; one that was to end itself ends.
+        if (custom.responds) answer(NO_RESPONSE);
+        else if (endsItself) setPhaseIdx(i => i + 1);
+        return;
+      }
+      case 'done':
+        sandboxPayload.current = { ...sandboxPayload.current, ...message.data };
+        if (message.correct !== null) reportedCorrect.current = message.correct;
+        if (custom.responds) answer(message.response ?? SHOWN);
+        else if (!phase.awaitsResponse) setPhaseIdx(i => i + 1);
+        return;
+      default:
+        return;
+    }
+  };
+  // Offered only where the phase is waiting on the script, after a long silence.
+  const waitsOnScript = !!custom && (custom.responds || (!phase.awaitsResponse && phase.durationMs === undefined));
+  const onStuck = waitsOnScript
+    ? () => {
+        sandboxPayload.current = { ...sandboxPayload.current, display_stuck: true };
+        if (custom?.responds) answer(NO_RESPONSE);
+        else setPhaseIdx(i => i + 1);
+      }
+    : undefined;
   // Between trials: blank, or whatever the definition keeps up. Under a feedback message:
   // the feedback display when there is one, so a stimulus need not linger behind "Missed".
   const shown = iti
@@ -518,6 +601,25 @@ export function Runner({
                 answer(response ?? SHOWN);
               }} />
           )
+        ) : custom && !iti && !feedback?.message ? (
+          // Keyed by trial, phase and attempt: every one starts a fresh frame, so no script
+          // state leaks between trials except through exp.keep().
+          <CustomFrame
+            key={`${trialIdx}-${phaseIdx}-${attempt}`}
+            script={custom.script}
+            interactive={!!custom.responds}
+            init={{
+              values,
+              language,
+              practice,
+              trialIndex: trial.index,
+              seed: trial.seed,
+              assetBase: definition.assets?.base ?? '',
+              memory: sandboxMemory.current,
+              responds: !!custom.responds,
+            }}
+            onMessage={onSandbox}
+            onStuck={onStuck} />
         ) : (
           shown && <DisplayView node={shown} values={values} />
         )}

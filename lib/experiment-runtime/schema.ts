@@ -290,9 +290,8 @@ export interface Phase {
    *
    * The name must be one of `PHASE_COMPONENTS` in component-names.ts. A DEFINITION CANNOT
    * INTRODUCE ONE: the pipeline writes JSON, and a component is code that ships with the
-   * site. So a generated experiment cannot use this, and an experiment that needs it is one
-   * to say no to rather than to approximate — a lookalike that drops the timing or the
-   * drawing is not the experiment.
+   * site. So a generated experiment cannot use this: a generated experiment that needs a
+   * display the kinds cannot describe uses `custom` (a sandboxed script) instead.
    *
    * What it costs, which falls on the lecturer rather than on you: a phase that is code
    * cannot be edited from /create and cannot be regenerated. Everything else about the
@@ -306,6 +305,13 @@ export interface Phase {
    * are built from, so the answer lands in the same column as every other experiment's.
    */
   component?: string;
+  /**
+   * A display drawn by a short script, for what no display kind above can show.
+   *
+   * See `CustomDisplay` for when to use it and how to write one. `display` is still required
+   * — give `{ "kind": "blank" }` — and is what a still preview shows in place of the script.
+   */
+  custom?: CustomDisplay;
   /**
    * Omitted on a response phase, which waits for input instead.
    * Bound because in cueing paradigms the interval itself is the manipulation.
@@ -331,6 +337,78 @@ export interface Phase {
    * `durationMs: 800, jitterMs: 400`, so the participant cannot time what comes next.
    */
   jitterMs?: Bound<number>;
+}
+
+/**
+ * A phase drawn by a script — the way to build ANYTHING the display kinds cannot show.
+ *
+ * USE IT ONLY FOR THE PART THAT NEEDS IT. Everything else — factors, trial counts,
+ * fixation, masks, the ordinary response buttons, scoring, charts — stays declarative. A
+ * motion-coherence task is a normal definition whose one stimulus phase is a script drawing
+ * the moving dots, followed by a normal choice response. Never use a script for text, a
+ * shape, an image or an array the display kinds already handle.
+ *
+ * Use it for: animation and motion (random-dot kinematograms, apparent motion, multiple
+ * object tracking), anything timed per frame (flicker, RSVP streams inside one trial, a
+ * rapid sequence), sound (tones via the Web Audio API), interaction the response kinds do
+ * not offer (dragging, clicking a location, a puzzle), and trial-to-trial dependence
+ * (staircases, n-back, task switching) through `exp.memory` / `exp.keep()`.
+ *
+ * The script is the BODY of a function, run in strict mode inside a sandboxed frame. It
+ * cannot reach the site, the network or other data — only its own frame. It receives one
+ * argument, `exp`:
+ *
+ *   exp.root          the element to draw in; it fills the frame (flex, centred)
+ *   exp.width, exp.height   its size in CSS pixels
+ *   exp.canvas()      creates a full-size, high-DPI canvas: returns { canvas, ctx, width, height }
+ *   exp.values        this trial's factor values and pool items, e.g. exp.values.direction
+ *   exp.language      'he' or 'en';  exp.text({ en, he }) picks the right one
+ *   exp.practice      true during practice;  exp.trialIndex  the trial's number
+ *   exp.random()      seeded random in [0, 1) — use it instead of Math.random
+ *   exp.now()         performance.now()
+ *   exp.asset(name)   URL of an uploaded image or sound file
+ *   exp.record({ ... })        adds columns to this trial's results row (any time)
+ *   exp.done(response, { ... }) ends the phase. With `responds: true` the response is the
+ *                     trial's answer; put `correct: true/false` in the object when the script
+ *                     knows (pair it with the `reported` correctness rule). Other keys become
+ *                     columns. On a display-only phase, done() moves on early.
+ *   exp.memory        what an earlier trial of this block passed to exp.keep(), or null
+ *   exp.keep(value)   remember a JSON value for the next trial (a staircase level, the last
+ *                     letters for n-back). Practice and each block start fresh.
+ *
+ * Rules for a script that works the first time:
+ * - Use requestAnimationFrame for motion and measure elapsed time with exp.now() — never
+ *   assume a frame rate. Draw from exp.width/exp.height, never a fixed pixel size; students
+ *   run this on phones.
+ * - Every interaction must work by touch AND mouse: use pointer events ('pointerdown'), and
+ *   keys only as an extra. Buttons you create are styled already.
+ * - exp.root centres its children, which then shrink to their narrowest. Give any grid, row
+ *   or keyboard an explicit width — `width: min(92vw, 420px)` — or its buttons collapse
+ *   into slivers.
+ * - Hebrew runs are right-to-left, and so is the frame. Set `dir = 'ltr'` on anything that
+ *   must read left to right: Latin letters, digits, a keyboard, a left/right layout.
+ * - A display-only phase is ended by the phase's `durationMs` (or by exp.done() when it has
+ *   none); the frame is removed when the phase ends, so no cleanup is needed.
+ * - No network, no imports, no external libraries, no alert/prompt. Plain modern JavaScript.
+ * - Keep it short and readable: a lecturer may ask for it to be changed later.
+ *
+ * Example — 2 seconds of moving dots whose coherent share and direction come from factors,
+ * followed in the next phase by ordinary choice buttons:
+ *
+ *   { "name": "dots", "display": { "kind": "blank" }, "durationMs": 2000,
+ *     "custom": { "script": "const { ctx, width, height } = exp.canvas();\nconst n = 150, r = Math.min(width, height) * 0.45, cx = width / 2, cy = height / 2;\nconst coherent = exp.values.coherence / 100, angle = exp.values.direction * Math.PI / 180;\nconst speed = r * 0.4;\nlet dots = Array.from({ length: n }, () => ({ a: exp.random() * 2 * Math.PI, d: Math.sqrt(exp.random()) * r, signal: exp.random() < coherent }));\ndots = dots.map(p => ({ x: cx + Math.cos(p.a) * p.d, y: cy + Math.sin(p.a) * p.d, dir: p.signal ? angle : exp.random() * 2 * Math.PI }));\nlet last = exp.now();\nfunction frame() {\n  const now = exp.now(), dt = (now - last) / 1000; last = now;\n  ctx.clearRect(0, 0, width, height); ctx.fillStyle = '#f8fafc';\n  for (const p of dots) {\n    p.x += Math.cos(p.dir) * speed * dt; p.y -= Math.sin(p.dir) * speed * dt;\n    if (Math.hypot(p.x - cx, p.y - cy) > r) { const a = exp.random() * 2 * Math.PI, d = Math.sqrt(exp.random()) * r; p.x = cx + Math.cos(a) * d; p.y = cy + Math.sin(a) * d; }\n    ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, 2 * Math.PI); ctx.fill();\n  }\n  requestAnimationFrame(frame);\n}\nrequestAnimationFrame(frame);" } }
+ */
+export interface CustomDisplay {
+  /** The function body described above. Plain JavaScript; no HTML, no imports. */
+  script: string;
+  /**
+   * True when the script itself answers the trial by calling exp.done(response). The phase
+   * must then have `awaitsResponse: true`, the trial's `response` must be `{ "kind": "text" }`,
+   * and no ordinary response controls are drawn. False or omitted: the script only displays,
+   * and any response is collected by the ordinary controls as usual (shown below the frame
+   * when the phase awaits a response).
+   */
+  responds?: boolean;
 }
 
 // ─── Responses ────────────────────────────────────────────────────────────────
@@ -697,6 +775,14 @@ export type CorrectRule =
        */
       editDistance?: number;
     }
+  /**
+   * Correct when a custom display said so: `exp.done(answer, { correct: true })`.
+   *
+   * For a script that decides what was right itself — an adaptive staircase, an n-back
+   * stream, a puzzle — where no factor planned in advance holds the answer. A trial whose
+   * script reported nothing is scored as not correct.
+   */
+  | { kind: 'reported' }
   /** Preference tasks with no correct answer — ratings, free choice. */
   | { kind: 'none' };
 
@@ -1254,9 +1340,12 @@ export interface ExperimentDefinition {
   simplifications?: { what: string; why: string }[];
 }
 
-// ─── Not yet expressible ──────────────────────────────────────────────────────
+// ─── Not yet expressible DECLARATIVELY ────────────────────────────────────────
 //
-// Deliberately absent, each unlocking specific paradigms (see docs/PARADIGM-COVERAGE.md):
+// Every item below is now buildable through a custom display (`Phase.custom`, a sandboxed
+// script — see CustomDisplay above and docs/ESCAPE-HATCH.md). What remains true is that none
+// of them has a DECLARATIVE form yet, so a script is the way to build them. Kept as the list
+// of what would be worth adding as display kinds if one paradigm keeps needing the same script:
 //
 //   trial history      the next trial depending on preceding ones
 //                      -> task switching, n-back, Iowa gambling, reversal learning

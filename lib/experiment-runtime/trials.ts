@@ -436,6 +436,12 @@ export const EARLY_RESPONSE = 'early';
  */
 export const SHOWN = 'shown';
 
+/**
+ * Where the runner puts a custom display's verdict (`exp.done(x, { correct })`) for the
+ * `reported` correctness rule to read. Prefixed so no factor can be named it.
+ */
+export const REPORTED_CORRECT_KEY = '__reportedCorrect';
+
 /** A studied item that came back in free recall, and one that did not. */
 export const RECALLED = 'recalled';
 export const MISSED = 'missed';
@@ -634,6 +640,10 @@ export function correctRuleFor(
 export function isCorrect(def: TrialDesign, trial: Trial, response: string): boolean | null {
   const rule = correctRuleFor(def.trial.correct, trial);
   if (rule.kind === 'none') return null;
+
+  // The custom display's own verdict, placed in the trial's values by the runner. Nothing
+  // reported is not correct: a script that crashed or skipped the call did not get it right.
+  if (rule.kind === 'reported') return trial.values[REPORTED_CORRECT_KEY] === true;
 
   if (rule.kind === 'matchesFactor') {
     return String(lookup(rule.factor, trial.values)) === response;

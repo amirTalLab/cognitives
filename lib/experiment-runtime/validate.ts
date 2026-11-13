@@ -15,6 +15,7 @@
 import type { ExperimentDefinition, Factor, PoolItem, ResponseStep, Stage } from './schema';
 import { excluded, MAX_TRIALS, NO_RESPONSE } from './trials';
 import { ONBOARDING_COMPONENTS, PHASE_COMPONENTS } from './component-names';
+import { SANDBOX_MAX_SCRIPT, scriptSyntaxError } from './sandbox';
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -151,7 +152,12 @@ function referencesIn(node: unknown, out: string[] = []): string[] {
   } else if (Array.isArray(node)) {
     for (const item of node) referencesIn(item, out);
   } else if (node && typeof node === 'object') {
-    for (const value of Object.values(node)) referencesIn(value, out);
+    for (const [key, value] of Object.entries(node)) {
+      // A custom display's script is JavaScript, full of braces that are blocks and object
+      // literals rather than references. It reads factors through exp.values instead.
+      if (key === 'custom') continue;
+      referencesIn(value, out);
+    }
   }
   return out;
 }
@@ -954,7 +960,8 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
   }
 
   for (const phase of def.trial.phases) {
-    if (!phase.awaitsResponse && phase.durationMs === undefined) {
+    // A custom display may end itself with exp.done(); customIssues checks that it does.
+    if (!phase.awaitsResponse && phase.durationMs === undefined && !phase.custom) {
       err(`Phase "${phase.name}" is timed but has no duration, so it would never advance.`);
     }
     if (typeof phase.durationMs === 'number' && phase.durationMs < 0) {
@@ -1169,7 +1176,7 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
 
   if (!correctSets?.sets && !rule?.kind) {
     err('trial.correct is missing. Use {"kind":"none"} when the task has no right answer.');
-  } else if (rule && rule.kind !== 'none') {
+  } else if (rule && rule.kind !== 'none' && rule.kind !== 'reported') {
     if (!rule.factor) {
       err(`Correctness rule "${rule.kind}" needs a "factor" naming what the response is judged against.`);
     } else if (!available.has(rule.factor)) {
@@ -1296,7 +1303,90 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
     }
   }
 
+  // ── Custom displays ────────────────────────────────────────────────────────
+  //
+  // Checked in every block, not only the first: a script in a later block that does not
+  // parse fails in the middle of a class just the same.
+  issues.push(...customIssues(def.trial.phases, def.trial.correct, ''));
+  for (const entry of def.stages ?? []) {
+    const blocks = isObjLike(entry) && Array.isArray((entry as { stages?: unknown }).stages)
+      ? (entry as { stages: unknown[] }).stages
+      : [entry];
+    for (const block of blocks) {
+      if (!isObjLike(block)) continue;
+      const trial = (block as { trial?: { phases?: unknown; correct?: unknown } }).trial;
+      const name = (block as { name?: unknown }).name;
+      if (trial) issues.push(...customIssues(trial.phases, trial.correct, typeof name === 'string' ? ` (block "${name}")` : ' (a later block)'));
+    }
+  }
+
   return issues;
+}
+
+function isObjLike(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+/**
+ * The rules for a phase drawn by a script.
+ *
+ * What can be known without running it: that it parses, that it is not enormous, that a
+ * script meant to answer the trial can actually answer it, and that a display-only phase
+ * with no duration has some way to end. Whether it DRAWS the right thing is for the preview
+ * and the /create smoke test, which run it.
+ */
+function customIssues(phases: unknown, correct: unknown, where: string): ValidationIssue[] {
+  const out: ValidationIssue[] = [];
+  const err = (message: string) => out.push({ severity: 'error', message });
+  if (!Array.isArray(phases)) return out;
+
+  let customCount = 0;
+  for (const p of phases) {
+    if (!isObjLike(p)) continue;
+    const name = typeof p.name === 'string' ? p.name : '?';
+    const custom = p.custom;
+    if (custom === undefined) continue;
+    customCount++;
+
+    if (!isObjLike(custom) || typeof custom.script !== 'string' || !custom.script.trim()) {
+      err(`Phase "${name}"${where}: "custom" must be an object with a non-empty "script".`);
+      continue;
+    }
+    const script = custom.script;
+    if (script.length > SANDBOX_MAX_SCRIPT) {
+      err(`Phase "${name}"${where}: the custom script is ${script.length} characters, over the ${SANDBOX_MAX_SCRIPT} limit. Draw only the part the display kinds cannot, and leave the rest declarative.`);
+    }
+    const syntax = scriptSyntaxError(script);
+    if (syntax) {
+      err(`Phase "${name}"${where}: the custom script does not parse as JavaScript — ${syntax}`);
+    }
+    if (p.component !== undefined) {
+      err(`Phase "${name}"${where} has both "component" and "custom". Use one.`);
+    }
+    if (custom.responds !== undefined && typeof custom.responds !== 'boolean') {
+      err(`Phase "${name}"${where}: "custom.responds" must be true or false.`);
+    }
+    const callsDone = /\bdone\s*\(/.test(script);
+    if (custom.responds === true) {
+      if (!p.awaitsResponse) {
+        err(`Phase "${name}"${where}: the custom script answers the trial ("responds": true), so the phase must have "awaitsResponse": true.`);
+      }
+      if (!callsDone) {
+        err(`Phase "${name}"${where}: the custom script answers the trial but never calls exp.done(...), so the trial could never end.`);
+      }
+    } else if (!p.awaitsResponse && p.durationMs === undefined && !callsDone) {
+      err(`Phase "${name}"${where} has no "durationMs" and its script never calls exp.done(), so it would never end. Give it a duration, or end it from the script.`);
+    }
+  }
+
+  // `reported` reads a verdict only a script can give.
+  const rules: unknown[] = isObjLike(correct) && isObjLike(correct.sets)
+    ? Object.values(correct.sets)
+    : [correct];
+  if (rules.some(r => isObjLike(r) && r.kind === 'reported') && customCount === 0) {
+    err(`Correctness is "reported"${where}, but no phase has a custom script to report it, so every trial would score as wrong.`);
+  }
+  return out;
 }
 
 /** Convenience: true when nothing would stop the experiment running. */

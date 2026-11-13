@@ -73,24 +73,22 @@ export function specSystem(skill: string): string {
     `The paper is attached as a PDF and the lecturer has already chosen which experiment to build (named in the message). Your job is the skill's Step 5 only: extract the design spec for that experiment. Do not generate any code.
 
 The skill's rule about marking each field [from paper] or [inferred — confirm] is carried by the "source" property below: use "paper" when the value is stated in the paper, "inferred" when you supplied it. The lecturer edits this spec in a form before any code is written, so an inferred value is expected and welcome — an inferred value passed off as a reported one is not.`,
-    `## Which path this experiment takes
+    `## How this experiment is built
 
-The site builds experiments two ways, and you decide which before anything is generated.
+Every experiment on this site is a **definition**: the design described as data and run by a fixed renderer, with an instant preview, editable later in plain language. Set "buildTarget" to "definition" — always.
 
-**definition** — the experiment is described as data and run by a fixed renderer. Instant, cheap, safe. It can express a design whose trials are a CROSS OF FACTORS, repeated and shuffled, where each trial is a sequence of timed phases (fixation, stimulus, mask, blank) ending in a response, and the response is a choice, rating, number, short text or word list. Stimuli may be text, coloured text, SVG shapes, images, generated arrays of items, or something positioned on screen. A phase duration, a screen position and a stimulus attribute may all be driven by a factor. A trial may collect more than one response. A response may have a time limit, after which "no response" is recorded — which also expresses withholding a response as the correct answer (go/no-go, catch trials) — and a press that comes before the target can be caught as too early.
+A definition expresses trials that are a CROSS OF FACTORS, repeated and shuffled, where each trial is a sequence of phases (fixation, stimulus, mask, blank) ending in a response — a choice, rating, slider, number, short text or word list. Stimuli may be text, coloured text, SVG shapes, images, generated arrays of items, or something positioned on screen, and durations, positions and attributes may all be driven by factors. Responses may have deadlines (so withholding can be the right answer), and an experiment may run several blocks in sequence.
 
-It CANNOT yet express: a trial that depends on preceding trials (task switching, n-back, reversal learning), adaptive difficulty (staircases, spans that grow until failure), blocked designs with block-level instructions, audio, or a sequence of displays within a single trial (RSVP, flicker).
+For anything those standard displays cannot show, ONE phase can be a **custom display**: a short script run in a sandbox. That covers motion and animation (random-dot kinematograms, apparent motion, object tracking), anything timed per frame (flicker, RSVP inside a trial), sound, interaction the standard responses do not offer (clicking a location, dragging), and trial-to-trial dependence (staircases, n-back, task switching). So none of those is a reason to refuse or to cut the paradigm down — describe the stimulus precisely in the "stimuli" and "trialStructure" fields (sizes, speeds, durations, coherence, frequencies) so the build stage can draw it, and say in "buildTargetReason" which part needs a custom display.
 
-**code** — real pages are written and deployed. Reaches anything, but takes minutes rather than seconds, costs several times more, and must be reviewed before it runs.
-
-Choose "definition" whenever the design fits, including when a small, honest simplification makes it fit — an adaptive staircase becoming three fixed difficulty levels, sessions days apart becoming one session with a filled delay. List every such departure under "simplifications" so the lecturer can judge whether it still demonstrates the effect. Choose "code" only when the paradigm genuinely needs something in the cannot-express list.
+Simplify only for the classroom, not for the platform: 300 trials becoming 60, days apart becoming one sitting with a filled delay, an individual threshold procedure becoming a few fixed levels that span the range. List every such departure under "simplifications" so the lecturer can judge whether it still demonstrates the effect.
 
 ## Required output
 
 {
   "slug": "camelCase URL slug, e.g. boubaKiki",
-  "buildTarget": "definition" | "code",
-  "buildTargetReason": "one sentence naming what made it fit, or what forced the fallback",
+  "buildTarget": "definition",
+  "buildTargetReason": "one sentence: how it fits, naming the part that needs a custom display if any",
   "simplifications": [{ "what": "what changed from the paper", "why": "why it still demonstrates the effect" }],
   "title": "English experiment title",
   "titleHe": "Hebrew experiment title",
@@ -231,6 +229,7 @@ Points worth care, because they are where definitions usually go wrong:
 - Fill in "mock" with the effect the paper reports. It is what lets a lecturer demonstrate the result with no participants, so the numbers should reproduce the published finding.
 - The spec's "Reported results" field is the paper's own numbers, already converted to chart units. You cannot see the paper, so it is the only source you have and everything in it should end up on screen. Add "original" to each chart whose measure it covers: { "source": "Author (year), Exp. N", "values": { "<group>": <number> } }, one number per group, keyed by that group's value (or its label, where "groups" gives one). Never estimate a number that field does not give, and never carry one across to a different measure or condition — a missing comparison is honest, an invented one is not. "not reported" means no chart gets an "original".
 - A measure named in "Reported results" that no chart plots is a chart you have not built yet. Manipulation checks are the usual case: how subjects did on the loading or secondary task is what shows the manipulation worked, and without it a class cannot tell a failed manipulation from a failed effect. A reported null is worth plotting for the same reason — it is what rules out the dull explanation of the main effect. Prefer adding the chart over dropping the numbers.
+- When the design needs something no display kind can show — motion, animation, flicker, a stream of items inside one trial, sound, a click on a location, a staircase or n-back that depends on earlier trials — give THAT phase a "custom" display (see CustomDisplay in the schema: a short sandboxed script). Keep everything else declarative: fixation, the ordinary response buttons, factors, scoring and charts. Drive the script from factors through exp.values, so the conditions stay visible and editable in the definition rather than buried in code. Write the script to work first time: requestAnimationFrame with real elapsed time, sizes from exp.width/exp.height, pointer events, exp.random() for randomness, no network. Never use a script for something a display kind already does.
 - Prefer inline SVG shapes and text: they need nothing sourced and scale to any screen. Use an "image" display ONLY for files listed at the end of the message as uploaded — you cannot create image files, and a src naming anything else renders as a broken picture. The "assets" field is set by the app, not by you.
 
 === BEGIN SCHEMA (TypeScript) ===

@@ -52,7 +52,10 @@ export async function POST(req: NextRequest) {
         'The design spec ran out of output room before it was finished. This usually means the paper describes a very complex design; try picking a simpler experiment from the list.',
       );
     }
-    return NextResponse.json({ ...parseJson<Spec>(text), usage, stopReason });
+    // Always a definition: what the standard displays cannot show becomes a custom display.
+    // A model that still answers "code" out of habit must not send the live site down the
+    // generated-pages path, which cannot finish there.
+    return NextResponse.json({ ...parseJson<Spec>(text), buildTarget: 'definition', usage, stopReason });
   } catch (err) {
     return errorResponse(err);
   }

@@ -58,12 +58,15 @@ Classify every candidate. Most papers contain things we **cannot** recreate for 
 so this filter is what makes the output trustworthy.
 
 - ✅ **Recreatable** — a browser task runnable on the **general student population**:
-  forced-choice, RT, accuracy, ratings/estimates, with stimuli we can render (text,
-  shapes, images, audio).
+  forced-choice, RT, accuracy, ratings/estimates, clicks and drags, with stimuli a browser
+  can produce — text, shapes, images, and also **motion, animation, flicker, rapid
+  sequences and sound** (built as a *custom display*: a short sandboxed script for the one
+  phase that needs it). Adaptive procedures and trial-to-trial dependence (staircases,
+  n-back, task switching) are buildable the same way.
 - ⚠️ **Recreatable with caveats** — needs **image files the user must supply** (specific
   photographs, figures, faces), or is unusually long/complex. Name exactly which files.
   This is a caveat, not a blocker: images can be uploaded and the experiment then works
-  normally. Audio is a different matter — nothing can play it yet, so that is a ❌.
+  normally. Generated sound (tones, noise) needs no files at all.
 - ❌ **Not recreatable** — requires a **special population** (synaesthetes, clinical
   patients, experts), **apparatus** (fMRI, EEG, eye-tracker, physical rig), physical
   materials, or is a theoretical claim with **no task**. State the blocker.
@@ -86,7 +89,7 @@ simplification survives** — so run through this table before assigning one.
 | Multi-session with a delay | One session with a filled interval | Direction usually survives. **No** for consolidation or sleep claims |
 | Free recall scored against a list | Recognition (old/new) over the same items | Yes for false-memory and depth-of-processing direction. Changes the DV — say so |
 | A specific unavailable photo set | Faces already on this site, or shapes | Yes for inversion and composite effects. **No** when the identity of the images *is* the manipulation |
-| An auditory cue with no other role | The same cue presented visually | Sometimes. **No** for anything about auditory processing |
+| Individually calibrated thresholds | 3–5 fixed levels spanning the reported threshold range, or a short in-task staircase | Yes for direction of the effect. Say which |
 | Continuous mouse trajectory | Discrete choice plus RT | Loses the process measure, usually keeps the effect |
 | Eye-tracking DV | — | Normally a genuine ❌ |
 
@@ -109,7 +112,10 @@ that call silently.
 Do not stretch to cover these; a between-subjects manipulation run within-subject on a
 one-shot deception (framing, anchoring, false-memory suggestion) simply does not work,
 because the participant has seen the trick by trial two. Also genuinely out of reach:
-audio processing, motion, and anything needing a special population or apparatus.
+anything needing a special population or apparatus (eye tracking, EEG, a physical rig),
+and stimuli whose physical calibration IS the claim (exact luminance, a specific monitor
+refresh, true subliminal presentation verified per person). Motion, flicker and sound are
+NOT on this list any more — they are built as custom displays.
 
 ---
 
@@ -157,18 +163,12 @@ runtime. No pages, no build, no deploy: it previews the moment it is published, 
 lecturer can edit it afterwards. Almost every classic paradigm fits, and the eleven worked
 examples in `lib/experiment-runtime/` show which.
 
-**`new-cognitive-experiment`** — generates real Next.js pages. Reaches anything, but is
-slower, needs review and a deploy, and is fixed once written. Use it only when the design
-needs something the definition schema cannot express: trial history (the next trial
-depending on preceding ones), adaptive difficulty, block structure, audio, or a sequence
-within a trial (RSVP). A withheld response (go/no-go, catch trials) and a response deadline
-ARE expressible — see `timeoutMs` in the schema. The authoritative list is the
-"Not yet expressible" section at the bottom of `lib/experiment-runtime/schema.ts`.
-
-When the design is close to the boundary, check whether a stated simplification saves it —
-three fixed difficulty levels instead of a staircase usually still demonstrates the effect.
-Put the departure in the spec so the user can judge it, rather than silently taking the
-slower path.
+**`new-cognitive-experiment`** — generates real Next.js pages. Kept for the site's own
+developers; do not use it for a lecturer's experiment. Anything the standard displays
+cannot show — motion, flicker, RSVP, sound, clicking a location, staircases, n-back — is a
+definition with a **custom display** phase (`CustomDisplay` in
+`lib/experiment-runtime/schema.ts`), which stays editable, versioned and buildable from
+the website.
 
 ---
 

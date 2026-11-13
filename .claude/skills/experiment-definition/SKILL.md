@@ -1,6 +1,6 @@
 ---
 name: experiment-definition
-description: "Build a cognitive experiment for the cognitives site as a DEFINITION (validated JSON run by the shared runtime) instead of generated pages. Use this whenever the user wants a new experiment, task or study added — from a paper, from a design they describe in their own words, or from an idea they want turned into something students can take — and especially when they want to avoid the metered /create pipeline and use the Claude Code subscription instead. Any behavioural task is in scope, not only well-known paradigms. Produces experiments/<slug>.json, validates it with npm run exp:check, and publishes it to /run/<slug>. Falls back to new-cognitive-experiment only for designs the schema cannot express."
+description: "Build a cognitive experiment for the cognitives site as a DEFINITION (validated JSON run by the shared runtime) instead of generated pages. Use this whenever the user wants a new experiment, task or study added — from a paper, from a design they describe in their own words, or from an idea they want turned into something students can take — and especially when they want to avoid the metered /create pipeline and use the Claude Code subscription instead. Any behavioural task is in scope, not only well-known paradigms. Produces experiments/<slug>.json, validates it with npm run exp:check, and publishes it to /run/<slug>. Anything the standard displays cannot show (motion, flicker, sound, staircases) is built as a sandboxed custom display, never as generated pages."
 ---
 
 # Build an Experiment as a Definition
@@ -73,22 +73,29 @@ closest example and say what you assumed.
 
 ---
 
-## Step 3 — When to stop and use the other skill
+## Step 3 — What the standard displays cannot show: a custom display
 
-Hand off to **`new-cognitive-experiment`** (which writes real pages, and needs review and a
-deploy) only when the design genuinely needs one of the dimensions listed at the bottom of
-`schema.ts`:
+Never hand a lecturer's experiment to `new-cognitive-experiment`. When a design needs
+something no display kind can draw — motion or animation (random-dot kinematograms,
+apparent motion, object tracking), anything timed per frame (flicker, RSVP inside a trial),
+sound, a click on a location or a drag, or dependence on earlier trials (staircases,
+n-back, task switching) — give **that one phase** a `custom` display: a short script run in
+a sandbox. Read `CustomDisplay` in `schema.ts` for the `exp` API and a worked example.
 
-trial history · adaptive difficulty · block structure · audio · within-trial sequences
+- Everything else stays declarative: factors, fixation, the ordinary response buttons,
+  scoring, charts. Drive the script from factors via `exp.values`, so the conditions stay
+  visible in the JSON and editable later.
+- A script that answers the trial itself sets `"responds": true`, declares
+  `"response": { "kind": "text" }`, and calls `exp.done(answer, { correct })`; score it
+  with `{ "kind": "reported" }` when only the script knows what was right.
+- Trial-to-trial state goes through `exp.memory` / `exp.keep(value)`.
+- `npm run exp:check` catches a script that does not parse; only running it shows whether it
+  draws the right thing, so always preview it (Step 7) before publishing.
 
 A withheld response (go/no-go, catch trials), a response deadline and "too early" presses
-are NOT reasons to hand off — see `timeoutMs`, `trial.earlyFrom` and `trial.feedback`, and
-the POSNER_CUEING port for a worked example.
+need no script at all — see `timeoutMs`, `trial.earlyFrom` and `trial.feedback`.
 
-Say so plainly and explain the trade-off: generated pages take longer, need a deploy, and
-cannot be edited by the lecturer afterwards.
-
-**Before handing off, check whether a simplification saves it.** Most designs that look
+**Before reaching for a script, check whether the standard displays already do it.** Most designs that look
 out of reach are not: the catalogue in **`experiment-from-paper` Step 3b** lists the
 standard ones — fixed difficulty levels instead of a staircase, recognition instead of free
 recall, fewer trials, a filled interval instead of a week. Read it before concluding the
