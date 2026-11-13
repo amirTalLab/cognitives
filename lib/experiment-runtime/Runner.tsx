@@ -780,7 +780,12 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
                   arrow buttons as blank white squares, nothing to tell one from another. */}
               {opt.display
                 ? <DisplayView node={opt.display} values={values} />
-                : <span className="text-3xl font-semibold text-gray-900 leading-none select-none">{label}</span>}
+                : <span className="text-3xl font-semibold text-gray-900 leading-none select-none"
+                    // A symbol font first, and text presentation: otherwise Windows draws the
+                    // diagonal arrows as blue emoji beside plain straight ones.
+                    style={{ fontFamily: '"Segoe UI Symbol", "DejaVu Sans", "Noto Sans Symbols 2", system-ui, sans-serif', fontVariantEmoji: 'text' } as React.CSSProperties}>
+                    {label}
+                  </span>}
             </button>
           );
         })}
