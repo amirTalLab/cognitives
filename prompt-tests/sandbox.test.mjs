@@ -31,7 +31,7 @@ registerHooks({
 
 const { validate } = await import('../lib/experiment-runtime/validate.ts');
 const { isCorrect, buildTrials, REPORTED_CORRECT_KEY } = await import('../lib/experiment-runtime/trials.ts');
-const { readSandboxMessage, sanitizeColumns, sandboxDocument, scriptSyntaxError, SANDBOX_SOURCE, SANDBOX_MAX_SCRIPT } =
+const { readSandboxMessage, sanitizeColumns, sandboxDocument, scriptSyntaxError, phaseBlankAfter, SANDBOX_SOURCE, SANDBOX_MAX_SCRIPT, SANDBOX_BLANK_MS } =
   await import('../lib/experiment-runtime/sandbox.ts');
 
 const DOTS = `const { ctx, width, height } = exp.canvas();
@@ -258,4 +258,61 @@ test('syntax checking does not run the script', () => {
   assert.equal(scriptSyntaxError('globalThis.__ran = true;'), null);
   assert.equal(globalThis.__ran, false);
   assert.match(scriptSyntaxError('function ('), /./);
+});
+
+// ── A display that shows nothing ──
+// The failure a lecturer reported as "you cannot see the dots at all": the script ran, threw
+// nothing, and the screen stayed the page's own colour. It has to be caught like a crash.
+
+test('a blank report is read, and its message capped', () => {
+  const m = readSandboxMessage(msg({ type: 'blank', message: 'x'.repeat(2000) }), TOKEN);
+  assert.equal(m.type, 'blank');
+  assert.equal(m.message.length, 500);
+});
+
+test('the frame watches for a display that never shows anything', () => {
+  const doc = sandboxDocument('/* draws nothing */', {
+    values: {}, language: 'en', practice: false, trialIndex: 0, seed: 1, assetBase: '', memory: null, responds: false,
+    blankAfterMs: 400,
+  }, 'tok');
+  assert.match(doc, /type: 'blank'/);
+  assert.match(doc, /INIT\.blankAfterMs \|\| 1000/);
+  // The dark page colour is the one a drawing must differ from.
+  assert.match(doc, /var BG = \[15, 23, 42\]/);
+});
+
+test('a short phase is checked for blankness before it ends', () => {
+  assert.equal(phaseBlankAfter(undefined), SANDBOX_BLANK_MS);
+  assert.equal(phaseBlankAfter(5000), SANDBOX_BLANK_MS);
+  assert.equal(phaseBlankAfter(500), 380);
+  assert.equal(phaseBlankAfter(100), 150);
+});
+
+// ── Positioned answers ──
+
+const eightWay = (ats) => motionDef({
+  trial: {
+    ...motionDef().trial,
+    response: {
+      kind: 'choice',
+      layout: 'positioned',
+      options: ats.map((at, i) => ({ label: '→', value: String(i * 45), at })),
+    },
+    correct: { kind: 'matchesFactor', factor: 'direction' },
+  },
+});
+
+test('two positioned options on one spot are refused — one would cover the other', () => {
+  const found = errors(eightWay(['right', 'top', 'left', 'bottom', 'center', 'center', 'center', 'center']));
+  assert.ok(found.some(e => /both placed at "center"/.test(e)), found.join('\n'));
+});
+
+test('eight directions fit on the four sides and four corners', () => {
+  const found = errors(eightWay(['right', 'top-right', 'top', 'top-left', 'left', 'bottom-left', 'bottom', 'bottom-right']));
+  assert.ok(!found.some(e => /placed at/.test(e)), found.join('\n'));
+});
+
+test('a place that does not exist is named', () => {
+  const found = errors(eightWay(['right', 'upper-left']));
+  assert.ok(found.some(e => /"upper-left", which is not a place/.test(e)), found.join('\n'));
 });

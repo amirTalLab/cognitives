@@ -50,6 +50,26 @@ export const LANGUAGE_KEY = '__language';
 export const POSITIONED_OFFSET = 'min(180px, 32vw)';
 
 /**
+ * Every place a `positioned` item or button can sit: the four sides, the four corners and
+ * the centre. The corners exist for eight-way answers (which way did the dots move?) —
+ * without them a definition put the four diagonals all on `center`, one on top of another,
+ * and only one of the four could ever be pressed.
+ */
+export const POSITIONS = [
+  'center', 'left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right',
+] as const;
+export type Position = typeof POSITIONS[number];
+
+/** Where a position sits, as the centre point of the item (pair it with translate(-50%,-50%)). */
+export function positionedPlace(at: unknown): { left: string; top: string } {
+  const where = String(at ?? 'center');
+  const x = where.endsWith('left') ? -1 : where.endsWith('right') ? 1 : 0;
+  const y = where.startsWith('top') ? -1 : where.startsWith('bottom') ? 1 : 0;
+  const along = (d: number) => (d === 0 ? '50%' : `calc(50% ${d < 0 ? '-' : '+'} ${POSITIONED_OFFSET})`);
+  return { left: along(x), top: along(y) };
+}
+
+/**
  * Turns a manifest filename into a URL.
  *
  * Anything already addressable is left alone, so a definition can point straight at
@@ -479,15 +499,11 @@ export function DisplayView({ node, values }: { node: Display; values: Values })
       return <ArrayView node={node} values={values} />;
 
     case 'positioned': {
-      const at = resolve(node.at, values) ?? 'center';
-      const offset = POSITIONED_OFFSET;
-      const style: React.CSSProperties = { position: 'absolute' };
-      if (at === 'left') { style.left = `calc(50% - ${offset})`; style.top = '50%'; }
-      else if (at === 'right') { style.left = `calc(50% + ${offset})`; style.top = '50%'; }
-      else if (at === 'top') { style.left = '50%'; style.top = `calc(50% - ${offset})`; }
-      else if (at === 'bottom') { style.left = '50%'; style.top = `calc(50% + ${offset})`; }
-      else { style.left = '50%'; style.top = '50%'; }
-      style.transform = 'translate(-50%, -50%)';
+      const style: React.CSSProperties = {
+        position: 'absolute',
+        ...positionedPlace(resolve(node.at, values)),
+        transform: 'translate(-50%, -50%)',
+      };
 
       return (
         <div style={{ position: 'relative', width: '100%', height: 400 }}>

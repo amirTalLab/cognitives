@@ -17,6 +17,11 @@ import { excluded, MAX_TRIALS, NO_RESPONSE } from './trials';
 import { ONBOARDING_COMPONENTS, PHASE_COMPONENTS } from './component-names';
 import { SANDBOX_MAX_SCRIPT, scriptSyntaxError } from './sandbox';
 
+/** The places a positioned option can sit — kept in step with positionedPlace in DisplayView. */
+const POSITIONS: string[] = [
+  'center', 'left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right',
+];
+
 export interface ValidationIssue {
   severity: 'error' | 'warning';
   message: string;
@@ -944,6 +949,22 @@ export function validate(def: ExperimentDefinition): ValidationIssue[] {
         err(timeoutPhases.has(step.phase)
           ? `The choice in phase "${step.phase}" has no options.`
           : `The choice in phase "${step.phase}" has fewer than two options. A single "go" button needs "timeoutMs" on that phase, so that not pressing is also an answer.`);
+      }
+      if (step.layout === 'positioned') {
+        // Two buttons on one spot are one button: the lower one can never be pressed.
+        const taken = new Map<string, string>();
+        for (const opt of step.options) {
+          const at = opt.at ?? 'center';
+          if (typeof at !== 'string' || at.includes('{')) continue;
+          if (!POSITIONS.includes(at)) {
+            err(`Option "${opt.value}" in phase "${step.phase}" is placed at "${at}", which is not a place. Use one of: ${POSITIONS.join(', ')}.`);
+            continue;
+          }
+          const other = taken.get(at);
+          if (other !== undefined) {
+            err(`Options "${other}" and "${opt.value}" in phase "${step.phase}" are both placed at "${at}", so one covers the other and cannot be pressed. Give every option its own place (${POSITIONS.join(', ')}).`);
+          } else taken.set(at, String(opt.value));
+        }
       }
     }
   }

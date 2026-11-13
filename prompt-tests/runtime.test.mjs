@@ -3719,7 +3719,10 @@ test('a positioned stimulus and its button use one geometry, and it fits a phone
   // the stimulus it answers for.
   assert.ok(!/calc\(50% [-+] 180px\)/.test(display), 'the display still hard-codes 180px');
   assert.ok(!/calc\(50% [-+] 180px\)/.test(runner), 'the response buttons still hard-code 180px');
-  assert.match(runner, /POSITIONED_OFFSET/);
+  // Both place through positionedPlace, which is built on POSITIONED_OFFSET.
+  assert.match(display, /export function positionedPlace[\s\S]*POSITIONED_OFFSET/);
+  assert.match(runner, /positionedPlace\(resolve\(opt\.at/);
+  assert.match(display, /positionedPlace\(resolve\(node\.at/);
 });
 
 test('text direction follows the content, not the language of the run', () => {

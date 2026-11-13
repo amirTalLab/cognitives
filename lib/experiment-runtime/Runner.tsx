@@ -18,10 +18,10 @@ import {
   buildTrials, EARLY_RESPONSE, expandRecall, feedbackMessage, isCorrect, NO_RESPONSE, payloadOf,
   lookup, phaseDuration, REPORTED_CORRECT_KEY, resolve, SHOWN, Trial,
 } from './trials';
-import { DisplayView, SEED_KEY, ASSET_BASE_KEY, LANGUAGE_KEY, POSITIONED_OFFSET } from './DisplayView';
+import { DisplayView, SEED_KEY, ASSET_BASE_KEY, LANGUAGE_KEY, positionedPlace } from './DisplayView';
 import { PHASE_COMPONENT_MAP } from './components';
 import { CustomFrame } from './CustomFrame';
-import { SANDBOX_REPORT, type SandboxMessage } from './sandbox';
+import { SANDBOX_REPORT, phaseBlankAfter, type SandboxMessage } from './sandbox';
 import { saveTrial } from './store';
 
 /** One completed trial, ready to be stored. */
@@ -536,7 +536,7 @@ export function Runner({
         console.error(`Custom display "${phase.name}" failed:`, message.message);
         if (window.parent !== window) {
           window.parent.postMessage(
-            { type: SANDBOX_REPORT, slug: definition.slug, phase: phase.name, message: message.message },
+            { type: SANDBOX_REPORT, problem: 'error', slug: definition.slug, phase: phase.name, practice, message: message.message },
             window.location.origin,
           );
         }
@@ -546,6 +546,19 @@ export function Runner({
         else if (endsItself) setPhaseIdx(i => i + 1);
         return;
       }
+      case 'blank':
+        // Ran without an error but put nothing on screen. The phase goes on as designed (a
+        // participant cannot tell the difference anyway); the row and the preview record it,
+        // because otherwise this failure leaves no trace at all.
+        sandboxPayload.current = { ...sandboxPayload.current, display_blank: true };
+        console.warn(`Custom display "${phase.name}" showed nothing:`, message.message);
+        if (window.parent !== window) {
+          window.parent.postMessage(
+            { type: SANDBOX_REPORT, problem: 'blank', slug: definition.slug, phase: phase.name, practice, message: message.message },
+            window.location.origin,
+          );
+        }
+        return;
       case 'done':
         sandboxPayload.current = { ...sandboxPayload.current, ...message.data };
         if (message.correct !== null) reportedCorrect.current = message.correct;
@@ -617,6 +630,8 @@ export function Runner({
               assetBase: definition.assets?.base ?? '',
               memory: sandboxMemory.current,
               responds: !!custom.responds,
+              // A short phase is checked before it ends, or a blank one would never be noticed.
+              blankAfterMs: phaseBlankAfter(Number(resolve(phase.durationMs, values))),
             }}
             onMessage={onSandbox}
             onStuck={onStuck} />
@@ -741,18 +756,17 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
     return (
       <div style={{ position: 'relative', width: '100%', height: 400 }}>
         {options.map((opt, i) => {
-          const at = String(resolve(opt.at, values) ?? 'center');
           const style: React.CSSProperties = {
             position: 'absolute',
-            left: at === 'left' ? `calc(50% - ${POSITIONED_OFFSET})` : at === 'right' ? `calc(50% + ${POSITIONED_OFFSET})` : '50%',
-            top: at === 'top' ? `calc(50% - ${POSITIONED_OFFSET})` : at === 'bottom' ? `calc(50% + ${POSITIONED_OFFSET})` : '50%',
+            ...positionedPlace(resolve(opt.at, values)),
             transform: 'translate(-50%, -50%)',
           };
           const value = String(resolve(opt.value, values) ?? opt.value);
           const marked = highlight != null && highlight === value;
+          const label = String(resolve(rtl && opt.labelHe ? opt.labelHe : opt.label, values) ?? '');
           return (
             <button key={i} {...press(() => onAnswer(value))} style={style}
-              aria-label={String(resolve(rtl && opt.labelHe ? opt.labelHe : opt.label, values) ?? '')}
+              aria-label={label}
               // Centred as a FLEX box: the dot inside is an SVG with display:block, and a
               // block element sits at the left of its container however the text around it
               // is aligned. In serial reaction time that put every dot off-centre in its
@@ -762,7 +776,11 @@ function ResponseView({ step, values, rtl, onAnswer, highlight, deadlineMs }: {
                           active:scale-95 ${marked
                             ? 'border-emerald-400 bg-emerald-400/20'
                             : 'border-gray-500 bg-gray-100 hover:border-purple-400'}`}>
-              {opt.display && <DisplayView node={opt.display} values={values} />}
+              {/* With no picture the label is the button's face. Showing only `display` left
+                  arrow buttons as blank white squares, nothing to tell one from another. */}
+              {opt.display
+                ? <DisplayView node={opt.display} values={values} />
+                : <span className="text-3xl font-semibold text-gray-900 leading-none select-none">{label}</span>}
             </button>
           );
         })}

@@ -719,7 +719,9 @@ export default function CreateProjectPage() {
     refineDefinition([...messages, {
       role: 'user',
       content: `[Automatic check] A custom display failed when it was run:\n${errors.map(e => `- ${e}`).join('\n')}\n`
-        + 'Fix the script so it runs without errors on every trial. Change nothing else.',
+        + 'Fix the script so it runs without errors on every trial, practice included, and visibly draws its '
+        + 'stimulus straight away. Read each message for the cause (a value that is not there, a canvas of the '
+        + 'wrong size, a colour the same as the background). Change nothing else.',
     }]);
   };
 
@@ -736,9 +738,12 @@ export default function CreateProjectPage() {
   useEffect(() => {
     const listen = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
-      const data = event.data as { type?: string; phase?: string; message?: string } | null;
+      const data = event.data as { type?: string; problem?: string; phase?: string; practice?: boolean; message?: string } | null;
       if (!data || data.type !== SANDBOX_REPORT) return;
-      const line = `The custom display in phase "${data.phase}" failed: ${String(data.message).slice(0, 500)}`;
+      const where = `phase "${data.phase}"${data.practice ? ' (practice)' : ''}`;
+      const line = data.problem === 'blank'
+        ? `The custom display in ${where} showed NOTHING on screen in the preview. ${String(data.message).slice(0, 500)}`
+        : `The custom display in ${where} failed in the preview: ${String(data.message).slice(0, 500)}`;
       setSandboxErrors(prev => (prev.includes(line) ? prev : [...prev, line]));
       setSandboxCheck('failed');
     };
@@ -749,7 +754,12 @@ export default function CreateProjectPage() {
   const sendChat = () => {
     const text = chatInput.trim();
     if (!text) return;
-    const next: ChatMessage[] = [...messages, { role: 'user', content: text }];
+    // What the preview itself saw goes with the request. "I can't see the dots" names the
+    // symptom; the frame's own report names the cause. Without it the model can only guess.
+    const seen = definition && sandboxErrors.length
+      ? `\n\n[Automatic note: what the preview recorded while this was being tried:\n${sandboxErrors.map(e => `- ${e}`).join('\n')}\nFix the cause these name.]`
+      : '';
+    const next: ChatMessage[] = [...messages, { role: 'user', content: text + seen }];
     setMessages(next);
     setChatInput('');
     autoRepairs.current = 0;
@@ -1391,7 +1401,7 @@ export default function CreateProjectPage() {
                   <div className="flex-1 text-sm">
                     {sandboxCheck === 'checking' && <p className="text-gray-400">Testing the custom display…</p>}
                     {sandboxCheck === 'ok' && sandboxErrors.length === 0 && (
-                      <p className="text-gray-400">The custom display runs without errors.</p>
+                      <p className="text-gray-400">The custom display runs without errors and draws something on screen, practice included.</p>
                     )}
                     {sandboxErrors.length > 0 && (
                       <>

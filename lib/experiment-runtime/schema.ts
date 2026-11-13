@@ -237,7 +237,7 @@ export type Display =
       }[];
     }
   /** Something at a screen location — Posner cues and targets, where the side is the manipulation. */
-  | { kind: 'positioned'; at: Bound<'left' | 'right' | 'top' | 'bottom' | 'center'>; content: Display }
+  | { kind: 'positioned'; at: Bound<'left' | 'right' | 'top' | 'bottom' | 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>; content: Display }
   /** Several displays at once. */
   | { kind: 'stack'; items: Display[] }
   /** Displays side by side, left to right — a cue flanked by two placeholder boxes. */
@@ -387,6 +387,11 @@ export interface Phase {
  *   into slivers.
  * - Hebrew runs are right-to-left, and so is the frame. Set `dir = 'ltr'` on anything that
  *   must read left to right: Latin letters, digits, a keyboard, a left/right layout.
+ * - Put something VISIBLE on screen at once, in light colours: the page is dark navy
+ *   (#0f172a), so black or navy on it cannot be seen. A display that is still blank after
+ *   a second is reported and fails the automatic check, exactly like one that crashes.
+ * - Read only values that exist on EVERY trial, practice included — `exp.values.x.y` throws
+ *   when x is missing, and then the participant sees nothing but the next phase.
  * - A display-only phase is ended by the phase's `durationMs` (or by exp.done() when it has
  *   none); the frame is removed when the phase ends, so no cleanup is needed.
  * - No network, no imports, no external libraries, no alert/prompt. Plain modern JavaScript.
@@ -435,8 +440,12 @@ export type ResponseSpec =
          * reaction time is the case: four boxes in a diamond, a dot appears in one, and you
          * press that one. A row of buttons reading up/left/right/down would be a different
          * experiment — it would measure reading a direction word, not reacting to a place.
+         *
+         * Each option needs its OWN place: two on the same spot sit one on top of the other
+         * and only one can be pressed. For eight directions use the four sides and the four
+         * corners. With no `display`, the button shows its label (an arrow, a letter).
          */
-        at?: 'left' | 'right' | 'top' | 'bottom' | 'center';
+        at?: 'left' | 'right' | 'top' | 'bottom' | 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
       }[];
       /**
        * Take the options from a LIST in the trial's data instead of the fixed list above.

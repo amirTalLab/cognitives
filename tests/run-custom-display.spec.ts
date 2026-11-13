@@ -221,4 +221,50 @@ test.describe('custom displays', () => {
       document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
     expect(overflows).toBe(false);
   });
+
+  test('a display that shows nothing is recorded on the row', async ({ page }) => {
+    test.setTimeout(60_000);
+    const saved = await captureSaves(page);
+    const blank = base('e2eBlank', {
+      phases: [
+        { name: 'dots', display: { kind: 'blank' }, durationMs: 600, custom: { script: "const { ctx, width, height } = exp.canvas();\nctx.fillStyle = '#0f172a';\nctx.fillRect(0, 0, width, height);" } },
+        { name: 'response', display: { kind: 'blank' }, awaitsResponse: true, startsClock: true },
+      ],
+      response: CHOICE,
+      correct: { kind: 'matchesFactor', factor: 'direction' },
+    });
+    await start(page, blank);
+    for (let i = 0; i < 40 && !(await thanks(page).isVisible().catch(() => false)); i++) {
+      const button = page.locator('main button', { hasText: /Left|שמאל/ });
+      if (await button.isVisible().catch(() => false)) await button.click().catch(() => {});
+      await page.waitForTimeout(150);
+    }
+    await expect(thanks(page)).toBeVisible();
+    await savedMatches(saved, /"display_blank":\s*true/);
+  });
+
+  test('eight positioned arrows each show their arrow, each in its own place', async ({ page }) => {
+    await captureSaves(page);
+    const arrows: [string, string][] = [['→', 'right'], ['↗', 'top-right'], ['↑', 'top'], ['↖', 'top-left'],
+      ['←', 'left'], ['↙', 'bottom-left'], ['↓', 'bottom'], ['↘', 'bottom-right']];
+    const eight = base('e2eEight', {
+      phases: [{ name: 'response', display: { kind: 'blank' }, awaitsResponse: true, startsClock: true }],
+      response: { kind: 'choice', layout: 'positioned', options: arrows.map(([label, at]) => ({ label, labelHe: label, value: at, at })) },
+      correct: { kind: 'none' },
+    }, { factors: [{ name: 'direction', levels: ['right'] }], repetitions: 1 });
+    await start(page, eight);
+
+    const boxes = [];
+    for (const [label] of arrows) {
+      const button = page.locator('main button', { hasText: label });
+      await expect(button).toBeVisible({ timeout: 10_000 });
+      boxes.push(await button.boundingBox());
+    }
+    // No two overlap: every one of the eight can be pressed.
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i]!, b = boxes[j]!;
+      const overlap = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+      expect(overlap, `${arrows[i][0]} overlaps ${arrows[j][0]}`).toBe(false);
+    }
+  });
 });

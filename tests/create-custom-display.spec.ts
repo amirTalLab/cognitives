@@ -99,7 +99,7 @@ test('a crashing script is found and repaired without the lecturer asking', asyn
   await expect.poll(() => refines.length, { timeout: 20_000 }).toBe(1);
   expect(refines[0]).toMatch(/\[Automatic check\]/);
   expect(refines[0]).toMatch(/phase "show"/);
-  await expect(page.getByText('The custom display runs without errors.')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('The custom display runs without errors and draws something on screen')).toBeVisible({ timeout: 20_000 });
 });
 
 test('a script that cannot be repaired stops after two tries and blocks publishing', async ({ page }) => {
@@ -113,4 +113,27 @@ test('a script that cannot be repaired stops after two tries and blocks publishi
 
   await page.getByRole('button', { name: /Finish & publish/ }).click();
   await expect(page.getByText(/Not published — a custom display is failing/)).toBeVisible();
+});
+
+/** Runs cleanly and paints the frame the page's own colour: nothing a participant could see. */
+const BLANK = "const { ctx, width, height } = exp.canvas();\nctx.fillStyle = '#0f172a';\nctx.fillRect(0, 0, width, height);";
+
+test('a script that runs but shows nothing is caught, and the cause goes with the next request', async ({ page }) => {
+  test.setTimeout(90_000);
+  const refines = await openWith(page, BLANK, () => BLANK);
+
+  // Caught by the check like a crash — this is "you cannot see the dots at all".
+  await expect.poll(() => refines.length, { timeout: 20_000 }).toBe(1);
+  expect(refines[0]).toMatch(/shows NOTHING on screen/);
+  expect(refines[0]).toMatch(/canvas/);
+  await expect(page.getByRole('button', { name: 'Fix it automatically' })).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(3000);
+  expect(refines.length).toBe(2);
+
+  // The lecturer describes the symptom; what the frame reported is attached for the model.
+  await page.getByPlaceholder('What should change?').fill('I cannot see the dots');
+  await page.getByPlaceholder('What should change?').press('Enter');
+  await expect.poll(() => refines.length, { timeout: 20_000 }).toBe(3);
+  expect(refines[2]).toMatch(/^I cannot see the dots/);
+  expect(refines[2]).toMatch(/\[Automatic note[\s\S]*shows NOTHING on screen/);
 });

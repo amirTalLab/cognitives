@@ -125,13 +125,17 @@ export function smokeSamples(def: ExperimentDefinition): Sample[] {
   for (const block of blocks) {
     const custom = block.design.trial.phases.filter(p => p.custom?.script);
     if (custom.length === 0) continue;
-    let trials;
-    try { trials = buildTrials(block.design, { context: block.context }); } catch { continue; }
-    for (const trial of trials.slice(0, SAMPLES_PER_PHASE)) {
+    // Practice as well as the real trials: practice is the first thing anyone sees, and it
+    // can be drawn differently (a fixed practice set, its own items), so a script that is
+    // fine on the real trials can still fail there.
+    const runs: { practice: boolean; trials: ReturnType<typeof buildTrials> }[] = [];
+    try { runs.push({ practice: true, trials: buildTrials(block.design, { context: block.context, practice: true }).slice(0, 2) }); } catch { /* no practice */ }
+    try { runs.push({ practice: false, trials: buildTrials(block.design, { context: block.context }).slice(0, SAMPLES_PER_PHASE) }); } catch { /* checked by the validator */ }
+    for (const { practice, trials } of runs) for (const trial of trials) {
       for (const phase of custom) {
         out.push({
-          key: `${block.stage}-${trial.index}-${phase.name}`,
-          label: `phase "${phase.name}"${blocks.length > 1 ? ` in block "${block.stage}"` : ''}`,
+          key: `${block.stage}-${practice ? 'p' : 't'}${trial.index}-${phase.name}`,
+          label: `phase "${phase.name}"${blocks.length > 1 ? ` in block "${block.stage}"` : ''}${practice ? ' (practice)' : ''}`,
           script: phase.custom!.script,
           init: {
             values: {
@@ -145,7 +149,7 @@ export function smokeSamples(def: ExperimentDefinition): Sample[] {
             // Hebrew is the default run language, and the one more likely to trip a script
             // (right-to-left text, a missing `he` string).
             language: 'he',
-            practice: false,
+            practice,
             trialIndex: trial.index,
             seed: trial.seed,
             assetBase: def.assets?.base ?? '',
@@ -201,8 +205,14 @@ export function SandboxSmokeTest({ definition, onResult }: {
           init={sample.init}
           interactive={false}
           onMessage={message => {
-            if (done.current || message.type !== 'error') return;
-            errors.current.set(sample.label, `The custom display in ${sample.label} failed: ${message.message}`);
+            if (done.current) return;
+            // A crash, or a script that runs cleanly and shows nothing — the second is the
+            // one nobody can see, so it is caught here rather than by a lecturer squinting.
+            if (message.type === 'error') {
+              errors.current.set(sample.label, `The custom display in ${sample.label} failed: ${message.message}`);
+            } else if (message.type === 'blank' && !errors.current.has(sample.label)) {
+              errors.current.set(sample.label, `The custom display in ${sample.label} shows NOTHING on screen. ${message.message}`);
+            }
           }}
         />
       ))}

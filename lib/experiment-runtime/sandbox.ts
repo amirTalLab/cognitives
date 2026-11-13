@@ -28,6 +28,25 @@ export const SANDBOX_MAX_SCRIPT = 40_000;
 /** A phase that waits on a script that never answers offers a way on after this long. */
 export const SANDBOX_STUCK_MS = 120_000;
 
+/**
+ * How long a display may show nothing before it is reported as blank.
+ *
+ * A custom display exists to put something on screen. One still empty after this long has
+ * failed as surely as one that threw, only silently: the frame is the page's own colour, so
+ * a participant sees an empty screen and then the buttons. That was the failure a lecturer
+ * could not describe and the model could not see.
+ */
+export const SANDBOX_BLANK_MS = 1_000;
+
+/**
+ * When a phase of this length should be checked for showing nothing: before it ends, or a
+ * short blank phase would be gone before anyone noticed.
+ */
+export function phaseBlankAfter(durationMs: number | undefined): number {
+  if (durationMs === undefined || !Number.isFinite(durationMs) || durationMs <= 0) return SANDBOX_BLANK_MS;
+  return Math.max(150, Math.min(SANDBOX_BLANK_MS, durationMs - 120));
+}
+
 /** What a sandbox may carry from one trial to the next (a staircase level, the last letters). */
 const MAX_MEMORY_BYTES = 50_000;
 
@@ -51,12 +70,16 @@ export interface SandboxInit {
   memory: unknown;
   /** True when this script is the one that answers the trial. */
   responds: boolean;
+  /** When to report a frame that still shows nothing (ms). Defaults to SANDBOX_BLANK_MS. */
+  blankAfterMs?: number;
 }
 
 /** A message from a sandbox, after checking. Anything malformed is dropped, never trusted. */
 export type SandboxMessage =
   | { type: 'start' }
   | { type: 'error'; message: string }
+  /** The frame showed nothing visible in time; `message` says what was there instead. */
+  | { type: 'blank'; message: string }
   | { type: 'keep'; memory: unknown }
   | { type: 'record'; data: Record<string, unknown> }
   | { type: 'done'; response: string | null; data: Record<string, unknown>; correct: boolean | null };
@@ -78,6 +101,8 @@ export function readSandboxMessage(raw: unknown, token: string): SandboxMessage 
       return { type: 'start' };
     case 'error':
       return { type: 'error', message: String(m.message ?? 'Unknown error').slice(0, 500) };
+    case 'blank':
+      return { type: 'blank', message: String(m.message ?? 'Nothing was drawn').slice(0, 500) };
     case 'keep': {
       const memory = jsonSafe(m.memory, MAX_MEMORY_BYTES);
       return memory === undefined ? null : { type: 'keep', memory };
@@ -267,6 +292,83 @@ canvas{display:block}
   };
   window.exp = exp;
   post({ type: 'start' });
+
+  // ── Did anything actually appear? ──
+  // Checked from inside the frame, the one place that can look at the canvas pixels. Polled
+  // rather than checked once, so a display that takes a moment to start is not flagged.
+  var BG = [15, 23, 42];
+  function parseColor(c) {
+    c = String(c || '');
+    var open = c.indexOf('('), close = c.lastIndexOf(')');
+    if (open < 0 || close < open) return null;
+    var p = c.slice(open + 1, close).split('/').join(' ').split(',').join(' ').split(' ')
+      .filter(function (x) { return x !== ''; }).map(Number);
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  }
+  function stands(r, g, b, a) {
+    return a > 0.08 && Math.abs(r - BG[0]) + Math.abs(g - BG[1]) + Math.abs(b - BG[2]) > 24;
+  }
+  function standsCss(c) { var x = parseColor(c); return !!x && stands(x.r, x.g, x.b, x.a); }
+  function canvasDrawn(c) {
+    if (!c.width || !c.height) return false;
+    try {
+      var data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      var stride = Math.max(1, Math.floor(Math.sqrt((c.width * c.height) / 250000))) * 4 * 2;
+      for (var i = 0; i < data.length; i += stride) {
+        if (stands(data[i], data[i + 1], data[i + 2], data[i + 3] / 255)) return true;
+      }
+      return false;
+    } catch (e) { return true; } // a picture from elsewhere taints the canvas: something is drawn
+  }
+  function onScreen(r) {
+    return r.width >= 1 && r.height >= 1 && r.right > 0 && r.bottom > 0
+      && r.left < window.innerWidth && r.top < window.innerHeight;
+  }
+  function showsSomething() {
+    if (window.innerWidth < 2 || window.innerHeight < 2) return false;
+    var all = [document.body].concat(Array.prototype.slice.call(document.body.querySelectorAll('*')));
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      var tag = String(el.tagName).toUpperCase();
+      if (tag === 'SCRIPT' || tag === 'STYLE') continue;
+      if (!onScreen(el.getBoundingClientRect())) continue;
+      var cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) continue;
+      if (tag === 'CANVAS') { if (canvasDrawn(el)) return true; continue; }
+      if (tag === 'IMG' || tag === 'VIDEO' || tag === 'SVG' || tag === 'INPUT' || tag === 'BUTTON') return true;
+      if (el !== document.body && standsCss(cs.backgroundColor)) return true;
+      if (Number.parseFloat(cs.borderTopWidth) > 0 && standsCss(cs.borderTopColor)) return true;
+      for (var n = el.firstChild; n; n = n.nextSibling) {
+        if (n.nodeType === 3 && n.nodeValue.trim() && standsCss(cs.color)) return true;
+      }
+    }
+    return false;
+  }
+  function whatIsThere() {
+    var canvases = root.querySelectorAll('canvas');
+    var parts = ['the frame is ' + window.innerWidth + 'x' + window.innerHeight + 'px'];
+    if (!root.firstChild) parts.push('the script added nothing to exp.root');
+    else {
+      parts.push('exp.root holds ' + root.querySelectorAll('*').length + ' element(s)');
+      if (canvases.length) parts.push(canvases.length + ' canvas(es) sized '
+        + Array.prototype.map.call(canvases, function (c) { return c.width + 'x' + c.height; }).join(', ')
+        + ', with nothing drawn that differs from the dark background');
+      if (root.textContent.trim()) parts.push('text "' + root.textContent.trim().slice(0, 60) + '" in a colour too close to the background, or off screen');
+    }
+    return parts.join('; ');
+  }
+  var started = performance.now();
+  var blankAfter = INIT.blankAfterMs || ${SANDBOX_BLANK_MS};
+  var watch = setInterval(function () {
+    if (reported || finished) { clearInterval(watch); return; }
+    var shown = false;
+    try { shown = showsSomething(); } catch (e) { shown = true; }
+    if (shown) { clearInterval(watch); return; }
+    if (performance.now() - started >= blankAfter) {
+      clearInterval(watch);
+      post({ type: 'blank', message: 'Nothing visible appeared within ' + Math.round(blankAfter) + ' ms: ' + whatIsThere() + '.' });
+    }
+  }, 100);
 })();
 </script>
 <script>
